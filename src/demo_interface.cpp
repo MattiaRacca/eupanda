@@ -5,6 +5,8 @@ DemoInterface::DemoInterface(): nh_("~")
     kinesthetic_server_ = nh_.advertiseService("kinesthetic_teaching", &DemoInterface::kinestheticTeachingCallback, this);
     cartesian_impedance_dynamic_reconfigure_client_ = nh_.
             serviceClient<dynamic_reconfigure::Reconfigure>("/dynamic_reconfigure_compliance_param_node/set_parameters");
+    forcetorque_collision_client_ = nh_.
+            serviceClient<franka_control::SetForceTorqueCollisionBehavior>("/franka_control/set_force_torque_collision_behavior");
     equilibrium_pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/equilibrium_pose",10);
 }
 
@@ -42,11 +44,31 @@ geometry_msgs::PoseStamped DemoInterface::getEEPose()
 
     return current_ee_pose;
 }
+bool DemoInterface::AdjustFTThreshold(double ft_multiplier){
+    franka_control::SetForceTorqueCollisionBehavior collision_srv;
+
+    boost::array<double, 6> force_threshold{ {20.0, 20.0, 20.0, 25.0, 25.0, 25.0} };
+    boost::array<double, 7> torque_threshold{ {20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0} };
+
+    for (auto& value : force_threshold) {
+        value = value*ft_multiplier;
+    }
+    for (auto& value : torque_threshold) {
+        value = value*ft_multiplier;
+    }
+
+    collision_srv.request.lower_force_thresholds_nominal = force_threshold;
+    collision_srv.request.upper_force_thresholds_nominal = force_threshold;
+    collision_srv.request.lower_torque_thresholds_nominal = torque_threshold;
+    collision_srv.request.upper_torque_thresholds_nominal = torque_threshold;
+
+    forcetorque_collision_client_.call(collision_srv);
+}
 
 bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req,
                                                 panda_pbd::EnableTeaching::Response &res)
 {
-    dynamic_reconfigure::Reconfigure srv;
+    dynamic_reconfigure::Reconfigure stiffness_srv;
 
     dynamic_reconfigure::DoubleParameter translational_stiff;
     dynamic_reconfigure::DoubleParameter rotational_stiff;
@@ -55,25 +77,27 @@ bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Reque
 
     if (req.teaching)
     {
+        AdjustFTThreshold(req.ft_threshold_multiplier);
         translational_stiff.value = 0.0;
         rotational_stiff.value = 0.0;
 
-        srv.request.config.doubles.push_back(translational_stiff);
-        srv.request.config.doubles.push_back(rotational_stiff);
+        stiffness_srv.request.config.doubles.push_back(translational_stiff);
+        stiffness_srv.request.config.doubles.push_back(rotational_stiff);
 
-        res.success = cartesian_impedance_dynamic_reconfigure_client_.call(srv);
+        res.success = cartesian_impedance_dynamic_reconfigure_client_.call(stiffness_srv);
         res.current_mode = 1;
         res.ee_pose = getEEPose();
     } else {
+        AdjustFTThreshold(1);
         translational_stiff.value = 200.0;
         rotational_stiff.value = 10.0;
 
-        srv.request.config.doubles.push_back(translational_stiff);
-        srv.request.config.doubles.push_back(rotational_stiff);
+        stiffness_srv.request.config.doubles.push_back(translational_stiff);
+        stiffness_srv.request.config.doubles.push_back(rotational_stiff);
 
         res.ee_pose = getEEPose();
         equilibrium_pose_publisher_.publish(res.ee_pose);
-        res.success = cartesian_impedance_dynamic_reconfigure_client_.call(srv);
+        res.success = cartesian_impedance_dynamic_reconfigure_client_.call(stiffness_srv);
         res.current_mode = 0;
     }
     return true;

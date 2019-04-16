@@ -1,4 +1,5 @@
 bool teaching
+float64 ft_threshold_multiplier
 ---
 bool success
 int32 current_mode # teaching=1, not_teaching=0
