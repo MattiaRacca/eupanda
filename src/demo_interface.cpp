@@ -3,7 +3,6 @@
 DemoInterface::DemoInterface(): nh_("~")
 {
     kinesthetic_server_ = nh_.advertiseService("kinesthetic_teaching", &DemoInterface::kinestheticTeachingCallback, this);
-    joint_stiffness_client_ = nh_.serviceClient<franka_control::SetJointImpedance>("set_joint_impedance");
 }
 
 bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req,
@@ -11,18 +10,30 @@ bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Reque
 {
     if (req.teaching)
     {
-        boost::array<double, 7> stiffness;
-        stiffness.fill(0);
-        franka_control::SetJointImpedance srv;
-        srv.request.joint_stiffness = stiffness;
-        if (joint_stiffness_client_.call(srv))
-        {
-            ROS_INFO("%d", srv.response.success);
-            res.response = 1;
-        } else {
-            ROS_ERROR("Failed to call SetJointImpedance service");
-            ROS_ERROR("%s", srv.response.error.c_str());
-            res.response = -1;
-        }
+        dynamic_reconfigure::ReconfigureRequest srv_req;
+        dynamic_reconfigure::ReconfigureResponse srv_resp;
+        dynamic_reconfigure::DoubleParameter double_param;
+        dynamic_reconfigure::Config conf;
+
+        double_param.name = "translational_stiffness";
+        double_param.value = 0.0;
+
+        conf.doubles.push_back(double_param);
+        srv_req.config = conf;
+
+        ros::service::call("/dynamic_reconfigure_compliance_param_node/set_parameters", srv_req, srv_resp);
+    } else {
+        dynamic_reconfigure::ReconfigureRequest srv_req;
+        dynamic_reconfigure::ReconfigureResponse srv_resp;
+        dynamic_reconfigure::DoubleParameter double_param;
+        dynamic_reconfigure::Config conf;
+
+        double_param.name = "translational_stiffness";
+        double_param.value = 200.0;
+
+        conf.doubles.push_back(double_param);
+        srv_req.config = conf;
+
+        ros::service::call("/dynamic_reconfigure_compliance_param_node/set_parameters", srv_req, srv_resp);
     }
 }
