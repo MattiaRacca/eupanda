@@ -20,18 +20,18 @@
 class DemoInterface
 {
 private:
-    ros::NodeHandle nh_;
-    ros::ServiceServer kinesthetic_server_;
-    ros::ServiceClient cartesian_impedance_dynamic_reconfigure_client_;
-    ros::ServiceClient forcetorque_collision_client_;
-    ros::Publisher equilibrium_pose_publisher_;
-    tf::TransformListener pose_listener_;
+  ros::NodeHandle nh_;
+  ros::ServiceServer kinesthetic_server_;
+  ros::ServiceClient cartesian_impedance_dynamic_reconfigure_client_;
+  ros::ServiceClient forcetorque_collision_client_;
+  ros::Publisher equilibrium_pose_publisher_;
+  tf::TransformListener pose_listener_;
 
-    bool kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
-    geometry_msgs::PoseStamped getEEPose();
-    bool AdjustFTThreshold(double);
+  bool kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
+  geometry_msgs::PoseStamped getEEPose();
+  bool AdjustFTThreshold(double);
 public:
-    DemoInterface();
+  DemoInterface();
 };
 
 #endif // DEMO_INTERFACE_H
