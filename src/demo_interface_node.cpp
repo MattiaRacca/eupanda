@@ -2,5 +2,6 @@
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "demo_interface_node");
+    DemoInterface node;
     ros::spin();
 }
