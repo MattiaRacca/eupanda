@@ -1,4 +1,5 @@
 bool teaching
 ---
 bool success
-int32 current_mode
+int32 current_mode # teaching=1, not_teaching=0
+geometry_msgs/PoseStamped ee_pose
