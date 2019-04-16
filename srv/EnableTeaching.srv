@@ -1,3 +1,4 @@
 bool teaching
 ---
-int64 response
+bool success
+int32 current_mode
