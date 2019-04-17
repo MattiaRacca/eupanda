@@ -3,11 +3,14 @@
 DemoInterface::DemoInterface(): nh_("~")
 {
   kinesthetic_server_ = nh_.advertiseService("kinesthetic_teaching", &DemoInterface::kinestheticTeachingCallback, this);
+  grasp_server_ = nh_.advertiseService("grasp", &DemoInterface::graspCallback, this);
   cartesian_impedance_dynamic_reconfigure_client_ = nh_.
       serviceClient<dynamic_reconfigure::Reconfigure>("/dynamic_reconfigure_compliance_param_node/set_parameters");
   forcetorque_collision_client_ = nh_.
                                   serviceClient<franka_control::SetForceTorqueCollisionBehavior>("/franka_control/set_force_torque_collision_behavior");
   equilibrium_pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/equilibrium_pose", 10);
+  gripper_grasp_client_ = new actionlib::SimpleActionClient<franka_gripper::GraspAction>("/franka_gripper/grasp", true);
+  gripper_move_client_ = new actionlib::SimpleActionClient<franka_gripper::MoveAction>("/franka_gripper/move", true);
 }
 
 geometry_msgs::PoseStamped DemoInterface::getEEPose()
@@ -131,4 +134,60 @@ bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Reque
   res.success = cartesian_impedance_dynamic_reconfigure_client_.call(stiffness_srv);
 
   return true;
+}
+
+bool DemoInterface::graspCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res) {
+  if (req.data)
+  {
+    franka_gripper::GraspGoal grasping_goal;
+    grasping_goal.width = 0.0;
+    grasping_goal.force = 2.0;
+    grasping_goal.speed = 0.01;
+    grasping_goal.epsilon.inner = 0.5;
+    grasping_goal.epsilon.outer = 0.5;
+
+    if (!gripper_grasp_client_->waitForServer(ros::Duration(1))){
+      ROS_ERROR("Cannot reach GraspAction Server");
+      res.success = false;
+      res.message = "Cannot reach GraspAction Server";
+      return false;
+    }
+
+    gripper_grasp_client_->sendGoalAndWait(grasping_goal);
+    if (gripper_grasp_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED){
+      ROS_ERROR("Error in the grasp goal: %s", gripper_grasp_client_->getState().getText().c_str());
+      res.success = false;
+      res.message = gripper_grasp_client_->getState().getText();
+      return false;
+    }
+
+    res.success = true;
+    res.message = gripper_grasp_client_->getState().getText();
+
+    return true;
+  } else {
+    franka_gripper::MoveGoal move_goal;
+    move_goal.width = 0.0762;
+    move_goal.speed = 0.01;
+
+    if (!gripper_move_client_->waitForServer(ros::Duration(1))){
+      ROS_ERROR("Cannot reach MoveAction Server");
+      res.success = false;
+      res.message = "Cannot reach MoveAction Server";
+      return false;
+    }
+
+    gripper_move_client_->sendGoalAndWait(move_goal);
+    if (gripper_move_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED){
+      ROS_ERROR("Error in the grasp goal: %s", gripper_move_client_->getState().getText().c_str());
+      res.success = false;
+      res.message = gripper_move_client_->getState().getText();
+      return false;
+    }
+
+    res.success = true;
+    res.message = gripper_move_client_->getState().getText();
+
+    return true;
+  }
 }
