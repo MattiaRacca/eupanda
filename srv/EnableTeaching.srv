@@ -1,6 +1,14 @@
-bool teaching
+### teaching
+# 0: no teaching (stiff arm)
+# 1: full kinesthetic (both EE position and orientation)
+# 2: only EE position
+# 3: only EE orientation
+### ft_threshold_multiplier
+# multiplier for force/torque reflex trigger
+# 1.0: standard value from cartesian_impedance_controller
+# 2.0: (or higher) more suitable for kinesthetic teaching
+int32 teaching
 float64 ft_threshold_multiplier
 ---
 bool success
-int32 current_mode # teaching=1, not_teaching=0
 geometry_msgs/PoseStamped ee_pose

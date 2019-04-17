@@ -14,7 +14,7 @@ geometry_msgs::PoseStamped DemoInterface::getEEPose()
 {
   std::string tf_err_msg;
   std::string refFrame = "panda_link0";
-  std::string childFrame = "panda_EE";
+  std::string childFrame = "panda_K";
   tf::StampedTransform transform;
 
   if (!pose_listener_.waitForTransform(refFrame, childFrame, ros::Time(0),
@@ -59,11 +59,11 @@ bool DemoInterface::AdjustFTThreshold(double ft_multiplier)
 
   for (auto& value : force_threshold)
   {
-    value = value * ft_multiplier;
+    value *= ft_multiplier;
   }
   for (auto& value : torque_threshold)
   {
-    value = value * ft_multiplier;
+    value *= ft_multiplier;
   }
 
   collision_srv.request.lower_force_thresholds_nominal = force_threshold;
@@ -84,32 +84,51 @@ bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Reque
   translational_stiff.name = "translational_stiffness";
   rotational_stiff.name = "rotational_stiffness";
 
-  if (req.teaching)
-  {
-    AdjustFTThreshold(req.ft_threshold_multiplier);
-    translational_stiff.value = 0.0;
-    rotational_stiff.value = 0.0;
+  double default_translation_stiffness = 200.0;
+  double default_rotational_stiffness = 10.0;
 
-    stiffness_srv.request.config.doubles.push_back(translational_stiff);
-    stiffness_srv.request.config.doubles.push_back(rotational_stiff);
-
-    res.success = cartesian_impedance_dynamic_reconfigure_client_.call(stiffness_srv);
-    res.current_mode = 1;
-    res.ee_pose = getEEPose();
+  switch (req.teaching) {
+    case 0: {
+      ROS_INFO("Teaching mode deactivated...");
+      AdjustFTThreshold(1);
+      translational_stiff.value = default_translation_stiffness;
+      rotational_stiff.value = default_rotational_stiffness;
+      break;
+      }
+    case 1: {
+      ROS_INFO("Full Teaching mode activated...");
+      AdjustFTThreshold(req.ft_threshold_multiplier);
+      translational_stiff.value = 0.0;
+      rotational_stiff.value = 0.0;
+      break;
+    }
+    case 2: {
+      ROS_INFO("Position Teaching mode activated...");
+      AdjustFTThreshold(req.ft_threshold_multiplier);
+      translational_stiff.value = 0.0;
+      rotational_stiff.value = default_rotational_stiffness;
+      break;
+    }
+    case 3: {
+      ROS_INFO("Orientation Teaching mode activated...");
+      AdjustFTThreshold(req.ft_threshold_multiplier);
+      translational_stiff.value = default_translation_stiffness;
+      rotational_stiff.value = 0.0;
+      break;
+    }
+    default: {
+      ROS_ERROR("Unknown value of teaching - nothing happened");
+      return false;
+    }
   }
-  else
-  {
-    AdjustFTThreshold(1);
-    translational_stiff.value = 200.0;
-    rotational_stiff.value = 10.0;
 
-    stiffness_srv.request.config.doubles.push_back(translational_stiff);
-    stiffness_srv.request.config.doubles.push_back(rotational_stiff);
+  stiffness_srv.request.config.doubles.push_back(translational_stiff);
+  stiffness_srv.request.config.doubles.push_back(rotational_stiff);
 
-    res.ee_pose = getEEPose();
-    equilibrium_pose_publisher_.publish(res.ee_pose);
-    res.success = cartesian_impedance_dynamic_reconfigure_client_.call(stiffness_srv);
-    res.current_mode = 0;
-  }
+  res.ee_pose = getEEPose();
+  equilibrium_pose_publisher_.publish(res.ee_pose);
+  ros::Duration(0.5).sleep(); // to allow the controller to receive the now equilibrium pose
+  res.success = cartesian_impedance_dynamic_reconfigure_client_.call(stiffness_srv);
+
   return true;
 }
