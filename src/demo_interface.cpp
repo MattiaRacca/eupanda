@@ -2,13 +2,19 @@
 
 DemoInterface::DemoInterface(): nh_("~")
 {
+  // Service servers
   kinesthetic_server_ = nh_.advertiseService("kinesthetic_teaching", &DemoInterface::kinestheticTeachingCallback, this);
   grasp_server_ = nh_.advertiseService("grasp", &DemoInterface::graspCallback, this);
+  user_sync_server_ = nh_.advertiseService("user_sync", &DemoInterface::userSyncCallback, this);
+
+  equilibrium_pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/equilibrium_pose", 10);
+
+  // Clients
   cartesian_impedance_dynamic_reconfigure_client_ = nh_.
       serviceClient<dynamic_reconfigure::Reconfigure>("/dynamic_reconfigure_compliance_param_node/set_parameters");
   forcetorque_collision_client_ = nh_.
-                                  serviceClient<franka_control::SetForceTorqueCollisionBehavior>("/franka_control/set_force_torque_collision_behavior");
-  equilibrium_pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/equilibrium_pose", 10);
+                                  serviceClient<franka_control::SetForceTorqueCollisionBehavior>
+                                          ("/franka_control/set_force_torque_collision_behavior");
   gripper_grasp_client_ = new actionlib::SimpleActionClient<franka_gripper::GraspAction>("/franka_gripper/grasp", true);
   gripper_move_client_ = new actionlib::SimpleActionClient<franka_gripper::MoveAction>("/franka_gripper/move", true);
 }
@@ -119,6 +125,14 @@ bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Reque
       rotational_stiff.value = 0.0;
       break;
     }
+    case 4: {
+      // TODO: this is not a clean way of making the robot reasonable stiff
+      ROS_INFO("Extra stiff mode activated...");
+      AdjustFTThreshold(req.ft_threshold_multiplier);
+      translational_stiff.value = default_translation_stiffness*20;
+      rotational_stiff.value = default_rotational_stiffness*20;
+      break;
+    }
     default: {
       ROS_ERROR("Unknown value of teaching - nothing happened");
       return false;
@@ -190,4 +204,43 @@ bool DemoInterface::graspCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBo
 
     return true;
   }
+}
+
+bool DemoInterface::userSyncCallback(panda_pbd::UserSyncRequest &req, panda_pbd::UserSyncResponse &res){
+  boost::shared_ptr<geometry_msgs::WrenchStamped const> last_external_wrench_ptr;
+  bool threshold_exceeded = false;
+
+  panda_pbd::EnableTeachingRequest stiff_configuration_req;
+  panda_pbd::EnableTeachingResponse stiff_configuration_res;
+  stiff_configuration_req.teaching = 4;
+  stiff_configuration_req.ft_threshold_multiplier = 4.0;
+
+  // TODO: calling a service this way is a bit clunky...
+  ros::service::call("/demo_interface_node/kinesthetic_teaching", stiff_configuration_req, stiff_configuration_res);
+
+  while (!threshold_exceeded)
+  {
+    last_external_wrench_ptr = ros::topic::waitForMessage<geometry_msgs::WrenchStamped>("/franka_state_controller/F_ext");
+    if (last_external_wrench_ptr != nullptr)
+    {
+      last_wrench_ = *last_external_wrench_ptr;
+      if (std::abs(last_wrench_.wrench.force.x) > req.force_threshold.x ||
+          std::abs(last_wrench_.wrench.force.y) > req.force_threshold.y ||
+          std::abs(last_wrench_.wrench.force.z) > req.force_threshold.z)
+      {
+        ROS_INFO("User unlocked the robot");
+        ROS_INFO("[%f %f %f] sensed",std::abs(last_wrench_.wrench.force.x),
+                std::abs(last_wrench_.wrench.force.y),
+                std::abs(last_wrench_.wrench.force.z));
+        threshold_exceeded = true;
+      } else {
+        ROS_INFO("Not enough");
+        ROS_INFO("[%f %f %f] sensed",std::abs(last_wrench_.wrench.force.x),
+                 std::abs(last_wrench_.wrench.force.y),
+                 std::abs(last_wrench_.wrench.force.z));
+      }
+    }
+  }
+  res.success = true;
+  return res.success;
 }

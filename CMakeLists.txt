@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
 add_service_files(
   FILES
   EnableTeaching.srv
+  UserSync.srv
 )
 
 generate_messages(

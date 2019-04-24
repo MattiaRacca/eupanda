@@ -7,6 +7,7 @@
 # multiplier for force/torque reflex trigger
 # 1.0: standard value from cartesian_impedance_controller
 # 2.0: (or higher) more suitable for kinesthetic teaching
+
 int32 teaching
 float64 ft_threshold_multiplier
 ---
