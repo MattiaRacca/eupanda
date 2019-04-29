@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   geometry_msgs
   message_generation
+  actionlib_msgs
 )
 
 add_service_files(
@@ -19,8 +20,14 @@ add_service_files(
   UserSync.srv
 )
 
+add_action_files(
+  DIRECTORY action
+  FILES MoveToContact.action
+)
+
 generate_messages(
   DEPENDENCIES
+  actionlib_msgs
   std_msgs
   geometry_msgs
 )
@@ -28,7 +35,7 @@ generate_messages(
 catkin_package(
     INCLUDE_DIRS include
 #  LIBRARIES panda_pbd
-    CATKIN_DEPENDS roscpp rospy std_msgs message_runtime geometry_msgs
+    CATKIN_DEPENDS roscpp rospy std_msgs message_runtime geometry_msgs actionlib_msgs
 #    DEPENDS
 )
 
