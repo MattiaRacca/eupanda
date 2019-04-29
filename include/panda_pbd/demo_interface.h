@@ -56,7 +56,9 @@ private:
 
   // Helper functions
   geometry_msgs::PoseStamped getEEPose();
-  bool AdjustFTThreshold(double);
+  bool adjustFTThreshold(double);
+  bool adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
+  bool adjustImpedanceControllerStiffness(double transl_stiff, double rotat_stiff, double ft_mult);
 public:
   DemoInterface();
 };

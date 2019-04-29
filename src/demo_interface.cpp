@@ -59,12 +59,18 @@ geometry_msgs::PoseStamped DemoInterface::getEEPose()
 
   return current_ee_pose;
 }
-bool DemoInterface::AdjustFTThreshold(double ft_multiplier)
+
+bool DemoInterface::adjustFTThreshold(double ft_multiplier)
 {
   franka_control::SetForceTorqueCollisionBehavior collision_srv;
 
   boost::array<double, 6> force_threshold{ {20.0, 20.0, 20.0, 25.0, 25.0, 25.0} };
   boost::array<double, 7> torque_threshold{ {20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0} };
+
+  if (ft_multiplier <= 1.0){
+    ROS_ERROR("ForceTorque Multiplier has to be greater than 1...");
+    return false;
+  }
 
   for (auto& value : force_threshold)
   {
@@ -83,9 +89,9 @@ bool DemoInterface::AdjustFTThreshold(double ft_multiplier)
   forcetorque_collision_client_.call(collision_srv);
 }
 
-bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req,
-    panda_pbd::EnableTeaching::Response &res)
-{
+bool DemoInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req,
+                                                       panda_pbd::EnableTeaching::Response &res)
+                                                       {
   dynamic_reconfigure::Reconfigure stiffness_srv;
 
   dynamic_reconfigure::DoubleParameter translational_stiff;
@@ -99,38 +105,30 @@ bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Reque
   switch (req.teaching) {
     case 0: {
       ROS_INFO("Teaching mode deactivated...");
-      AdjustFTThreshold(1);
+      adjustFTThreshold(1.0);
       translational_stiff.value = default_translation_stiffness;
       rotational_stiff.value = default_rotational_stiffness;
       break;
-      }
+    }
     case 1: {
       ROS_INFO("Full Teaching mode activated...");
-      AdjustFTThreshold(req.ft_threshold_multiplier);
+      adjustFTThreshold(req.ft_threshold_multiplier);
       translational_stiff.value = 0.0;
       rotational_stiff.value = 0.0;
       break;
     }
     case 2: {
       ROS_INFO("Position Teaching mode activated...");
-      AdjustFTThreshold(req.ft_threshold_multiplier);
+      adjustFTThreshold(req.ft_threshold_multiplier);
       translational_stiff.value = 0.0;
       rotational_stiff.value = default_rotational_stiffness;
       break;
     }
     case 3: {
       ROS_INFO("Orientation Teaching mode activated...");
-      AdjustFTThreshold(req.ft_threshold_multiplier);
+      adjustFTThreshold(req.ft_threshold_multiplier);
       translational_stiff.value = default_translation_stiffness;
       rotational_stiff.value = 0.0;
-      break;
-    }
-    case 4: {
-      // TODO: this is not a clean way of making the robot reasonable stiff
-      ROS_INFO("Extra stiff mode activated...");
-      AdjustFTThreshold(req.ft_threshold_multiplier);
-      translational_stiff.value = default_translation_stiffness*20;
-      rotational_stiff.value = default_rotational_stiffness*20;
       break;
     }
     default: {
@@ -142,10 +140,38 @@ bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Reque
   stiffness_srv.request.config.doubles.push_back(translational_stiff);
   stiffness_srv.request.config.doubles.push_back(rotational_stiff);
 
+  return cartesian_impedance_dynamic_reconfigure_client_.call(stiffness_srv);
+}
+
+bool DemoInterface::adjustImpedanceControllerStiffness(double transl_stiff, double rotat_stiff, double ft_mult) {
+  dynamic_reconfigure::Reconfigure stiffness_srv;
+
+  dynamic_reconfigure::DoubleParameter translational_stiff;
+  dynamic_reconfigure::DoubleParameter rotational_stiff;
+  translational_stiff.name = "translational_stiffness";
+  rotational_stiff.name = "rotational_stiffness";
+
+  double default_translation_stiffness = transl_stiff;
+  double default_rotational_stiffness = rotat_stiff;
+
+  ROS_INFO("Changing Impedance Controller Stiffness...");
+  adjustFTThreshold(ft_mult);
+  translational_stiff.value = default_translation_stiffness;
+  rotational_stiff.value = default_rotational_stiffness;
+
+  stiffness_srv.request.config.doubles.push_back(translational_stiff);
+  stiffness_srv.request.config.doubles.push_back(rotational_stiff);
+
+  return cartesian_impedance_dynamic_reconfigure_client_.call(stiffness_srv);
+}
+
+bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req,
+    panda_pbd::EnableTeaching::Response &res)
+{
   res.ee_pose = getEEPose();
   equilibrium_pose_publisher_.publish(res.ee_pose);
   ros::Duration(0.5).sleep(); // to allow the controller to receive the now equilibrium pose
-  res.success = cartesian_impedance_dynamic_reconfigure_client_.call(stiffness_srv);
+  res.success = adjustImpedanceControllerStiffness(req,res);
 
   return true;
 }
@@ -210,17 +236,13 @@ bool DemoInterface::userSyncCallback(panda_pbd::UserSyncRequest &req, panda_pbd:
   boost::shared_ptr<geometry_msgs::WrenchStamped const> last_external_wrench_ptr;
   bool threshold_exceeded = false;
 
-  panda_pbd::EnableTeachingRequest stiff_configuration_req;
-  panda_pbd::EnableTeachingResponse stiff_configuration_res;
-  stiff_configuration_req.teaching = 4;
-  stiff_configuration_req.ft_threshold_multiplier = 4.0;
-
-  // TODO: calling a service this way is a bit clunky...
-  ros::service::call("/demo_interface_node/kinesthetic_teaching", stiff_configuration_req, stiff_configuration_res);
+  adjustImpedanceControllerStiffness(1000, 200, 10);
+  ROS_WARN("Setting the robot to be stiff -- to be pushable");
 
   while (!threshold_exceeded)
   {
-    last_external_wrench_ptr = ros::topic::waitForMessage<geometry_msgs::WrenchStamped>("/franka_state_controller/F_ext");
+    last_external_wrench_ptr = ros::topic::waitForMessage<geometry_msgs::WrenchStamped>(
+            "/franka_state_controller/F_ext");
     if (last_external_wrench_ptr != nullptr)
     {
       last_wrench_ = *last_external_wrench_ptr;
@@ -229,15 +251,17 @@ bool DemoInterface::userSyncCallback(panda_pbd::UserSyncRequest &req, panda_pbd:
           std::abs(last_wrench_.wrench.force.z) > req.force_threshold.z)
       {
         ROS_INFO("User unlocked the robot");
-        ROS_INFO("[%f %f %f] sensed",std::abs(last_wrench_.wrench.force.x),
-                std::abs(last_wrench_.wrench.force.y),
-                std::abs(last_wrench_.wrench.force.z));
+        ROS_INFO("[%f %f %f] sensed",
+                last_wrench_.wrench.force.x,
+                last_wrench_.wrench.force.y,
+                last_wrench_.wrench.force.z);
         threshold_exceeded = true;
       } else {
         ROS_INFO("Not enough");
-        ROS_INFO("[%f %f %f] sensed",std::abs(last_wrench_.wrench.force.x),
-                 std::abs(last_wrench_.wrench.force.y),
-                 std::abs(last_wrench_.wrench.force.z));
+        ROS_INFO("[%f %f %f] sensed",
+                last_wrench_.wrench.force.x,
+                last_wrench_.wrench.force.y,
+                last_wrench_.wrench.force.z);
       }
     }
   }
