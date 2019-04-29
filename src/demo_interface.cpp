@@ -68,8 +68,9 @@ bool DemoInterface::adjustFTThreshold(double ft_multiplier)
   boost::array<double, 7> torque_threshold{ {20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0} };
 
   if (ft_multiplier <= 1.0){
-    ROS_ERROR("ForceTorque Multiplier has to be greater than 1...");
-    return false;
+    ROS_WARN("ForceTorque Multiplier has to be greater than 1.0...");
+    ROS_WARN("Setting to Default (1.0)");
+    ft_multiplier = 1.0;
   }
 
   for (auto& value : force_threshold)
@@ -170,7 +171,7 @@ bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Reque
 {
   res.ee_pose = getEEPose();
   equilibrium_pose_publisher_.publish(res.ee_pose);
-  ros::Duration(0.5).sleep(); // to allow the controller to receive the now equilibrium pose
+  ros::Duration(0.5).sleep(); // to allow the controller to receive the new equilibrium pose
   res.success = adjustImpedanceControllerStiffness(req,res);
 
   return true;
@@ -236,13 +237,17 @@ bool DemoInterface::userSyncCallback(panda_pbd::UserSyncRequest &req, panda_pbd:
   boost::shared_ptr<geometry_msgs::WrenchStamped const> last_external_wrench_ptr;
   bool threshold_exceeded = false;
 
-  adjustImpedanceControllerStiffness(1000, 200, 10);
-  ROS_WARN("Setting the robot to be stiff -- to be pushable");
+  adjustImpedanceControllerStiffness(1000.0, 200.0, 10.0);
+  ROS_WARN("Setting the robot to be stiff (to be pushable)");
 
   while (!threshold_exceeded)
   {
+    /* The external wrench is in the EE frame
+     * Positive value when the force is applied AGAINST the axis
+     */
     last_external_wrench_ptr = ros::topic::waitForMessage<geometry_msgs::WrenchStamped>(
             "/franka_state_controller/F_ext");
+
     if (last_external_wrench_ptr != nullptr)
     {
       last_wrench_ = *last_external_wrench_ptr;
@@ -250,15 +255,14 @@ bool DemoInterface::userSyncCallback(panda_pbd::UserSyncRequest &req, panda_pbd:
           std::abs(last_wrench_.wrench.force.y) > req.force_threshold.y ||
           std::abs(last_wrench_.wrench.force.z) > req.force_threshold.z)
       {
-        ROS_INFO("User unlocked the robot");
+        ROS_INFO("Robot unlocked!");
         ROS_INFO("[%f %f %f] sensed",
                 last_wrench_.wrench.force.x,
                 last_wrench_.wrench.force.y,
                 last_wrench_.wrench.force.z);
         threshold_exceeded = true;
       } else {
-        ROS_INFO("Not enough");
-        ROS_INFO("[%f %f %f] sensed",
+        ROS_INFO_THROTTLE(10, "Not enough force ([%f %f %f] sensed)",
                 last_wrench_.wrench.force.x,
                 last_wrench_.wrench.force.y,
                 last_wrench_.wrench.force.z);
@@ -266,5 +270,8 @@ bool DemoInterface::userSyncCallback(panda_pbd::UserSyncRequest &req, panda_pbd:
     }
   }
   res.success = true;
+  // setting back to default
+  ROS_DEBUG("Setting stiffness back to standard values");
+  adjustImpedanceControllerStiffness(200.0, 10.0, 1.0);
   return res.success;
 }
