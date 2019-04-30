@@ -38,7 +38,7 @@ DemoInterface::DemoInterface():
 
   ROS_INFO("Starting the Impedance Controller...");
   controller_manager_msgs::SwitchController switch_controller;
-  switch_controller.request.start_controllers.push_back(impedance_controller);
+  switch_controller.request.start_controllers.push_back(IMPEDANCE_CONTROLLER);
   switch_controller.request.strictness = 2;
 
   // TODO: proper handling here please
@@ -54,13 +54,15 @@ DemoInterface::DemoInterface():
     }
   }
 
+  move_group_ = new moveit::planning_interface::MoveGroupInterface(PLANNING_GROUP);
+  joint_model_group = move_group_->getCurrentState()->getJointModelGroup(PLANNING_GROUP);
 }
 
 geometry_msgs::PoseStamped DemoInterface::getEEPose()
 {
   std::string tf_err_msg;
-  std::string refFrame = base_frame;
-  std::string childFrame = ee_frame;
+  std::string refFrame = BASE_FRAME;
+  std::string childFrame = EE_FRAME;
   tf::StampedTransform transform;
 
   if (!pose_listener_.waitForTransform(refFrame, childFrame, ros::Time(0),
@@ -140,7 +142,6 @@ bool DemoInterface::adjustImpedanceControllerStiffness(double transl_stiff = 200
   translational_stiff.name = "translational_stiffness";
   rotational_stiff.name = "rotational_stiffness";
 
-
   adjustFTThreshold(ft_mult);
   translational_stiff.value = transl_stiff;
   rotational_stiff.value = rotat_stiff;
@@ -148,7 +149,7 @@ bool DemoInterface::adjustImpedanceControllerStiffness(double transl_stiff = 200
   stiffness_srv.request.config.doubles.push_back(translational_stiff);
   stiffness_srv.request.config.doubles.push_back(rotational_stiff);
 
-  ROS_INFO("Changing %s parameters...", impedance_controller.c_str());
+  ROS_INFO("Changing %s parameters...", IMPEDANCE_CONTROLLER.c_str());
   return cartesian_impedance_dynamic_reconfigure_client_.call(stiffness_srv);
 }
 
@@ -161,6 +162,8 @@ bool DemoInterface::adjustDirectionControllerParameters(geometry_msgs::Vector3 d
   dynamic_reconfigure::Reconfigure direction_srv;
   dynamic_reconfigure::DoubleParameter translational_stiff, rotational_stiff;
   dynamic_reconfigure::DoubleParameter vx_d, vy_d, vz_d, speed_d;
+
+  adjustFTThreshold(ft_mult);
 
   translational_stiff.name = "translational_stiffness";
   rotational_stiff.name = "rotational_stiffness";
@@ -183,7 +186,7 @@ bool DemoInterface::adjustDirectionControllerParameters(geometry_msgs::Vector3 d
   direction_srv.request.config.doubles.push_back(vz_d);
   direction_srv.request.config.doubles.push_back(speed_d);
 
-  ROS_INFO("Changing %s parameters...", direction_controller.c_str());
+  ROS_INFO("Changing %s parameters...", DIRECTION_CONTROLLER.c_str());
   return cartesian_impedance_direction_dynamic_reconfigure_client_.call(direction_srv);
 }
 
@@ -210,6 +213,12 @@ bool DemoInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching
     case 3: {
       ROS_INFO("Orientation Teaching mode activated...");
       result = adjustImpedanceControllerStiffness(200.0, 0.0, req.ft_threshold_multiplier);
+      break;
+    }
+    case 4: {
+      ROS_WARN("This is a moveit test and should be removed");
+      ROS_WARN("Did it manage? %s", testPlanning() ? "yes" : "no");
+      result = false;
       break;
     }
     default: {
@@ -333,8 +342,8 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
 
   ROS_INFO("Trying to switch to the direction controller...");
   controller_manager_msgs::SwitchController switch_controller;
-  switch_controller.request.stop_controllers.push_back(impedance_controller);
-  switch_controller.request.start_controllers.push_back(direction_controller);
+  switch_controller.request.stop_controllers.push_back(IMPEDANCE_CONTROLLER);
+  switch_controller.request.start_controllers.push_back(DIRECTION_CONTROLLER);
   switch_controller.request.strictness = 2;
 
   controller_manager_switch_.call(switch_controller);
@@ -384,8 +393,8 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
 
   ROS_INFO("Trying to switch back to the impedance controller...");
   controller_manager_msgs::SwitchController switch_back_controller;
-  switch_back_controller.request.start_controllers.push_back(impedance_controller);
-  switch_back_controller.request.stop_controllers.push_back(direction_controller);
+  switch_back_controller.request.start_controllers.push_back(IMPEDANCE_CONTROLLER);
+  switch_back_controller.request.stop_controllers.push_back(DIRECTION_CONTROLLER);
   switch_back_controller.request.strictness = 2;
 
   adjustImpedanceControllerStiffness();
@@ -393,4 +402,19 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
   ROS_INFO("and... %s", switch_back_controller.response.ok ? "SUCCESS" : "FAILURE");
   if (!switch_controller.response.ok)
     return;
+}
+
+bool DemoInterface::testPlanning() {
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+
+  geometry_msgs::PoseStamped current_pose = getEEPose();
+  geometry_msgs::Pose target_pose;
+
+  target_pose.orientation = current_pose.pose.orientation;
+  target_pose.position = current_pose.pose.position;
+  target_pose.position.z += 0.04; // move 4 cm up
+
+  move_group_->setPoseTarget(target_pose);
+
+  return (move_group_->plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
 }

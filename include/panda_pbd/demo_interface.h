@@ -22,6 +22,9 @@
 #include <franka_gripper/GraspAction.h>
 #include <franka_gripper/MoveAction.h>
 
+// MoveIt! includes
+#include <moveit/move_group_interface/move_group_interface.h>
+
 // Custom services
 #include "panda_pbd/EnableTeaching.h"
 #include "panda_pbd/UserSync.h"
@@ -33,14 +36,19 @@ private:
   ros::NodeHandle nh_;
 
   // const controller names
-  const std::string impedance_controller = "cartesian_impedance_example_controller";
-  const std::string direction_controller = "cartesian_impedance_direction_controller";
+  const std::string IMPEDANCE_CONTROLLER = "cartesian_impedance_example_controller";
+  const std::string DIRECTION_CONTROLLER = "cartesian_impedance_direction_controller";
 
   // const frame names
-  const std::string base_frame = "panda_link0";
-  const std::string ee_frame = "panda_K";
+  const std::string BASE_FRAME = "panda_link0";
+  const std::string EE_FRAME = "panda_K";
 
-    // Internal variable
+  // MoveIt! stuff
+  const std::string PLANNING_GROUP = "panda_arm";
+  const robot_state::JointModelGroup *joint_model_group;
+  moveit::planning_interface::MoveGroupInterface *move_group_;
+
+  // Internal variable
   geometry_msgs::WrenchStamped last_wrench_;
   panda_pbd::MoveToContactFeedback move_to_contact_feedback_;
   panda_pbd::MoveToContactResult move_to_contact_result_;
@@ -79,6 +87,8 @@ private:
 
   bool adjustDirectionControllerParameters(geometry_msgs::Vector3 direction, double speed, double transl_stiff,
           double rotat_stiff, double ft_mult);
+
+  bool testPlanning();
 public:
   DemoInterface();
 };

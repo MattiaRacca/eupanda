@@ -12,7 +12,12 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   message_generation
   actionlib_msgs
+  moveit_core
+  moveit_ros_planning
+  moveit_ros_planning_interface
 )
+
+find_package(Eigen3 REQUIRED)
 
 add_service_files(
   FILES
@@ -42,6 +47,7 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIRS}
 )
 
 add_executable(demo_interface src/demo_interface_node.cpp
