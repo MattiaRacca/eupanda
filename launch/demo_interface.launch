@@ -8,7 +8,10 @@
   </include>
 
   <rosparam command="load" file="$(find franka_example_controllers)/config/franka_example_controllers.yaml" />
-  <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" args="cartesian_impedance_example_controller"/>
+  <rosparam command="load" file="$(find franka_more_controllers)/config/franka_more_controllers.yaml" />
+  <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" args="--stopped cartesian_impedance_example_controller cartesian_impedance_direction_controller"/>
   <node name="demo_interface_node" pkg="panda_pbd" type="demo_interface" output="screen"/>
-  <!-- <node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" required="false" /> -->
+  <node name="controller_gui" pkg="rqt_controller_manager" type="rqt_controller_manager" required="false"/>
+  <node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" required="false"/>
+  <node name="rqt_service_caller" pkg="rqt_service_caller" type="rqt_service_caller"  required="false"/>
 </launch>

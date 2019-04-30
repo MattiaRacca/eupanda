@@ -1,6 +1,7 @@
 #include "panda_pbd/demo_interface.h"
 
-DemoInterface::DemoInterface(): nh_("~")
+DemoInterface::DemoInterface():
+  nh_("~")
 {
   // Service servers
   kinesthetic_server_ = nh_.advertiseService("kinesthetic_teaching", &DemoInterface::kinestheticTeachingCallback, this);
@@ -9,14 +10,38 @@ DemoInterface::DemoInterface(): nh_("~")
 
   equilibrium_pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/equilibrium_pose", 10);
 
+  move_to_contact_server_ = new actionlib::SimpleActionServer<panda_pbd::MoveToContactAction>(
+          nh_, "move_to_contact_server",boost::bind(&DemoInterface::moveToContactCallback, this, _1), false);
+  move_to_contact_server_->start();
+
   // Clients
   cartesian_impedance_dynamic_reconfigure_client_ = nh_.
       serviceClient<dynamic_reconfigure::Reconfigure>("/dynamic_reconfigure_compliance_param_node/set_parameters");
+
+  cartesian_impedance_direction_dynamic_reconfigure_client_ = nh_.
+          serviceClient<dynamic_reconfigure::Reconfigure>
+                  ("/dynamic_reconfigure_cartesian_impedance_direction_param_node/set_parameters");
+
   forcetorque_collision_client_ = nh_.
                                   serviceClient<franka_control::SetForceTorqueCollisionBehavior>
                                           ("/franka_control/set_force_torque_collision_behavior");
+  controller_manager_switch_ = nh_.
+          serviceClient<controller_manager_msgs::SwitchController>
+                  ("/controller_manager/switch_controller");
+
   gripper_grasp_client_ = new actionlib::SimpleActionClient<franka_gripper::GraspAction>("/franka_gripper/grasp", true);
+
   gripper_move_client_ = new actionlib::SimpleActionClient<franka_gripper::MoveAction>("/franka_gripper/move", true);
+
+  // TODO: remove this abomination and wait for controller manager to be up
+  ros::Duration(3).sleep();
+
+  ROS_INFO("Switch to the Impedance Controller...");
+  controller_manager_msgs::SwitchController switch_controller;
+  switch_controller.request.start_controllers.push_back("cartesian_impedance_example_controller");
+  switch_controller.request.strictness = 2;
+
+  controller_manager_switch_.call(switch_controller);
 }
 
 geometry_msgs::PoseStamped DemoInterface::getEEPose()
@@ -67,7 +92,7 @@ bool DemoInterface::adjustFTThreshold(double ft_multiplier)
   boost::array<double, 6> force_threshold{ {20.0, 20.0, 20.0, 25.0, 25.0, 25.0} };
   boost::array<double, 7> torque_threshold{ {20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0} };
 
-  if (ft_multiplier <= 1.0){
+  if (ft_multiplier < 1.0){
     ROS_WARN("ForceTorque Multiplier has to be greater than 1.0...");
     ROS_WARN("Setting to Default (1.0)");
     ft_multiplier = 1.0;
@@ -89,62 +114,13 @@ bool DemoInterface::adjustFTThreshold(double ft_multiplier)
 
   forcetorque_collision_client_.call(collision_srv);
 }
+bool DemoInterface::adjustImpedanceControllerStiffness(double transl_stiff = 200.0,
+                                                       double rotat_stiff = 10.0, double ft_mult = 1.0) {
 
-bool DemoInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req,
-                                                       panda_pbd::EnableTeaching::Response &res)
-                                                       {
-  dynamic_reconfigure::Reconfigure stiffness_srv;
+  auto ee_pose = getEEPose();
+  equilibrium_pose_publisher_.publish(ee_pose);
+  ros::Duration(0.5).sleep(); // to allow the controller to receive the new equilibrium pose
 
-  dynamic_reconfigure::DoubleParameter translational_stiff;
-  dynamic_reconfigure::DoubleParameter rotational_stiff;
-  translational_stiff.name = "translational_stiffness";
-  rotational_stiff.name = "rotational_stiffness";
-
-  double default_translation_stiffness = 200.0;
-  double default_rotational_stiffness = 10.0;
-
-  switch (req.teaching) {
-    case 0: {
-      ROS_INFO("Teaching mode deactivated...");
-      adjustFTThreshold(1.0);
-      translational_stiff.value = default_translation_stiffness;
-      rotational_stiff.value = default_rotational_stiffness;
-      break;
-    }
-    case 1: {
-      ROS_INFO("Full Teaching mode activated...");
-      adjustFTThreshold(req.ft_threshold_multiplier);
-      translational_stiff.value = 0.0;
-      rotational_stiff.value = 0.0;
-      break;
-    }
-    case 2: {
-      ROS_INFO("Position Teaching mode activated...");
-      adjustFTThreshold(req.ft_threshold_multiplier);
-      translational_stiff.value = 0.0;
-      rotational_stiff.value = default_rotational_stiffness;
-      break;
-    }
-    case 3: {
-      ROS_INFO("Orientation Teaching mode activated...");
-      adjustFTThreshold(req.ft_threshold_multiplier);
-      translational_stiff.value = default_translation_stiffness;
-      rotational_stiff.value = 0.0;
-      break;
-    }
-    default: {
-      ROS_ERROR("Unknown value of teaching - nothing happened");
-      return false;
-    }
-  }
-
-  stiffness_srv.request.config.doubles.push_back(translational_stiff);
-  stiffness_srv.request.config.doubles.push_back(rotational_stiff);
-
-  return cartesian_impedance_dynamic_reconfigure_client_.call(stiffness_srv);
-}
-
-bool DemoInterface::adjustImpedanceControllerStiffness(double transl_stiff, double rotat_stiff, double ft_mult) {
   dynamic_reconfigure::Reconfigure stiffness_srv;
 
   dynamic_reconfigure::DoubleParameter translational_stiff;
@@ -166,14 +142,44 @@ bool DemoInterface::adjustImpedanceControllerStiffness(double transl_stiff, doub
   return cartesian_impedance_dynamic_reconfigure_client_.call(stiffness_srv);
 }
 
+bool DemoInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req,
+                                                       panda_pbd::EnableTeaching::Response &res)
+{
+  bool result;
+  switch (req.teaching) {
+    case 0: {
+      ROS_INFO("Teaching mode deactivated...");
+      result = adjustImpedanceControllerStiffness();
+      break;
+    }
+    case 1: {
+      ROS_INFO("Full Teaching mode activated...");
+      result = adjustImpedanceControllerStiffness(0.0, 0.0, req.ft_threshold_multiplier);
+      break;
+    }
+    case 2: {
+      ROS_INFO("Position Teaching mode activated...");
+      result = adjustImpedanceControllerStiffness(0.0, 10.0, req.ft_threshold_multiplier);
+      break;
+    }
+    case 3: {
+      ROS_INFO("Orientation Teaching mode activated...");
+      result = adjustImpedanceControllerStiffness(200.0, 0.0, req.ft_threshold_multiplier);
+      break;
+    }
+    default: {
+      ROS_ERROR("Unknown value of teaching - nothing happened");
+      result = false;
+    }
+  }
+
+  return result;
+}
+
 bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req,
     panda_pbd::EnableTeaching::Response &res)
 {
-  res.ee_pose = getEEPose();
-  equilibrium_pose_publisher_.publish(res.ee_pose);
-  ros::Duration(0.5).sleep(); // to allow the controller to receive the new equilibrium pose
   res.success = adjustImpedanceControllerStiffness(req,res);
-
   return true;
 }
 
@@ -274,4 +280,63 @@ bool DemoInterface::userSyncCallback(panda_pbd::UserSyncRequest &req, panda_pbd:
   ROS_DEBUG("Setting stiffness back to standard values");
   adjustImpedanceControllerStiffness(200.0, 10.0, 1.0);
   return res.success;
+}
+
+void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal){
+  ROS_INFO("Received MoveToContact request");
+
+  ROS_INFO("Trying to switch to the direction controller...");
+  controller_manager_msgs::SwitchController switch_controller;
+  switch_controller.request.stop_controllers.push_back("cartesian_impedance_example_controller");
+  switch_controller.request.start_controllers.push_back("cartesian_impedance_direction_controller");
+  switch_controller.request.strictness = 2;
+
+  controller_manager_switch_.call(switch_controller);
+  ROS_INFO("and... %s", switch_controller.response.ok ? "SUCCESS" : "FAILURE");
+  ROS_INFO("Staying with this controller until contact...");
+
+  bool in_contact = false;
+  while(!in_contact)
+  {
+    auto last_external_wrench_ptr = ros::topic::waitForMessage<geometry_msgs::WrenchStamped>(
+            "/franka_state_controller/F_ext");
+
+    if (last_external_wrench_ptr != nullptr)
+    {
+      last_wrench_ = *last_external_wrench_ptr;
+      if (std::abs(last_wrench_.wrench.force.x) > goal->force_threshold ||
+          std::abs(last_wrench_.wrench.force.y) > goal->force_threshold ||
+          std::abs(last_wrench_.wrench.force.z) > goal->force_threshold)
+      {
+        ROS_INFO("Robot touched something!");
+        ROS_INFO("[%f %f %f] sensed",
+                 last_wrench_.wrench.force.x,
+                 last_wrench_.wrench.force.y,
+                 last_wrench_.wrench.force.z);
+        in_contact = true;
+      } else {
+        ROS_INFO_THROTTLE(10, "Not enough force ([%f %f %f] sensed)",
+                          last_wrench_.wrench.force.x,
+                          last_wrench_.wrench.force.y,
+                          last_wrench_.wrench.force.z);
+        move_to_contact_feedback_.contact_forces.x = last_wrench_.wrench.force.x;
+        move_to_contact_feedback_.contact_forces.y = last_wrench_.wrench.force.y;
+        move_to_contact_feedback_.contact_forces.z = last_wrench_.wrench.force.z;
+        move_to_contact_server_->publishFeedback(move_to_contact_feedback_);
+      }
+    }
+  }
+
+  move_to_contact_result_.ee_pose = getEEPose();
+  move_to_contact_server_->setSucceeded(move_to_contact_result_);
+
+  ROS_INFO("Trying to switch back to the impedance controller...");
+  controller_manager_msgs::SwitchController switch_back_controller;
+  switch_back_controller.request.start_controllers.push_back("cartesian_impedance_example_controller");
+  switch_back_controller.request.stop_controllers.push_back("cartesian_impedance_direction_controller");
+  switch_back_controller.request.strictness = 2;
+
+  adjustImpedanceControllerStiffness();
+  controller_manager_switch_.call(switch_back_controller);
+  ROS_INFO("and... %s", switch_back_controller.response.ok ? "SUCCESS" : "FAILURE");
 }
