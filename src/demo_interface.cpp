@@ -42,12 +42,18 @@ DemoInterface::DemoInterface():
   switch_controller.request.strictness = 2;
 
   // TODO: proper handling here please
-  controller_manager_switch_.call(switch_controller);
-  if (switch_controller.response.ok){
-    ROS_INFO("Impedance Controller Started");
-  } else {
-    ROS_ERROR("Impedance Controller not started. Errors are coming.");
+  bool loaded_controller = false;
+  while (!loaded_controller){
+    controller_manager_switch_.call(switch_controller);
+    loaded_controller = switch_controller.response.ok;
+    if (loaded_controller){
+      ROS_INFO("Impedance Controller started");
+    } else {
+      ROS_ERROR("Impedance Controller not started. Trying again in 2 seconds...");
+      ros::Duration(2).sleep();
+    }
   }
+
 }
 
 geometry_msgs::PoseStamped DemoInterface::getEEPose()
@@ -121,7 +127,8 @@ bool DemoInterface::adjustFTThreshold(double ft_multiplier)
   forcetorque_collision_client_.call(collision_srv);
 }
 bool DemoInterface::adjustImpedanceControllerStiffness(double transl_stiff = 200.0,
-                                                       double rotat_stiff = 10.0, double ft_mult = 1.0) {
+                                                       double rotat_stiff = 10.0,
+                                                       double ft_mult = 1.0) {
 
   auto ee_pose = getEEPose();
   equilibrium_pose_publisher_.publish(ee_pose);
@@ -129,23 +136,55 @@ bool DemoInterface::adjustImpedanceControllerStiffness(double transl_stiff = 200
 
   dynamic_reconfigure::Reconfigure stiffness_srv;
 
-  dynamic_reconfigure::DoubleParameter translational_stiff;
-  dynamic_reconfigure::DoubleParameter rotational_stiff;
+  dynamic_reconfigure::DoubleParameter translational_stiff, rotational_stiff;
   translational_stiff.name = "translational_stiffness";
   rotational_stiff.name = "rotational_stiffness";
 
-  double default_translation_stiffness = transl_stiff;
-  double default_rotational_stiffness = rotat_stiff;
 
-  ROS_INFO("Changing Impedance Controller Stiffness...");
   adjustFTThreshold(ft_mult);
-  translational_stiff.value = default_translation_stiffness;
-  rotational_stiff.value = default_rotational_stiffness;
+  translational_stiff.value = transl_stiff;
+  rotational_stiff.value = rotat_stiff;
 
   stiffness_srv.request.config.doubles.push_back(translational_stiff);
   stiffness_srv.request.config.doubles.push_back(rotational_stiff);
 
+  ROS_INFO("Changing %s parameters...", impedance_controller.c_str());
   return cartesian_impedance_dynamic_reconfigure_client_.call(stiffness_srv);
+}
+
+bool DemoInterface::adjustDirectionControllerParameters(geometry_msgs::Vector3 direction,
+                                                        double speed = 0.0,
+                                                        double transl_stiff = 1000.0,
+                                                        double rotat_stiff = 200.0,
+                                                        double ft_mult = 10.0
+                                                        ){
+  dynamic_reconfigure::Reconfigure direction_srv;
+  dynamic_reconfigure::DoubleParameter translational_stiff, rotational_stiff;
+  dynamic_reconfigure::DoubleParameter vx_d, vy_d, vz_d, speed_d;
+
+  translational_stiff.name = "translational_stiffness";
+  rotational_stiff.name = "rotational_stiffness";
+  vx_d.name = "vx_d";
+  vy_d.name = "vy_d";
+  vz_d.name = "vz_d";
+  speed_d.name = "speed";
+
+  translational_stiff.value = transl_stiff;
+  rotational_stiff.value = rotat_stiff;
+  vx_d.value = direction.x;
+  vy_d.value = direction.y;
+  vz_d.value = direction.z;
+  speed_d.value = speed;
+
+  direction_srv.request.config.doubles.push_back(translational_stiff);
+  direction_srv.request.config.doubles.push_back(rotational_stiff);
+  direction_srv.request.config.doubles.push_back(vx_d);
+  direction_srv.request.config.doubles.push_back(vy_d);
+  direction_srv.request.config.doubles.push_back(vz_d);
+  direction_srv.request.config.doubles.push_back(speed_d);
+
+  ROS_INFO("Changing %s parameters...", direction_controller.c_str());
+  return cartesian_impedance_direction_dynamic_reconfigure_client_.call(direction_srv);
 }
 
 bool DemoInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req,
@@ -302,6 +341,9 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
   ROS_INFO("and... %s", switch_controller.response.ok ? "SUCCESS" : "FAILURE");
   if (!switch_controller.response.ok)
     return;
+
+  ROS_WARN("Setting the robot to be stiff (to be pushable)");
+  adjustDirectionControllerParameters(goal.get()->direction, goal.get()->speed);
 
   ROS_INFO("Direction Controller until contact...");
 

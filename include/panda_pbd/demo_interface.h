@@ -76,6 +76,9 @@ private:
   bool adjustFTThreshold(double);
   bool adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
   bool adjustImpedanceControllerStiffness(double transl_stiff, double rotat_stiff, double ft_mult);
+
+  bool adjustDirectionControllerParameters(geometry_msgs::Vector3 direction, double speed, double transl_stiff,
+          double rotat_stiff, double ft_mult);
 public:
   DemoInterface();
 };
