@@ -32,7 +32,15 @@ class DemoInterface
 private:
   ros::NodeHandle nh_;
 
-  // Internal variable
+  // const controller names
+  const std::string impedance_controller = "cartesian_impedance_example_controller";
+  const std::string direction_controller = "cartesian_impedance_direction_controller";
+
+  // const frame names
+  const std::string base_frame = "panda_link0";
+  const std::string ee_frame = "panda_K";
+
+    // Internal variable
   geometry_msgs::WrenchStamped last_wrench_;
   panda_pbd::MoveToContactFeedback move_to_contact_feedback_;
   panda_pbd::MoveToContactResult move_to_contact_result_;

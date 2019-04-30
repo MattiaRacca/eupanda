@@ -3,7 +3,7 @@
 DemoInterface::DemoInterface():
   nh_("~")
 {
-  // Service servers
+  // Servers
   kinesthetic_server_ = nh_.advertiseService("kinesthetic_teaching", &DemoInterface::kinestheticTeachingCallback, this);
   grasp_server_ = nh_.advertiseService("grasp", &DemoInterface::graspCallback, this);
   user_sync_server_ = nh_.advertiseService("user_sync", &DemoInterface::userSyncCallback, this);
@@ -33,22 +33,28 @@ DemoInterface::DemoInterface():
 
   gripper_move_client_ = new actionlib::SimpleActionClient<franka_gripper::MoveAction>("/franka_gripper/move", true);
 
-  // TODO: remove this abomination and wait for controller manager to be up
-  ros::Duration(3).sleep();
+  ROS_INFO("Waiting for the controller manager");
+  controller_manager_switch_.waitForExistence();
 
-  ROS_INFO("Switch to the Impedance Controller...");
+  ROS_INFO("Starting the Impedance Controller...");
   controller_manager_msgs::SwitchController switch_controller;
-  switch_controller.request.start_controllers.push_back("cartesian_impedance_example_controller");
+  switch_controller.request.start_controllers.push_back(impedance_controller);
   switch_controller.request.strictness = 2;
 
+  // TODO: proper handling here please
   controller_manager_switch_.call(switch_controller);
+  if (switch_controller.response.ok){
+    ROS_INFO("Impedance Controller Started");
+  } else {
+    ROS_ERROR("Impedance Controller not started. Errors are coming.");
+  }
 }
 
 geometry_msgs::PoseStamped DemoInterface::getEEPose()
 {
   std::string tf_err_msg;
-  std::string refFrame = "panda_link0";
-  std::string childFrame = "panda_K";
+  std::string refFrame = base_frame;
+  std::string childFrame = ee_frame;
   tf::StampedTransform transform;
 
   if (!pose_listener_.waitForTransform(refFrame, childFrame, ros::Time(0),
@@ -180,7 +186,7 @@ bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Reque
     panda_pbd::EnableTeaching::Response &res)
 {
   res.success = adjustImpedanceControllerStiffness(req,res);
-  return true;
+  return res.success;
 }
 
 bool DemoInterface::graspCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res) {
@@ -283,17 +289,21 @@ bool DemoInterface::userSyncCallback(panda_pbd::UserSyncRequest &req, panda_pbd:
 }
 
 void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal){
+  // TODO: do proper error handling
   ROS_INFO("Received MoveToContact request");
 
   ROS_INFO("Trying to switch to the direction controller...");
   controller_manager_msgs::SwitchController switch_controller;
-  switch_controller.request.stop_controllers.push_back("cartesian_impedance_example_controller");
-  switch_controller.request.start_controllers.push_back("cartesian_impedance_direction_controller");
+  switch_controller.request.stop_controllers.push_back(impedance_controller);
+  switch_controller.request.start_controllers.push_back(direction_controller);
   switch_controller.request.strictness = 2;
 
   controller_manager_switch_.call(switch_controller);
   ROS_INFO("and... %s", switch_controller.response.ok ? "SUCCESS" : "FAILURE");
-  ROS_INFO("Staying with this controller until contact...");
+  if (!switch_controller.response.ok)
+    return;
+
+  ROS_INFO("Direction Controller until contact...");
 
   bool in_contact = false;
   while(!in_contact)
@@ -332,11 +342,13 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
 
   ROS_INFO("Trying to switch back to the impedance controller...");
   controller_manager_msgs::SwitchController switch_back_controller;
-  switch_back_controller.request.start_controllers.push_back("cartesian_impedance_example_controller");
-  switch_back_controller.request.stop_controllers.push_back("cartesian_impedance_direction_controller");
+  switch_back_controller.request.start_controllers.push_back(impedance_controller);
+  switch_back_controller.request.stop_controllers.push_back(direction_controller);
   switch_back_controller.request.strictness = 2;
 
   adjustImpedanceControllerStiffness();
   controller_manager_switch_.call(switch_back_controller);
   ROS_INFO("and... %s", switch_back_controller.response.ok ? "SUCCESS" : "FAILURE");
+  if (!switch_controller.response.ok)
+    return;
 }
