@@ -43,11 +43,10 @@ private:
   // const frame names
   const std::string BASE_FRAME = "panda_link0";
   const std::string EE_FRAME = "panda_K";
-  const std::string HAND_FRAME = "panda_hand";
+  const std::string LINK8_FRAME = "panda_link8";
 
   // MoveIt! stuff
   const std::string PLANNING_GROUP = "panda_arm_hand";
-  const robot_state::JointModelGroup *joint_model_group;
   moveit::planning_interface::MoveGroupInterface *move_group_;
 
   // Internal variable
@@ -55,10 +54,13 @@ private:
   panda_pbd::MoveToContactFeedback move_to_contact_feedback_;
   panda_pbd::MoveToContactResult move_to_contact_result_;
 
-  // Services (servers and clients)
+  // ROS SERVICES ====== servers
   ros::ServiceServer kinesthetic_server_;
   ros::ServiceServer grasp_server_;
   ros::ServiceServer user_sync_server_;
+  ros::ServiceServer moveit_test_server_;
+
+  // ROS SERVICES ====== clients
   ros::ServiceClient cartesian_impedance_dynamic_reconfigure_client_;
   ros::ServiceClient cartesian_impedance_direction_dynamic_reconfigure_client_;
   ros::ServiceClient forcetorque_collision_client_;
@@ -78,15 +80,18 @@ private:
   // Callbacks
   bool kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
   bool graspCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
+  bool moveitTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
   bool userSyncCallback(panda_pbd::UserSyncRequest &req, panda_pbd::UserSyncResponse &res);
   void moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal);
 
   // Helper functions
+  geometry_msgs::PoseStamped getPose(const std::string origin, const std::string destination);
   geometry_msgs::PoseStamped getEEPose();
-  geometry_msgs::PoseStamped getHandPose();
+
   bool adjustFTThreshold(double);
-  bool adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
+
   bool adjustImpedanceControllerStiffness(double transl_stiff, double rotat_stiff, double ft_mult);
+  bool adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
 
   bool adjustDirectionControllerParameters(geometry_msgs::Vector3 direction, double speed, double transl_stiff,
           double rotat_stiff, double ft_mult);

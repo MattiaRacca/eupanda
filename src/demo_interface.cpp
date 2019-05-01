@@ -7,6 +7,7 @@ DemoInterface::DemoInterface():
   kinesthetic_server_ = nh_.advertiseService("kinesthetic_teaching", &DemoInterface::kinestheticTeachingCallback, this);
   grasp_server_ = nh_.advertiseService("grasp", &DemoInterface::graspCallback, this);
   user_sync_server_ = nh_.advertiseService("user_sync", &DemoInterface::userSyncCallback, this);
+  moveit_test_server_ = nh_.advertiseService("moveit_test", &DemoInterface::moveitTestCallback, this);
 
   equilibrium_pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/equilibrium_pose", 10);
 
@@ -55,96 +56,53 @@ DemoInterface::DemoInterface():
   }
 
   move_group_ = new moveit::planning_interface::MoveGroupInterface(PLANNING_GROUP);
-  auto links = move_group_->getLinkNames();
+  move_group_->setEndEffector(LINK8_FRAME);
+}
 
-  ROS_INFO("WHAT IS AVAILABLE!?");
-  for(auto it = links.begin(); it != links.end(); it++)    {
-    ROS_INFO("%s", it->c_str());
+geometry_msgs::PoseStamped DemoInterface::getPose(const std::string ref_frame, const std::string child_frame)
+{
+  std::string tf_err_msg;
+  tf::StampedTransform transform;
+
+  if (!pose_listener_.waitForTransform(ref_frame, child_frame, ros::Time(0),
+                                       ros::Duration(0.5), ros::Duration(0.01),
+                                       &tf_err_msg))
+  {
+    ROS_ERROR_STREAM("Unable to get pose from TF: " << tf_err_msg);
+  }
+  else
+  {
+    try
+    {
+      pose_listener_.lookupTransform(ref_frame, child_frame,
+                                     ros::Time(0), // get latest available
+                                     transform);
+    }
+    catch (const tf::TransformException &e)
+    {
+      ROS_ERROR_STREAM("Error in lookupTransform of " << child_frame << " in "
+                                                      << ref_frame);
+    }
   }
 
+  geometry_msgs::TransformStamped current_ee_transform;
+  tf::transformStampedTFToMsg(transform, current_ee_transform);
+
+  geometry_msgs::PoseStamped current_ee_pose;
+  current_ee_pose.header.frame_id = current_ee_transform.header.frame_id;
+  current_ee_pose.pose.orientation = current_ee_transform.transform.rotation;
+  current_ee_pose.pose.position.x = current_ee_transform.transform.translation.x;
+  current_ee_pose.pose.position.y = current_ee_transform.transform.translation.y;
+  current_ee_pose.pose.position.z = current_ee_transform.transform.translation.z;
+
+  return current_ee_pose;
 }
 
 geometry_msgs::PoseStamped DemoInterface::getEEPose()
 {
-  std::string tf_err_msg;
-  std::string refFrame = BASE_FRAME;
-  std::string childFrame = EE_FRAME;
-  tf::StampedTransform transform;
-
-  if (!pose_listener_.waitForTransform(refFrame, childFrame, ros::Time(0),
-                                       ros::Duration(0.5), ros::Duration(0.01),
-                                       &tf_err_msg))
-  {
-    ROS_ERROR_STREAM("Unable to get pose from TF: " << tf_err_msg);
-  }
-  else
-  {
-    try
-    {
-      pose_listener_.lookupTransform(refFrame, childFrame,
-                                     ros::Time(0), // get latest available
-                                     transform);
-    }
-    catch (const tf::TransformException &e)
-    {
-      ROS_ERROR_STREAM("Error in lookupTransform of " << childFrame << " in "
-                       << refFrame);
-    }
-  }
-
-  geometry_msgs::TransformStamped current_ee_transform;
-  tf::transformStampedTFToMsg(transform, current_ee_transform);
-
-  geometry_msgs::PoseStamped current_ee_pose;
-  current_ee_pose.header.frame_id = current_ee_transform.header.frame_id;
-  current_ee_pose.pose.orientation = current_ee_transform.transform.rotation;
-  current_ee_pose.pose.position.x = current_ee_transform.transform.translation.x;
-  current_ee_pose.pose.position.y = current_ee_transform.transform.translation.y;
-  current_ee_pose.pose.position.z = current_ee_transform.transform.translation.z;
-
-  return current_ee_pose;
+  return getPose(BASE_FRAME, EE_FRAME);
 }
 
-geometry_msgs::PoseStamped DemoInterface::getHandPose()
-{
-  std::string tf_err_msg;
-  std::string refFrame = BASE_FRAME;
-  std::string childFrame = HAND_FRAME;
-  tf::StampedTransform transform;
-
-  if (!pose_listener_.waitForTransform(refFrame, childFrame, ros::Time(0),
-                                       ros::Duration(0.5), ros::Duration(0.01),
-                                       &tf_err_msg))
-  {
-    ROS_ERROR_STREAM("Unable to get pose from TF: " << tf_err_msg);
-  }
-  else
-  {
-    try
-    {
-      pose_listener_.lookupTransform(refFrame, childFrame,
-                                     ros::Time(0), // get latest available
-                                     transform);
-    }
-    catch (const tf::TransformException &e)
-    {
-      ROS_ERROR_STREAM("Error in lookupTransform of " << childFrame << " in "
-                                                      << refFrame);
-    }
-  }
-
-  geometry_msgs::TransformStamped current_ee_transform;
-  tf::transformStampedTFToMsg(transform, current_ee_transform);
-
-  geometry_msgs::PoseStamped current_ee_pose;
-  current_ee_pose.header.frame_id = current_ee_transform.header.frame_id;
-  current_ee_pose.pose.orientation = current_ee_transform.transform.rotation;
-  current_ee_pose.pose.position.x = current_ee_transform.transform.translation.x;
-  current_ee_pose.pose.position.y = current_ee_transform.transform.translation.y;
-  current_ee_pose.pose.position.z = current_ee_transform.transform.translation.z;
-
-  return current_ee_pose;
-}
 
 bool DemoInterface::adjustFTThreshold(double ft_multiplier)
 {
@@ -262,12 +220,6 @@ bool DemoInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching
       result = adjustImpedanceControllerStiffness(200.0, 0.0, req.ft_threshold_multiplier);
       break;
     }
-    case 4: {
-      ROS_WARN("This is a moveit test and should be removed");
-      ROS_WARN("Did it manage? %s", testPlanning() ? "yes" : "no");
-      result = true;
-      break;
-    }
     default: {
       ROS_ERROR("Unknown value of teaching - nothing happened");
       result = false;
@@ -276,6 +228,7 @@ bool DemoInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching
 
   res.success = result;
   res.ee_pose = getEEPose();
+
   return result;
 }
 
@@ -453,7 +406,7 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
     return;
 }
 
-bool DemoInterface::testPlanning() {
+bool DemoInterface::moveitTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res){
   moveit::planning_interface::MoveGroupInterface::Plan plan;
 
   ROS_INFO("Trying to switch to the joint controller...");
@@ -468,7 +421,7 @@ bool DemoInterface::testPlanning() {
     return false;
 
 
-  geometry_msgs::PoseStamped current_pose = getHandPose();
+  geometry_msgs::PoseStamped current_pose = getPose(BASE_FRAME, LINK8_FRAME);
   ROS_WARN("[%f, %f, %f]", current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z);
   geometry_msgs::Pose target_pose;
 
