@@ -56,7 +56,6 @@ DemoInterface::DemoInterface():
   }
 
   move_group_ = new moveit::planning_interface::MoveGroupInterface(PLANNING_GROUP);
-  move_group_->setEndEffector(LINK8_FRAME);
 }
 
 geometry_msgs::PoseStamped DemoInterface::getPose(const std::string ref_frame, const std::string child_frame)
@@ -191,7 +190,7 @@ bool DemoInterface::adjustDirectionControllerParameters(geometry_msgs::Vector3 d
   direction_srv.request.config.doubles.push_back(vz_d);
   direction_srv.request.config.doubles.push_back(speed_d);
 
-  ROS_INFO("Changing %s parameters...", DIRECTION_CONTROLLER.c_str());
+  ROS_INFO("Changing %s parameters...", IMPEDANCE_DIRECTION_CONTROLLER.c_str());
   return cartesian_impedance_direction_dynamic_reconfigure_client_.call(direction_srv);
 }
 
@@ -342,10 +341,10 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
   // TODO: do proper error handling
   ROS_INFO("Received MoveToContact request");
 
-  ROS_INFO("Trying to switch to the direction controller...");
+  ROS_INFO("Trying to switch to %s...", IMPEDANCE_DIRECTION_CONTROLLER.c_str());
   controller_manager_msgs::SwitchController switch_controller;
   switch_controller.request.stop_controllers.push_back(IMPEDANCE_CONTROLLER);
-  switch_controller.request.start_controllers.push_back(DIRECTION_CONTROLLER);
+  switch_controller.request.start_controllers.push_back(IMPEDANCE_DIRECTION_CONTROLLER);
   switch_controller.request.strictness = 2;
 
   controller_manager_switch_.call(switch_controller);
@@ -356,7 +355,7 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
   ROS_WARN("Setting the robot to be stiff (to be pushable)");
   adjustDirectionControllerParameters(goal.get()->direction, goal.get()->speed);
 
-  ROS_INFO("Direction Controller until contact...");
+  ROS_INFO("%s until contact...", IMPEDANCE_DIRECTION_CONTROLLER.c_str());
 
   bool in_contact = false;
   while(!in_contact)
@@ -393,10 +392,10 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
   move_to_contact_result_.ee_pose = getEEPose();
   move_to_contact_server_->setSucceeded(move_to_contact_result_);
 
-  ROS_INFO("Trying to switch back to the impedance controller...");
+  ROS_INFO("Trying to switch back to %s...", IMPEDANCE_CONTROLLER.c_str());
   controller_manager_msgs::SwitchController switch_back_controller;
   switch_back_controller.request.start_controllers.push_back(IMPEDANCE_CONTROLLER);
-  switch_back_controller.request.stop_controllers.push_back(DIRECTION_CONTROLLER);
+  switch_back_controller.request.stop_controllers.push_back(IMPEDANCE_DIRECTION_CONTROLLER);
   switch_back_controller.request.strictness = 2;
 
   adjustImpedanceControllerStiffness();
@@ -422,32 +421,25 @@ bool DemoInterface::moveitTestCallback(std_srvs::SetBoolRequest &req, std_srvs::
 
 
   geometry_msgs::PoseStamped current_pose = getPose(BASE_FRAME, LINK8_FRAME);
-  ROS_WARN("[%f, %f, %f]", current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z);
+  ROS_WARN_NAMED("MoveIt! Test", "[%f, %f, %f]", current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z);
   geometry_msgs::Pose target_pose;
 
   target_pose.orientation = current_pose.pose.orientation;
   target_pose.position = current_pose.pose.position;
   target_pose.position.z += 0.04; // move 4 cm up
-  target_pose.position.y += 0.04; // move 4 cm up
-
-  // We can print the name of the reference frame for this robot.
-  ROS_INFO_NAMED("tutorial", "Reference frame: %s", move_group_->getPlanningFrame().c_str());
-
-  // We can also print the name of the end-effector link for this group.
-  ROS_INFO_NAMED("tutorial", "End effector link: %s", move_group_->getEndEffectorLink().c_str());
-
-  ROS_WARN("[%f, %f, %f]", target_pose.position.x, target_pose.position.y, target_pose.position.z);
+  target_pose.position.y += 0.04; // move 4 cm left
 
   move_group_->setPoseTarget(target_pose);
 
-  ROS_INFO("Trying to plan");
   bool result = (move_group_->plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
   ROS_INFO("Planning? %s", result ? "SUCCESS" : "FAILED");
 
   move_group_->move();
 
+  current_pose = getPose(BASE_FRAME, LINK8_FRAME);
+  ROS_WARN_NAMED("MoveIt! Test", "[%f, %f, %f]", current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z);
 
-  ROS_INFO("Trying to switch to the impedance controller...");
+  ROS_INFO("Trying to switch to %s...", IMPEDANCE_CONTROLLER.c_str());
   controller_manager_msgs::SwitchController switch_back_controller;
   switch_back_controller.request.stop_controllers.push_back(JOINT_CONTROLLER);
   switch_back_controller.request.start_controllers.push_back(IMPEDANCE_CONTROLLER);
