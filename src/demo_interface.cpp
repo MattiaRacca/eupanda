@@ -6,7 +6,6 @@ DemoInterface::DemoInterface():
   // Servers
   kinesthetic_server_ = nh_.advertiseService("kinesthetic_teaching", &DemoInterface::kinestheticTeachingCallback, this);
   grasp_server_ = nh_.advertiseService("grasp", &DemoInterface::graspCallback, this);
-  user_sync_server_ = nh_.advertiseService("user_sync", &DemoInterface::userSyncCallback, this);
   moveit_test_server_ = nh_.advertiseService("moveit_test", &DemoInterface::moveitTestCallback, this);
 
   equilibrium_pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/equilibrium_pose", 10);
@@ -14,6 +13,10 @@ DemoInterface::DemoInterface():
   move_to_contact_server_ = new actionlib::SimpleActionServer<panda_pbd::MoveToContactAction>(
           nh_, "move_to_contact_server",boost::bind(&DemoInterface::moveToContactCallback, this, _1), false);
   move_to_contact_server_->start();
+
+  user_sync_server_ = new actionlib::SimpleActionServer<panda_pbd::UserSyncAction>(
+          nh_, "user_sync_server",boost::bind(&DemoInterface::userSyncCallback, this, _1), false);
+  user_sync_server_->start();
 
   // Clients
   cartesian_impedance_dynamic_reconfigure_client_ = nh_.
@@ -34,10 +37,10 @@ DemoInterface::DemoInterface():
 
   gripper_move_client_ = new actionlib::SimpleActionClient<franka_gripper::MoveAction>("/franka_gripper/move", true);
 
-  ROS_INFO("Waiting for the controller manager");
+  ROS_DEBUG("Waiting for the controller manager");
   controller_manager_switch_.waitForExistence();
 
-  ROS_INFO("Starting the Impedance Controller...");
+  ROS_DEBUG("Starting the %s...", IMPEDANCE_CONTROLLER.c_str());
   controller_manager_msgs::SwitchController switch_controller;
   switch_controller.request.start_controllers.push_back(IMPEDANCE_CONTROLLER);
   switch_controller.request.strictness = 2;
@@ -48,9 +51,9 @@ DemoInterface::DemoInterface():
     controller_manager_switch_.call(switch_controller);
     loaded_controller = switch_controller.response.ok;
     if (loaded_controller){
-      ROS_INFO("Impedance Controller started");
+      ROS_INFO("%s started", IMPEDANCE_CONTROLLER.c_str());
     } else {
-      ROS_ERROR("Impedance Controller not started. Trying again in 2 seconds...");
+      ROS_ERROR("Cannot start %s. Trying again in 2 seconds...", IMPEDANCE_CONTROLLER.c_str());
       ros::Duration(2).sleep();
     }
   }
@@ -294,14 +297,17 @@ bool DemoInterface::graspCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBo
   }
 }
 
-bool DemoInterface::userSyncCallback(panda_pbd::UserSyncRequest &req, panda_pbd::UserSyncResponse &res){
+
+void DemoInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal){
   boost::shared_ptr<geometry_msgs::WrenchStamped const> last_external_wrench_ptr;
-  bool threshold_exceeded = false;
+  user_sync_result_.unlock = false;
 
   adjustImpedanceControllerStiffness(1000.0, 200.0, 10.0);
   ROS_WARN("Setting the robot to be stiff (to be pushable)");
 
-  while (!threshold_exceeded)
+  double force_threshold = goal.get()->force_threshold;
+
+  while (!user_sync_result_.unlock)
   {
     /* The external wrench is in the EE frame
      * Positive value when the force is applied AGAINST the axis
@@ -312,34 +318,37 @@ bool DemoInterface::userSyncCallback(panda_pbd::UserSyncRequest &req, panda_pbd:
     if (last_external_wrench_ptr != nullptr)
     {
       last_wrench_ = *last_external_wrench_ptr;
-      if (std::abs(last_wrench_.wrench.force.x) > req.force_threshold.x ||
-          std::abs(last_wrench_.wrench.force.y) > req.force_threshold.y ||
-          std::abs(last_wrench_.wrench.force.z) > req.force_threshold.z)
+      if (std::abs(last_wrench_.wrench.force.x) > force_threshold ||
+          std::abs(last_wrench_.wrench.force.y) > force_threshold ||
+          std::abs(last_wrench_.wrench.force.z) > force_threshold)
       {
-        ROS_INFO("Robot unlocked!");
-        ROS_INFO("[%f %f %f] sensed",
-                last_wrench_.wrench.force.x,
-                last_wrench_.wrench.force.y,
-                last_wrench_.wrench.force.z);
-        threshold_exceeded = true;
+        ROS_DEBUG("Robot unlocked!");
+        ROS_DEBUG("[%f %f %f] sensed",
+                 last_wrench_.wrench.force.x,
+                 last_wrench_.wrench.force.y,
+                 last_wrench_.wrench.force.z);
+        user_sync_result_.unlock = true;
       } else {
-        ROS_INFO_THROTTLE(10, "Not enough force ([%f %f %f] sensed)",
-                last_wrench_.wrench.force.x,
-                last_wrench_.wrench.force.y,
-                last_wrench_.wrench.force.z);
+        ROS_DEBUG_THROTTLE(10, "Not enough force ([%f %f %f] sensed)",
+                          last_wrench_.wrench.force.x,
+                          last_wrench_.wrench.force.y,
+                          last_wrench_.wrench.force.z);
+        user_sync_feedback_.contact_forces.x = last_wrench_.wrench.force.x;
+        user_sync_feedback_.contact_forces.y = last_wrench_.wrench.force.y;
+        user_sync_feedback_.contact_forces.z = last_wrench_.wrench.force.z;
+        user_sync_server_->publishFeedback(user_sync_feedback_);
       }
     }
   }
-  res.success = true;
-  // setting back to default
-  ROS_DEBUG("Setting stiffness back to standard values");
-  adjustImpedanceControllerStiffness(200.0, 10.0, 1.0);
-  return res.success;
+  user_sync_server_->setSucceeded(user_sync_result_);
+
+  // setting stiffnes back to default
+  adjustImpedanceControllerStiffness();
 }
 
 void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal){
   // TODO: do proper error handling
-  ROS_INFO("Received MoveToContact request");
+  ROS_DEBUG("Received MoveToContact request");
 
   ROS_INFO("Trying to switch to %s...", IMPEDANCE_DIRECTION_CONTROLLER.c_str());
   controller_manager_msgs::SwitchController switch_controller;
@@ -355,7 +364,7 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
   ROS_WARN("Setting the robot to be stiff (to be pushable)");
   adjustDirectionControllerParameters(goal.get()->direction, goal.get()->speed);
 
-  ROS_INFO("%s until contact...", IMPEDANCE_DIRECTION_CONTROLLER.c_str());
+  ROS_DEBUG("%s until contact...", IMPEDANCE_DIRECTION_CONTROLLER.c_str());
 
   bool in_contact = false;
   while(!in_contact)
@@ -370,14 +379,14 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
           std::abs(last_wrench_.wrench.force.y) > goal->force_threshold ||
           std::abs(last_wrench_.wrench.force.z) > goal->force_threshold)
       {
-        ROS_INFO("Robot touched something!");
-        ROS_INFO("[%f %f %f] sensed",
+        ROS_DEBUG("Robot touched something!");
+        ROS_DEBUG("[%f %f %f] sensed",
                  last_wrench_.wrench.force.x,
                  last_wrench_.wrench.force.y,
                  last_wrench_.wrench.force.z);
         in_contact = true;
       } else {
-        ROS_INFO_THROTTLE(10, "Not enough force ([%f %f %f] sensed)",
+        ROS_DEBUG_THROTTLE(10, "Not enough force ([%f %f %f] sensed)",
                           last_wrench_.wrench.force.x,
                           last_wrench_.wrench.force.y,
                           last_wrench_.wrench.force.z);

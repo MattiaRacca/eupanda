@@ -27,8 +27,8 @@
 
 // Custom services
 #include "panda_pbd/EnableTeaching.h"
-#include "panda_pbd/UserSync.h"
 #include "panda_pbd/MoveToContactAction.h"
+#include "panda_pbd/UserSyncAction.h"
 
 class DemoInterface
 {
@@ -42,8 +42,8 @@ private:
 
   // const frame names
   const std::string BASE_FRAME = "panda_link0";
-  const std::string EE_FRAME = "panda_K"; // N.B.: panda_K and panda_EE are the same thing
-  const std::string LINK8_FRAME = "panda_link8"; // Used as EE for the panda_arm planning group by MoveIt!
+  const std::string EE_FRAME = "panda_K";         // N.B.: panda_K and panda_EE are the same thing
+  const std::string LINK8_FRAME = "panda_link8";  // Used as EE for the panda_arm planning group by MoveIt!
 
   // MoveIt! stuff
   const std::string PLANNING_GROUP = "panda_arm";
@@ -53,11 +53,12 @@ private:
   geometry_msgs::WrenchStamped last_wrench_;
   panda_pbd::MoveToContactFeedback move_to_contact_feedback_;
   panda_pbd::MoveToContactResult move_to_contact_result_;
+  panda_pbd::UserSyncFeedback user_sync_feedback_;
+  panda_pbd::UserSyncResult user_sync_result_;
 
   // ROS SERVICES ====== servers
   ros::ServiceServer kinesthetic_server_;
   ros::ServiceServer grasp_server_;
-  ros::ServiceServer user_sync_server_;
   ros::ServiceServer moveit_test_server_;
 
   // ROS SERVICES ====== clients
@@ -73,6 +74,7 @@ private:
   actionlib::SimpleActionClient<franka_gripper::GraspAction> *gripper_grasp_client_;
   actionlib::SimpleActionClient<franka_gripper::MoveAction> *gripper_move_client_;
   actionlib::SimpleActionServer<panda_pbd::MoveToContactAction> *move_to_contact_server_;
+  actionlib::SimpleActionServer<panda_pbd::UserSyncAction> *user_sync_server_;
 
   // TF
   tf::TransformListener pose_listener_;
@@ -81,7 +83,7 @@ private:
   bool kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
   bool graspCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
   bool moveitTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
-  bool userSyncCallback(panda_pbd::UserSyncRequest &req, panda_pbd::UserSyncResponse &res);
+  void userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal);
   void moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal);
 
   // Helper functions
@@ -95,8 +97,6 @@ private:
 
   bool adjustDirectionControllerParameters(geometry_msgs::Vector3 direction, double speed, double transl_stiff,
           double rotat_stiff, double ft_mult);
-
-  bool testPlanning();
 public:
   DemoInterface();
 };

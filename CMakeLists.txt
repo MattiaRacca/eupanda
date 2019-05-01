@@ -22,12 +22,11 @@ find_package(Eigen3 REQUIRED)
 add_service_files(
   FILES
   EnableTeaching.srv
-  UserSync.srv
 )
 
 add_action_files(
   DIRECTORY action
-  FILES MoveToContact.action
+  FILES MoveToContact.action UserSync.action
 )
 
 generate_messages(

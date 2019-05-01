@@ -1,0 +1,10 @@
+## Goal definition
+# force_threshold is the force threshold that triggers the unlock
+float64 force_threshold
+---
+## Result definition
+# unlock is just a bool for confirming the unlock
+bool unlock
+---
+## Feedback
+geometry_msgs/Vector3 contact_forces
