@@ -55,7 +55,13 @@ DemoInterface::DemoInterface():
   }
 
   move_group_ = new moveit::planning_interface::MoveGroupInterface(PLANNING_GROUP);
-  joint_model_group = move_group_->getCurrentState()->getJointModelGroup(PLANNING_GROUP);
+  auto links = move_group_->getLinkNames();
+
+  ROS_INFO("WHAT IS AVAILABLE!?");
+  for(auto it = links.begin(); it != links.end(); it++)    {
+    ROS_INFO("%s", it->c_str());
+  }
+
 }
 
 geometry_msgs::PoseStamped DemoInterface::getEEPose()
@@ -83,6 +89,47 @@ geometry_msgs::PoseStamped DemoInterface::getEEPose()
     {
       ROS_ERROR_STREAM("Error in lookupTransform of " << childFrame << " in "
                        << refFrame);
+    }
+  }
+
+  geometry_msgs::TransformStamped current_ee_transform;
+  tf::transformStampedTFToMsg(transform, current_ee_transform);
+
+  geometry_msgs::PoseStamped current_ee_pose;
+  current_ee_pose.header.frame_id = current_ee_transform.header.frame_id;
+  current_ee_pose.pose.orientation = current_ee_transform.transform.rotation;
+  current_ee_pose.pose.position.x = current_ee_transform.transform.translation.x;
+  current_ee_pose.pose.position.y = current_ee_transform.transform.translation.y;
+  current_ee_pose.pose.position.z = current_ee_transform.transform.translation.z;
+
+  return current_ee_pose;
+}
+
+geometry_msgs::PoseStamped DemoInterface::getHandPose()
+{
+  std::string tf_err_msg;
+  std::string refFrame = BASE_FRAME;
+  std::string childFrame = HAND_FRAME;
+  tf::StampedTransform transform;
+
+  if (!pose_listener_.waitForTransform(refFrame, childFrame, ros::Time(0),
+                                       ros::Duration(0.5), ros::Duration(0.01),
+                                       &tf_err_msg))
+  {
+    ROS_ERROR_STREAM("Unable to get pose from TF: " << tf_err_msg);
+  }
+  else
+  {
+    try
+    {
+      pose_listener_.lookupTransform(refFrame, childFrame,
+                                     ros::Time(0), // get latest available
+                                     transform);
+    }
+    catch (const tf::TransformException &e)
+    {
+      ROS_ERROR_STREAM("Error in lookupTransform of " << childFrame << " in "
+                                                      << refFrame);
     }
   }
 
@@ -218,7 +265,7 @@ bool DemoInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching
     case 4: {
       ROS_WARN("This is a moveit test and should be removed");
       ROS_WARN("Did it manage? %s", testPlanning() ? "yes" : "no");
-      result = false;
+      result = true;
       break;
     }
     default: {
@@ -227,6 +274,8 @@ bool DemoInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching
     }
   }
 
+  res.success = result;
+  res.ee_pose = getEEPose();
   return result;
 }
 
@@ -400,21 +449,59 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
   adjustImpedanceControllerStiffness();
   controller_manager_switch_.call(switch_back_controller);
   ROS_INFO("and... %s", switch_back_controller.response.ok ? "SUCCESS" : "FAILURE");
-  if (!switch_controller.response.ok)
+  if (!switch_back_controller.response.ok)
     return;
 }
 
 bool DemoInterface::testPlanning() {
   moveit::planning_interface::MoveGroupInterface::Plan plan;
 
-  geometry_msgs::PoseStamped current_pose = getEEPose();
+  ROS_INFO("Trying to switch to the joint controller...");
+  controller_manager_msgs::SwitchController switch_controller;
+  switch_controller.request.stop_controllers.push_back(IMPEDANCE_CONTROLLER);
+  switch_controller.request.start_controllers.push_back(JOINT_CONTROLLER);
+  switch_controller.request.strictness = 2;
+
+  controller_manager_switch_.call(switch_controller);
+  ROS_INFO("and... %s", switch_controller.response.ok ? "SUCCESS" : "FAILURE");
+  if (!switch_controller.response.ok)
+    return false;
+
+
+  geometry_msgs::PoseStamped current_pose = getHandPose();
+  ROS_WARN("[%f, %f, %f]", current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z);
   geometry_msgs::Pose target_pose;
 
   target_pose.orientation = current_pose.pose.orientation;
   target_pose.position = current_pose.pose.position;
   target_pose.position.z += 0.04; // move 4 cm up
+  target_pose.position.y += 0.04; // move 4 cm up
+
+  // We can print the name of the reference frame for this robot.
+  ROS_INFO_NAMED("tutorial", "Reference frame: %s", move_group_->getPlanningFrame().c_str());
+
+  // We can also print the name of the end-effector link for this group.
+  ROS_INFO_NAMED("tutorial", "End effector link: %s", move_group_->getEndEffectorLink().c_str());
+
+  ROS_WARN("[%f, %f, %f]", target_pose.position.x, target_pose.position.y, target_pose.position.z);
 
   move_group_->setPoseTarget(target_pose);
 
-  return (move_group_->plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+  ROS_INFO("Trying to plan");
+  bool result = (move_group_->plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+  ROS_INFO("Planning? %s", result ? "SUCCESS" : "FAILED");
+
+  move_group_->move();
+
+
+  ROS_INFO("Trying to switch to the impedance controller...");
+  controller_manager_msgs::SwitchController switch_back_controller;
+  switch_back_controller.request.stop_controllers.push_back(JOINT_CONTROLLER);
+  switch_back_controller.request.start_controllers.push_back(IMPEDANCE_CONTROLLER);
+  switch_back_controller.request.strictness = 2;
+
+  controller_manager_switch_.call(switch_back_controller);
+  ROS_INFO("and... %s", switch_back_controller.response.ok ? "SUCCESS" : "FAILURE");
+  if (!switch_back_controller.response.ok)
+    return false;
 }

@@ -38,13 +38,15 @@ private:
   // const controller names
   const std::string IMPEDANCE_CONTROLLER = "cartesian_impedance_example_controller";
   const std::string DIRECTION_CONTROLLER = "cartesian_impedance_direction_controller";
+  const std::string JOINT_CONTROLLER = "position_joint_trajectory_controller";
 
   // const frame names
   const std::string BASE_FRAME = "panda_link0";
   const std::string EE_FRAME = "panda_K";
+  const std::string HAND_FRAME = "panda_hand";
 
   // MoveIt! stuff
-  const std::string PLANNING_GROUP = "panda_arm";
+  const std::string PLANNING_GROUP = "panda_arm_hand";
   const robot_state::JointModelGroup *joint_model_group;
   moveit::planning_interface::MoveGroupInterface *move_group_;
 
@@ -81,6 +83,7 @@ private:
 
   // Helper functions
   geometry_msgs::PoseStamped getEEPose();
+  geometry_msgs::PoseStamped getHandPose();
   bool adjustFTThreshold(double);
   bool adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
   bool adjustImpedanceControllerStiffness(double transl_stiff, double rotat_stiff, double ft_mult);

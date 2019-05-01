@@ -6,8 +6,7 @@ int main(int argc, char **argv)
   DemoInterface node;
 
   // The MultiThreadedSpinner allows for multiple callbacks at the same time
-  // ros::MultiThreadedSpinner spinner(4);
-  // spinner.spin();
-
-  ros::spin();
+  // TODO: proper thread-safe state machine...
+  ros::MultiThreadedSpinner spinner(4);
+  spinner.spin();
 }
