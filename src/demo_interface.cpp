@@ -3,13 +3,16 @@
 DemoInterface::DemoInterface():
   nh_("~")
 {
-  // Servers
+  // Service servers
   kinesthetic_server_ = nh_.advertiseService("kinesthetic_teaching", &DemoInterface::kinestheticTeachingCallback, this);
-  grasp_server_ = nh_.advertiseService("grasp", &DemoInterface::graspCallback, this);
+  open_gripper_server_ = nh_.advertiseService("open_gripper", &DemoInterface::openGripperCallback, this);
+  close_gripper_server_ = nh_.advertiseService("close_gripper", &DemoInterface::closeGripperCallback, this);
   moveit_test_server_ = nh_.advertiseService("moveit_test", &DemoInterface::moveitTestCallback, this);
 
+  // Publishers
   equilibrium_pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/equilibrium_pose", 10);
 
+  // Action servers
   move_to_contact_server_ = new actionlib::SimpleActionServer<panda_pbd::MoveToContactAction>(
           nh_, "move_to_contact_server",boost::bind(&DemoInterface::moveToContactCallback, this, _1), false);
   move_to_contact_server_->start();
@@ -18,7 +21,7 @@ DemoInterface::DemoInterface():
           nh_, "user_sync_server",boost::bind(&DemoInterface::userSyncCallback, this, _1), false);
   user_sync_server_->start();
 
-  // Clients
+  // Service clients
   cartesian_impedance_dynamic_reconfigure_client_ = nh_.
       serviceClient<dynamic_reconfigure::Reconfigure>("/dynamic_reconfigure_compliance_param_node/set_parameters");
 
@@ -33,10 +36,14 @@ DemoInterface::DemoInterface():
           serviceClient<controller_manager_msgs::SwitchController>
                   ("/controller_manager/switch_controller");
 
+  // Action clients
   gripper_grasp_client_ = new actionlib::SimpleActionClient<franka_gripper::GraspAction>("/franka_gripper/grasp", true);
-
   gripper_move_client_ = new actionlib::SimpleActionClient<franka_gripper::MoveAction>("/franka_gripper/move", true);
 
+  gripper_grasp_client_->waitForServer();
+  gripper_move_client_->waitForServer();
+
+  // Controller Manager interface
   ROS_DEBUG("Waiting for the controller manager");
   controller_manager_switch_.waitForExistence();
 
@@ -58,6 +65,7 @@ DemoInterface::DemoInterface():
     }
   }
 
+  // MoveIt! MoveGroupInterface
   move_group_ = new moveit::planning_interface::MoveGroupInterface(PLANNING_GROUP);
 }
 
@@ -235,68 +243,67 @@ bool DemoInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching
 }
 
 bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req,
-    panda_pbd::EnableTeaching::Response &res)
+                                                panda_pbd::EnableTeaching::Response &res)
 {
   res.success = adjustImpedanceControllerStiffness(req,res);
   return res.success;
 }
 
-bool DemoInterface::graspCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res) {
-  if (req.data)
-  {
-    franka_gripper::GraspGoal grasping_goal;
-    grasping_goal.width = 0.0;
-    grasping_goal.force = 2.0;
-    grasping_goal.speed = 0.01;
-    grasping_goal.epsilon.inner = 0.5;
-    grasping_goal.epsilon.outer = 0.5;
+bool DemoInterface::openGripperCallback(panda_pbd::CloseGripper::Request &req,
+                                        panda_pbd::CloseGripper::Response &res) {
+  franka_gripper::MoveGoal move_goal;
+  // Width in m between the gripper's two fingers
+  // TODO: Do we have a way to check the range for the gripper width?
 
-    if (!gripper_grasp_client_->waitForServer(ros::Duration(1))){
-      ROS_ERROR("Cannot reach GraspAction Server");
-      res.success = false;
-      res.message = "Cannot reach GraspAction Server";
-      return false;
-    }
+  move_goal.width = std::max(0.0, std::min(req.width, 0.0762));
+  move_goal.speed = 0.01; // in m/s
 
-    gripper_grasp_client_->sendGoalAndWait(grasping_goal);
-    if (gripper_grasp_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED){
-      ROS_ERROR("Error in the grasp goal: %s", gripper_grasp_client_->getState().getText().c_str());
-      res.success = false;
-      res.message = gripper_grasp_client_->getState().getText();
-      return false;
-    }
-
-    res.success = true;
-    res.message = gripper_grasp_client_->getState().getText();
-
-    return true;
-  } else {
-    franka_gripper::MoveGoal move_goal;
-    move_goal.width = 0.0762;
-    move_goal.speed = 0.01;
-
-    if (!gripper_move_client_->waitForServer(ros::Duration(1))){
-      ROS_ERROR("Cannot reach MoveAction Server");
-      res.success = false;
-      res.message = "Cannot reach MoveAction Server";
-      return false;
-    }
-
-    gripper_move_client_->sendGoalAndWait(move_goal);
-    if (gripper_move_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED){
-      ROS_ERROR("Error in the grasp goal: %s", gripper_move_client_->getState().getText().c_str());
-      res.success = false;
-      res.message = gripper_move_client_->getState().getText();
-      return false;
-    }
-
-    res.success = true;
-    res.message = gripper_move_client_->getState().getText();
-
-    return true;
+  if (!gripper_move_client_->waitForServer(ros::Duration(1))){
+    ROS_ERROR("Cannot reach MoveAction Server");
+    res.success = false;
+    return res.success;
   }
+
+  gripper_move_client_->sendGoalAndWait(move_goal);
+  if (gripper_move_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED){
+    ROS_ERROR("Error in the grasp goal: %s", gripper_move_client_->getState().getText().c_str());
+    res.success = false;
+  } else {
+    res.success = true;
+  }
+  return res.success;;
 }
 
+bool DemoInterface::closeGripperCallback(panda_pbd::CloseGripper::Request &req,
+                                         panda_pbd::CloseGripper::Response &res) {
+  franka_gripper::GraspGoal grasping_goal;
+
+  // TODO: Do we have a way to check the range for the gripper width?
+  // TODO: Do we want to enforce a force range?
+
+  grasping_goal.width = std::max(0.0, std::min(req.width, 0.0762));;
+  grasping_goal.force = req.force;
+  grasping_goal.speed = 0.01; // in m/s
+
+  // TODO: this epsilon value will never trigger an error basically (neglectful handling)
+  grasping_goal.epsilon.inner = 0.5;
+  grasping_goal.epsilon.outer = 0.5;
+
+  if (!gripper_grasp_client_->waitForServer(ros::Duration(1))){
+    ROS_ERROR("Cannot reach GraspAction Server");
+    res.success = false;
+    return res.success;
+  }
+
+  gripper_grasp_client_->sendGoalAndWait(grasping_goal);
+  if (gripper_grasp_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED){
+    ROS_ERROR("Error in the grasp goal: %s", gripper_grasp_client_->getState().getText().c_str());
+    res.success = false;
+  } else {
+    res.success = true;
+  }
+  return res.success;
+}
 
 void DemoInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal){
   boost::shared_ptr<geometry_msgs::WrenchStamped const> last_external_wrench_ptr;

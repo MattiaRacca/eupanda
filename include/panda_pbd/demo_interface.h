@@ -14,7 +14,6 @@
 #include <tf/transform_listener.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/WrenchStamped.h>
-#include <std_srvs/SetBool.h>
 #include <controller_manager_msgs/SwitchController.h>
 
 // Franka includes
@@ -27,6 +26,8 @@
 
 // Custom services
 #include "panda_pbd/EnableTeaching.h"
+#include "panda_pbd/OpenGripper.h"
+#include "panda_pbd/CloseGripper.h"
 #include "panda_pbd/MoveToContactAction.h"
 #include "panda_pbd/UserSyncAction.h"
 
@@ -58,7 +59,8 @@ private:
 
   // ROS SERVICES ====== servers
   ros::ServiceServer kinesthetic_server_;
-  ros::ServiceServer grasp_server_;
+  ros::ServiceServer close_gripper_server_;
+  ros::ServiceServer open_gripper_server_;
   ros::ServiceServer moveit_test_server_;
 
   // ROS SERVICES ====== clients
@@ -81,20 +83,18 @@ private:
 
   // Callbacks
   bool kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
-  bool graspCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
+  bool closeGripperCallback(panda_pbd::CloseGripper::Request &req, panda_pbd::CloseGripper::Response &res);
+  bool openGripperCallback(panda_pbd::CloseGripper::Request &req, panda_pbd::CloseGripper::Response &res);
   bool moveitTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
   void userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal);
   void moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal);
 
   // Helper functions
-  geometry_msgs::PoseStamped getPose(const std::string origin, const std::string destination);
+  geometry_msgs::PoseStamped getPose(std::string origin, std::string destination);
   geometry_msgs::PoseStamped getEEPose();
-
   bool adjustFTThreshold(double);
-
   bool adjustImpedanceControllerStiffness(double transl_stiff, double rotat_stiff, double ft_mult);
   bool adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
-
   bool adjustDirectionControllerParameters(geometry_msgs::Vector3 direction, double speed, double transl_stiff,
           double rotat_stiff, double ft_mult);
 public:

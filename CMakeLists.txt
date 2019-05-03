@@ -22,6 +22,8 @@ find_package(Eigen3 REQUIRED)
 add_service_files(
   FILES
   EnableTeaching.srv
+  OpenGripper.srv
+  CloseGripper.srv
 )
 
 add_action_files(
