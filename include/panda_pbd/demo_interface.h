@@ -69,12 +69,12 @@ private:
   // ROS SERVICES ====== clients
   ros::ServiceClient cartesian_impedance_dynamic_reconfigure_client_;
   ros::ServiceClient cartesian_impedance_direction_dynamic_reconfigure_client_;
+  ros::ServiceClient cartesian_impedance_trajectory_dynamic_reconfigure_client_;
   ros::ServiceClient forcetorque_collision_client_;
   ros::ServiceClient controller_manager_switch_;
 
   // Topics (publishers and subscribers)
   ros::Publisher equilibrium_pose_publisher_;
-  ros::Publisher target_pose_publisher_;
 
   // Action (servers and clients)
   actionlib::SimpleActionClient<franka_gripper::GraspAction> *gripper_grasp_client_;
@@ -100,6 +100,7 @@ private:
   geometry_msgs::PoseStamped getEEPose();
   bool adjustFTThreshold(double);
   bool adjustImpedanceControllerStiffness(double transl_stiff, double rotat_stiff, double ft_mult);
+  bool adjustTrajectoryControllerParameters(double transl_stiff, double rotat_stiff, double ft_mult);
   bool adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
   bool adjustDirectionControllerParameters(geometry_msgs::Vector3 direction, double speed, double transl_stiff,
           double rotat_stiff, double ft_mult);
