@@ -471,6 +471,13 @@ bool DemoInterface::moveitTestCallback(std_srvs::SetBoolRequest &req, std_srvs::
 }
 
 bool DemoInterface::moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res){
+  ROS_INFO("Test for the move to EE... going in teaching mode");
+  auto result = adjustImpedanceControllerStiffness(0.0, 0.0, 5.0);
+  ROS_INFO("Move the robot to new position");
+  ros::Duration(20).sleep();
+  geometry_msgs::PoseStamped goal_pose = getEEPose();
+  ROS_INFO("Move it back now!");
+  ros::Duration(20).sleep();
 
   ROS_INFO("Trying to switch to the %s...", IMPEDANCE_TRAJECTORY_CONTROLLER.c_str());
   controller_manager_msgs::SwitchController switch_controller;
@@ -484,21 +491,21 @@ bool DemoInterface::moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs
     return false;
 
   geometry_msgs::PoseStamped current_pose = getEEPose();
-  ROS_WARN("Move to EE test: current position [%f, %f, %f]", current_pose.pose.position.x,
-          current_pose.pose.position.y, current_pose.pose.position.z);
-  geometry_msgs::PoseStamped target_pose;
+  ROS_WARN("Move to EE test: current position [%f, %f, %f] and orientation [%f %f %f %f]",
+          current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z,
+          current_pose.pose.orientation.x, current_pose.pose.orientation.y, current_pose.pose.orientation.z, current_pose.pose.orientation.w);
 
-  target_pose.pose.orientation = current_pose.pose.orientation;
-  target_pose.pose.position = current_pose.pose.position;
-  target_pose.pose.position.z += 0.04; // move 4 cm up
-  target_pose.pose.position.y += 0.04; // move 4 cm left
-
-  target_pose_publisher_.publish(target_pose);
-  ros::Duration(5).sleep(); // to allow the controller to receive the new equilibrium pose
+  target_pose_publisher_.publish(goal_pose);
+  ros::Duration(20).sleep(); // to allow the controller to perform the motion
 
   current_pose = getEEPose();
-  ROS_WARN("Move to EE test: new pose [%f, %f, %f]", current_pose.pose.position.x,
-          current_pose.pose.position.y, current_pose.pose.position.z);
+  ROS_WARN("Move to EE test: current position [%f, %f, %f] and orientation [%f %f %f %f]",
+           current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z,
+           current_pose.pose.orientation.x, current_pose.pose.orientation.y, current_pose.pose.orientation.z, current_pose.pose.orientation.w);
+
+  ROS_WARN("Was trying to move here: goal position [%f, %f, %f] and orientation [%f %f %f %f]",
+           goal_pose.pose.position.x, goal_pose.pose.position.y, goal_pose.pose.position.z,
+           goal_pose.pose.orientation.x, goal_pose.pose.orientation.y, goal_pose.pose.orientation.z, goal_pose.pose.orientation.w);
 
   ROS_INFO("Trying to switch to %s...", IMPEDANCE_CONTROLLER.c_str());
   controller_manager_msgs::SwitchController switch_back_controller;
