@@ -31,6 +31,7 @@
 #include "panda_pbd/CloseGripper.h"
 #include "panda_pbd/MoveToContactAction.h"
 #include "panda_pbd/UserSyncAction.h"
+#include "franka_more_controllers/LinearMotionAction.h"
 
 class DemoInterface
 {
@@ -78,6 +79,7 @@ private:
   // Action (servers and clients)
   actionlib::SimpleActionClient<franka_gripper::GraspAction> *gripper_grasp_client_;
   actionlib::SimpleActionClient<franka_gripper::MoveAction> *gripper_move_client_;
+  actionlib::SimpleActionClient<franka_more_controllers::LinearMotionAction> *move_to_ee_client_;
   actionlib::SimpleActionServer<panda_pbd::MoveToContactAction> *move_to_contact_server_;
   actionlib::SimpleActionServer<panda_pbd::UserSyncAction> *user_sync_server_;
 

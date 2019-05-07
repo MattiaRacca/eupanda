@@ -42,9 +42,11 @@ DemoInterface::DemoInterface():
   // Action clients
   gripper_grasp_client_ = new actionlib::SimpleActionClient<franka_gripper::GraspAction>("/franka_gripper/grasp", true);
   gripper_move_client_ = new actionlib::SimpleActionClient<franka_gripper::MoveAction>("/franka_gripper/move", true);
+  move_to_ee_client_ = new actionlib::SimpleActionClient<franka_more_controllers::LinearMotionAction>("/move_to_ee_server", true);
 
   gripper_grasp_client_->waitForServer();
   gripper_move_client_->waitForServer();
+  move_to_ee_client_->waitForServer();
 
   // Controller Manager interface
   ROS_DEBUG("Waiting for the controller manager");
@@ -495,8 +497,24 @@ bool DemoInterface::moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs
           current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z,
           current_pose.pose.orientation.x, current_pose.pose.orientation.y, current_pose.pose.orientation.z, current_pose.pose.orientation.w);
 
-  target_pose_publisher_.publish(goal_pose);
-  ros::Duration(20).sleep(); // to allow the controller to perform the motion
+  if (!move_to_ee_client_->waitForServer(ros::Duration(1))){
+    ROS_ERROR("Cannot reach MoveToEE Server");
+    res.success = false;
+    return res.success;
+  }
+
+  franka_more_controllers::LinearMotionGoal goal;
+  goal.pose = goal_pose;
+  goal.position_speed = 0.02;
+  goal.rotation_speed = 0.5;
+
+  move_to_ee_client_->sendGoalAndWait(goal);
+  if (move_to_ee_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED){
+    ROS_ERROR("Error in the moveToEE action: %s", move_to_ee_client_->getState().getText().c_str());
+    res.success = false;
+  } else {
+    res.success = true;
+  }
 
   current_pose = getEEPose();
   ROS_WARN("Move to EE test: current position [%f, %f, %f] and orientation [%f %f %f %f]",
@@ -517,4 +535,6 @@ bool DemoInterface::moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs
   ROS_INFO("and... %s", switch_back_controller.response.ok ? "SUCCESS" : "FAILURE");
   if (!switch_back_controller.response.ok)
     return false;
+
+  return res.success;
 }
