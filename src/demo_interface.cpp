@@ -7,10 +7,13 @@ DemoInterface::DemoInterface():
   kinesthetic_server_ = nh_.advertiseService("kinesthetic_teaching", &DemoInterface::kinestheticTeachingCallback, this);
   open_gripper_server_ = nh_.advertiseService("open_gripper", &DemoInterface::openGripperCallback, this);
   close_gripper_server_ = nh_.advertiseService("close_gripper", &DemoInterface::closeGripperCallback, this);
-  moveit_test_server_ = nh_.advertiseService("moveit_test", &DemoInterface::moveitTestCallback, this);
+
+  // TODO: this is the test service...
+  moveit_test_server_ = nh_.advertiseService("moveit_test", &DemoInterface::moveToEETestCallback, this);
 
   // Publishers
   equilibrium_pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/equilibrium_pose", 10);
+  target_pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/target_pose", 10);
 
   // Action servers
   move_to_contact_server_ = new actionlib::SimpleActionServer<panda_pbd::MoveToContactAction>(
@@ -458,6 +461,48 @@ bool DemoInterface::moveitTestCallback(std_srvs::SetBoolRequest &req, std_srvs::
   ROS_INFO("Trying to switch to %s...", IMPEDANCE_CONTROLLER.c_str());
   controller_manager_msgs::SwitchController switch_back_controller;
   switch_back_controller.request.stop_controllers.push_back(JOINT_CONTROLLER);
+  switch_back_controller.request.start_controllers.push_back(IMPEDANCE_CONTROLLER);
+  switch_back_controller.request.strictness = 2;
+
+  controller_manager_switch_.call(switch_back_controller);
+  ROS_INFO("and... %s", switch_back_controller.response.ok ? "SUCCESS" : "FAILURE");
+  if (!switch_back_controller.response.ok)
+    return false;
+}
+
+bool DemoInterface::moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res){
+
+  ROS_INFO("Trying to switch to the %s...", IMPEDANCE_TRAJECTORY_CONTROLLER.c_str());
+  controller_manager_msgs::SwitchController switch_controller;
+  switch_controller.request.stop_controllers.push_back(IMPEDANCE_CONTROLLER);
+  switch_controller.request.start_controllers.push_back(IMPEDANCE_TRAJECTORY_CONTROLLER);
+  switch_controller.request.strictness = 2;
+
+  controller_manager_switch_.call(switch_controller);
+  ROS_INFO("and... %s", switch_controller.response.ok ? "SUCCESS" : "FAILURE");
+  if (!switch_controller.response.ok)
+    return false;
+
+  geometry_msgs::PoseStamped current_pose = getPose(BASE_FRAME, EE_FRAME);
+  ROS_WARN("Move to EE test: current position [%f, %f, %f]", current_pose.pose.position.x,
+          current_pose.pose.position.y, current_pose.pose.position.z);
+  geometry_msgs::Pose target_pose;
+
+  target_pose.orientation = current_pose.pose.orientation;
+  target_pose.position = current_pose.pose.position;
+  target_pose.position.z += 0.04; // move 4 cm up
+  target_pose.position.y += 0.04; // move 4 cm left
+
+  target_pose_publisher_.publish(target_pose);
+  ros::Duration(20).sleep(); // to allow the controller to receive the new equilibrium pose
+
+  current_pose = getPose(BASE_FRAME, EE_FRAME);
+  ROS_WARN("Move to EE test: new pose [%f, %f, %f]", current_pose.pose.position.x,
+          current_pose.pose.position.y, current_pose.pose.position.z);
+
+  ROS_INFO("Trying to switch to %s...", IMPEDANCE_CONTROLLER.c_str());
+  controller_manager_msgs::SwitchController switch_back_controller;
+  switch_back_controller.request.stop_controllers.push_back(IMPEDANCE_TRAJECTORY_CONTROLLER);
   switch_back_controller.request.start_controllers.push_back(IMPEDANCE_CONTROLLER);
   switch_back_controller.request.strictness = 2;
 

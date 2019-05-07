@@ -12,6 +12,7 @@
 #include <dynamic_reconfigure/DoubleParameter.h>
 #include <dynamic_reconfigure/Reconfigure.h>
 #include <tf/transform_listener.h>
+#include <std_srvs/SetBool.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/WrenchStamped.h>
 #include <controller_manager_msgs/SwitchController.h>
@@ -39,6 +40,7 @@ private:
   // const controller names
   const std::string IMPEDANCE_CONTROLLER = "cartesian_impedance_example_controller";
   const std::string IMPEDANCE_DIRECTION_CONTROLLER = "cartesian_impedance_direction_controller";
+  const std::string IMPEDANCE_TRAJECTORY_CONTROLLER = "cartesian_impedance_trajectory_controller";
   const std::string JOINT_CONTROLLER = "position_joint_trajectory_controller";
 
   // const frame names
@@ -71,6 +73,7 @@ private:
 
   // Topics (publishers and subscribers)
   ros::Publisher equilibrium_pose_publisher_;
+  ros::Publisher target_pose_publisher_;
 
   // Action (servers and clients)
   actionlib::SimpleActionClient<franka_gripper::GraspAction> *gripper_grasp_client_;
@@ -86,6 +89,7 @@ private:
   bool closeGripperCallback(panda_pbd::CloseGripper::Request &req, panda_pbd::CloseGripper::Response &res);
   bool openGripperCallback(panda_pbd::CloseGripper::Request &req, panda_pbd::CloseGripper::Response &res);
   bool moveitTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
+  bool moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
   void userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal);
   void moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal);
 
