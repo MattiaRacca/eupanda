@@ -22,9 +22,6 @@
 #include <franka_gripper/GraspAction.h>
 #include <franka_gripper/MoveAction.h>
 
-// MoveIt! includes
-#include <moveit/move_group_interface/move_group_interface.h>
-
 // Custom services
 #include "panda_pbd/EnableTeaching.h"
 #include "panda_pbd/OpenGripper.h"
@@ -42,16 +39,10 @@ private:
   const std::string IMPEDANCE_CONTROLLER = "cartesian_impedance_example_controller";
   const std::string IMPEDANCE_DIRECTION_CONTROLLER = "cartesian_impedance_direction_controller";
   const std::string IMPEDANCE_TRAJECTORY_CONTROLLER = "cartesian_impedance_trajectory_controller";
-  const std::string JOINT_CONTROLLER = "position_joint_trajectory_controller";
 
   // const frame names
   const std::string BASE_FRAME = "panda_link0";
   const std::string EE_FRAME = "panda_K";         // N.B.: panda_K and panda_EE are the same thing
-  const std::string LINK8_FRAME = "panda_link8";  // Used as EE for the panda_arm planning group by MoveIt!
-
-  // MoveIt! stuff
-  const std::string PLANNING_GROUP = "panda_arm";
-  moveit::planning_interface::MoveGroupInterface *move_group_;
 
   // Internal variable
   geometry_msgs::WrenchStamped last_wrench_;
@@ -64,7 +55,7 @@ private:
   ros::ServiceServer kinesthetic_server_;
   ros::ServiceServer close_gripper_server_;
   ros::ServiceServer open_gripper_server_;
-  ros::ServiceServer moveit_test_server_;
+  ros::ServiceServer move_to_ee_test_server_;
 
   // ROS SERVICES ====== clients
   ros::ServiceClient cartesian_impedance_dynamic_reconfigure_client_;
@@ -90,7 +81,6 @@ private:
   bool kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
   bool closeGripperCallback(panda_pbd::CloseGripper::Request &req, panda_pbd::CloseGripper::Response &res);
   bool openGripperCallback(panda_pbd::OpenGripper::Request &req, panda_pbd::OpenGripper::Response &res);
-  bool moveitTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
   bool moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
   void userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal);
   void moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal);
