@@ -252,8 +252,8 @@ bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Reque
   return res.success;
 }
 
-bool DemoInterface::openGripperCallback(panda_pbd::CloseGripper::Request &req,
-                                        panda_pbd::CloseGripper::Response &res) {
+bool DemoInterface::openGripperCallback(panda_pbd::OpenGripper::Request &req,
+                                        panda_pbd::OpenGripper::Response &res) {
   franka_gripper::MoveGoal move_goal;
   // Width in m between the gripper's two fingers
   // TODO: Do we have a way to check the range for the gripper width?
@@ -483,20 +483,20 @@ bool DemoInterface::moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs
   if (!switch_controller.response.ok)
     return false;
 
-  geometry_msgs::PoseStamped current_pose = getPose(BASE_FRAME, EE_FRAME);
+  geometry_msgs::PoseStamped current_pose = getEEPose();
   ROS_WARN("Move to EE test: current position [%f, %f, %f]", current_pose.pose.position.x,
           current_pose.pose.position.y, current_pose.pose.position.z);
-  geometry_msgs::Pose target_pose;
+  geometry_msgs::PoseStamped target_pose;
 
-  target_pose.orientation = current_pose.pose.orientation;
-  target_pose.position = current_pose.pose.position;
-  target_pose.position.z += 0.04; // move 4 cm up
-  target_pose.position.y += 0.04; // move 4 cm left
+  target_pose.pose.orientation = current_pose.pose.orientation;
+  target_pose.pose.position = current_pose.pose.position;
+  target_pose.pose.position.z += 0.04; // move 4 cm up
+  target_pose.pose.position.y += 0.04; // move 4 cm left
 
   target_pose_publisher_.publish(target_pose);
-  ros::Duration(20).sleep(); // to allow the controller to receive the new equilibrium pose
+  ros::Duration(5).sleep(); // to allow the controller to receive the new equilibrium pose
 
-  current_pose = getPose(BASE_FRAME, EE_FRAME);
+  current_pose = getEEPose();
   ROS_WARN("Move to EE test: new pose [%f, %f, %f]", current_pose.pose.position.x,
           current_pose.pose.position.y, current_pose.pose.position.z);
 

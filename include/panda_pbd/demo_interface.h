@@ -87,7 +87,7 @@ private:
   // Callbacks
   bool kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
   bool closeGripperCallback(panda_pbd::CloseGripper::Request &req, panda_pbd::CloseGripper::Response &res);
-  bool openGripperCallback(panda_pbd::CloseGripper::Request &req, panda_pbd::CloseGripper::Response &res);
+  bool openGripperCallback(panda_pbd::OpenGripper::Request &req, panda_pbd::OpenGripper::Response &res);
   bool moveitTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
   bool moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
   void userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal);
