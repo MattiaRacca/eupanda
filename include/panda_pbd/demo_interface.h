@@ -17,6 +17,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/WrenchStamped.h>
 #include <controller_manager_msgs/SwitchController.h>
+#include <controller_manager_msgs/ListControllers.h>
 
 // Franka includes
 #include <franka_control/SetForceTorqueCollisionBehavior.h>
@@ -63,6 +64,7 @@ private:
   ros::ServiceClient cartesian_impedance_dynamic_reconfigure_client_;
   ros::ServiceClient forcetorque_collision_client_;
   ros::ServiceClient controller_manager_switch_;
+  ros::ServiceClient controller_manager_list_;
 
   // ROS TOPICS ====== publishers
   ros::Publisher equilibrium_pose_publisher_;

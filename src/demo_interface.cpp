@@ -37,7 +37,7 @@ DemoInterface::DemoInterface():
                                           ("/franka_control/set_force_torque_collision_behavior");
   controller_manager_switch_ = nh_.
           serviceClient<controller_manager_msgs::SwitchController>
-                  ("/controller_manager/switch_controller");
+          ("/controller_manager/switch_controller");
 
   // Action clients
   gripper_grasp_client_ = new actionlib::SimpleActionClient<franka_gripper::GraspAction>("/franka_gripper/grasp", true);
@@ -121,7 +121,6 @@ geometry_msgs::PoseStamped DemoInterface::getEEPose()
   return getPose(BASE_FRAME, EE_FRAME);
 }
 
-
 bool DemoInterface::adjustFTThreshold(double ft_multiplier)
 {
   franka_control::SetForceTorqueCollisionBehavior collision_srv;
@@ -151,6 +150,7 @@ bool DemoInterface::adjustFTThreshold(double ft_multiplier)
 
   forcetorque_collision_client_.call(collision_srv);
 }
+
 bool DemoInterface::adjustImpedanceControllerStiffness(double transl_stiff = 200.0,
                                                        double rotat_stiff = 10.0,
                                                        double ft_mult = 1.0) {
@@ -401,7 +401,10 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
       last_wrench_ = *last_external_wrench_ptr;
       if (std::abs(last_wrench_.wrench.force.x) > goal->force_threshold ||
           std::abs(last_wrench_.wrench.force.y) > goal->force_threshold ||
-          std::abs(last_wrench_.wrench.force.z) > goal->force_threshold)
+          std::abs(last_wrench_.wrench.force.z) > goal->force_threshold ||
+          std::abs(last_wrench_.wrench.torque.x) > goal->torque_threshold ||
+          std::abs(last_wrench_.wrench.torque.y) > goal->torque_threshold ||
+          std::abs(last_wrench_.wrench.torque.z) > goal->torque_threshold)
       {
         ROS_DEBUG("Robot touched something!");
         ROS_DEBUG("[%f %f %f] sensed",
@@ -417,6 +420,9 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
         move_to_contact_feedback_.contact_forces.x = last_wrench_.wrench.force.x;
         move_to_contact_feedback_.contact_forces.y = last_wrench_.wrench.force.y;
         move_to_contact_feedback_.contact_forces.z = last_wrench_.wrench.force.z;
+        move_to_contact_feedback_.contact_torques.x = last_wrench_.wrench.torque.x;
+        move_to_contact_feedback_.contact_torques.y = last_wrench_.wrench.torque.y;
+        move_to_contact_feedback_.contact_torques.z = last_wrench_.wrench.torque.z;
         move_to_contact_server_->publishFeedback(move_to_contact_feedback_);
       }
     }
@@ -428,6 +434,9 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
   move_to_contact_result_.contact_forces.x = last_wrench_.wrench.force.x;
   move_to_contact_result_.contact_forces.y = last_wrench_.wrench.force.y;
   move_to_contact_result_.contact_forces.z = last_wrench_.wrench.force.z;
+  move_to_contact_result_.contact_torques.x = last_wrench_.wrench.torque.x;
+  move_to_contact_result_.contact_torques.y = last_wrench_.wrench.torque.y;
+  move_to_contact_result_.contact_torques.z = last_wrench_.wrench.torque.z;
 
   move_to_contact_server_->setSucceeded(move_to_contact_result_);
 
@@ -534,7 +543,7 @@ bool DemoInterface::moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::
   ros::Duration(20).sleep();
 
   geometry_msgs::PoseStamped current_pose = getEEPose();
-  ROS_WARN("Move to EE test: current position [%f, %f, %f] and orientation [%f %f %f %f]",
+  ROS_WARN("Move to test: current position [%f, %f, %f] and orientation [%f %f %f %f]",
           current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z,
           current_pose.pose.orientation.x, current_pose.pose.orientation.y, current_pose.pose.orientation.z, current_pose.pose.orientation.w);
 
@@ -548,8 +557,8 @@ bool DemoInterface::moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::
 
     panda_pbd::MoveToEEGoal goal;
     goal.pose = goal_pose;
-    goal.position_speed = 0.04;
-    goal.rotation_speed = 1.0;
+    goal.position_speed = 0.04; // in m/s
+    goal.rotation_speed = 1.0; // in rad/s
 
     ROS_INFO("Sending the goal, to myself...");
 
@@ -578,9 +587,10 @@ bool DemoInterface::moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::
 
     panda_pbd::MoveToContactGoal goal;
     goal.pose = goal_pose;
-    goal.position_speed = 0.04;
-    goal.rotation_speed = 1.0;
-    goal.force_threshold = 5.0;
+    goal.position_speed = 0.04; // in m/s
+    goal.rotation_speed = 1.0; // in rad/s
+    goal.force_threshold = 5.0; // in N
+    goal.torque_threshold = 5.0; // Nm/rad
 
     ROS_INFO("Sending the goal, to myself...");
 
@@ -594,7 +604,5 @@ bool DemoInterface::moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::
 
     ROS_INFO("Moved until force threshold was passed (contact reached?)");
   }
-
-
   return res.success;
 }

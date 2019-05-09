@@ -6,11 +6,14 @@ geometry_msgs/PoseStamped pose
 float64 position_speed
 float64 rotation_speed
 float64 force_threshold
+float64 torque_threshold
 ---
 ## Result definition
 # ee_pose is the end effector pose, when contact was reached
 geometry_msgs/PoseStamped final_pose
 geometry_msgs/Vector3 contact_forces
+geometry_msgs/Vector3 contact_torques
 ---
 ## Feedback
 geometry_msgs/Vector3 contact_forces
+geometry_msgs/Vector3 contact_torques
