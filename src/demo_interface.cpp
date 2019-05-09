@@ -245,10 +245,10 @@ bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Reque
 bool DemoInterface::openGripperCallback(panda_pbd::OpenGripper::Request &req,
                                         panda_pbd::OpenGripper::Response &res) {
   franka_gripper::MoveGoal move_goal;
-  // Width in m between the gripper's two fingers
   // TODO: Do we have a way to check the range for the gripper width?
+  // clunky way through the /franka_gripper/joint_states topic
 
-  move_goal.width = std::max(0.0, std::min(req.width, 0.0762));
+  move_goal.width = std::max(0.0, std::min(req.width, 0.08));
   move_goal.speed = 0.01; // in m/s
 
   if (!gripper_move_client_->waitForServer(ros::Duration(1))){
@@ -272,9 +272,10 @@ bool DemoInterface::closeGripperCallback(panda_pbd::CloseGripper::Request &req,
   franka_gripper::GraspGoal grasping_goal;
 
   // TODO: Do we have a way to check the range for the gripper width?
+  // see open gripper callback
   // TODO: Do we want to enforce a force range?
 
-  grasping_goal.width = std::max(0.0, std::min(req.width, 0.0762));;
+  grasping_goal.width = std::max(0.0, std::min(req.width, 0.08));;
   grasping_goal.force = req.force;
   grasping_goal.speed = 0.01; // in m/s
 
