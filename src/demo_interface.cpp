@@ -31,10 +31,6 @@ DemoInterface::DemoInterface():
   cartesian_impedance_dynamic_reconfigure_client_ = nh_.
       serviceClient<dynamic_reconfigure::Reconfigure>("/dynamic_reconfigure_compliance_param_node/set_parameters");
 
-  cartesian_impedance_direction_dynamic_reconfigure_client_ = nh_.
-          serviceClient<dynamic_reconfigure::Reconfigure>
-                  ("/dynamic_reconfigure_cartesian_impedance_direction_param_node/set_parameters");
-
   // Service clients
   forcetorque_collision_client_ = nh_.
                                   serviceClient<franka_control::SetForceTorqueCollisionBehavior>
@@ -215,43 +211,6 @@ bool DemoInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching
   return result;
 }
 
-bool DemoInterface::adjustDirectionControllerParameters(geometry_msgs::Vector3 direction,
-                                                        double speed = 0.0,
-                                                        double transl_stiff = 1500.0,
-                                                        double rotat_stiff = 300.0,
-                                                        double ft_mult = 10.0
-){
-  dynamic_reconfigure::Reconfigure direction_srv;
-  dynamic_reconfigure::DoubleParameter translational_stiff, rotational_stiff;
-  dynamic_reconfigure::DoubleParameter vx_d, vy_d, vz_d, speed_d;
-
-  adjustFTThreshold(ft_mult);
-
-  translational_stiff.name = "translational_stiffness";
-  rotational_stiff.name = "rotational_stiffness";
-  vx_d.name = "vx_d";
-  vy_d.name = "vy_d";
-  vz_d.name = "vz_d";
-  speed_d.name = "speed";
-
-  translational_stiff.value = transl_stiff;
-  rotational_stiff.value = rotat_stiff;
-  vx_d.value = direction.x;
-  vy_d.value = direction.y;
-  vz_d.value = direction.z;
-  speed_d.value = speed;
-
-  direction_srv.request.config.doubles.push_back(translational_stiff);
-  direction_srv.request.config.doubles.push_back(rotational_stiff);
-  direction_srv.request.config.doubles.push_back(vx_d);
-  direction_srv.request.config.doubles.push_back(vy_d);
-  direction_srv.request.config.doubles.push_back(vz_d);
-  direction_srv.request.config.doubles.push_back(speed_d);
-
-  ROS_INFO("Changing %s parameters...", IMPEDANCE_DIRECTION_CONTROLLER.c_str());
-  return cartesian_impedance_direction_dynamic_reconfigure_client_.call(direction_srv);
-}
-
 bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req,
                                                 panda_pbd::EnableTeaching::Response &res)
 {
@@ -364,28 +323,74 @@ void DemoInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal
 }
 
 void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal){
-  // TODO: do proper error handling
   ROS_DEBUG("Received MoveToContact request");
+  // TODO: assuming the cartesian impedance controller is active
 
-  ROS_INFO("Trying to switch to %s...", IMPEDANCE_DIRECTION_CONTROLLER.c_str());
-  controller_manager_msgs::SwitchController switch_controller;
-  switch_controller.request.stop_controllers.push_back(IMPEDANCE_CONTROLLER);
-  switch_controller.request.start_controllers.push_back(IMPEDANCE_DIRECTION_CONTROLLER);
-  switch_controller.request.strictness = 2;
+  ROS_WARN("Setting the robot to be stiff (to execute trajectory)");
+  adjustImpedanceControllerStiffness(1500.0, 300.0, 10.0);
 
-  controller_manager_switch_.call(switch_controller);
-  ROS_INFO("and... %s", switch_controller.response.ok ? "SUCCESS" : "FAILURE");
-  if (!switch_controller.response.ok)
-    return;
+  // Put current pose in Eigen form
+  auto current_pose = getEEPose();
+  Eigen::Vector3d current_position;
+  current_position << current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z;
+  Eigen::Quaterniond current_orientation;
+  current_orientation.coeffs() << current_pose.pose.orientation.x, current_pose.pose.orientation.y,
+          current_pose.pose.orientation.z, current_pose.pose.orientation.w;
 
-  ROS_WARN("Setting the robot to be stiff (to be able to push against, if needed)");
-  adjustDirectionControllerParameters(goal.get()->direction, goal.get()->speed);
+  // Put target pose in Eigen form
+  Eigen::Vector3d target_position;
+  target_position << goal->pose.pose.position.x, goal->pose.pose.position.y, goal->pose.pose.position.z;
+  Eigen::Quaterniond target_orientation;
 
-  ROS_DEBUG("%s until contact...", IMPEDANCE_DIRECTION_CONTROLLER.c_str());
+  target_orientation.coeffs() << goal->pose.pose.orientation.x, goal->pose.pose.orientation.y,
+          goal->pose.pose.orientation.z, goal->pose.pose.orientation.w;
 
+  if (current_orientation.coeffs().dot(target_orientation.coeffs()) < 0.0) {
+    target_orientation.coeffs() << -target_orientation.coeffs();
+  }
+
+  double position_speed_target = goal->position_speed; // m/s
+  double rotation_speed_target = goal->rotation_speed; // rad/s
+
+  // Compute "pace" of motion
+  Eigen::Vector3d position_difference = target_position - current_position;
+  Eigen::Quaterniond rotation_difference(target_orientation * current_orientation.inverse());
+
+  // Convert to axis angle
+  Eigen::AngleAxisd rotation_difference_angle_axis(rotation_difference);
+
+  double expected_time = std::max(rotation_difference_angle_axis.angle()/rotation_speed_target,
+                                 position_difference.norm()/position_speed_target);
+  double progression = 0.0;
   bool in_contact = false;
+
+  ros::Time starting_time = ros::Time::now();
+
   while(!in_contact)
   {
+    ros::Time current_time = ros::Time::now();
+    progression = (current_time - starting_time).toSec();
+
+    double tau = progression/expected_time;
+    // Position
+    Eigen::Vector3d desired_position = current_position*(1 - tau) + target_position*tau;
+    // Orientation
+    Eigen::Quaterniond desired_orientation = current_orientation.slerp(tau, target_orientation);
+
+    // command to Impedance controller
+    geometry_msgs::PoseStamped desired_pose;
+
+    desired_pose.pose.position.x = desired_position[0];
+    desired_pose.pose.position.y = desired_position[1];
+    desired_pose.pose.position.z = desired_position[2];
+
+    desired_pose.pose.orientation.x = desired_orientation.x();
+    desired_pose.pose.orientation.y = desired_orientation.y();
+    desired_pose.pose.orientation.z = desired_orientation.z();
+    desired_pose.pose.orientation.w = desired_orientation.w();
+
+    equilibrium_pose_publisher_.publish(desired_pose);
+
     auto last_external_wrench_ptr = ros::topic::waitForMessage<geometry_msgs::WrenchStamped>(
             "/franka_state_controller/F_ext");
 
@@ -398,15 +403,15 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
       {
         ROS_DEBUG("Robot touched something!");
         ROS_DEBUG("[%f %f %f] sensed",
-                 last_wrench_.wrench.force.x,
-                 last_wrench_.wrench.force.y,
-                 last_wrench_.wrench.force.z);
+                  last_wrench_.wrench.force.x,
+                  last_wrench_.wrench.force.y,
+                  last_wrench_.wrench.force.z);
         in_contact = true;
       } else {
         ROS_DEBUG_THROTTLE(10, "Not enough force ([%f %f %f] sensed)",
-                          last_wrench_.wrench.force.x,
-                          last_wrench_.wrench.force.y,
-                          last_wrench_.wrench.force.z);
+                           last_wrench_.wrench.force.x,
+                           last_wrench_.wrench.force.y,
+                           last_wrench_.wrench.force.z);
         move_to_contact_feedback_.contact_forces.x = last_wrench_.wrench.force.x;
         move_to_contact_feedback_.contact_forces.y = last_wrench_.wrench.force.y;
         move_to_contact_feedback_.contact_forces.z = last_wrench_.wrench.force.z;
@@ -415,20 +420,17 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
     }
   }
 
-  move_to_contact_result_.ee_pose = getEEPose();
+  // TODO: remove this after testing
+  ros::Duration(1).sleep();
+  move_to_contact_result_.final_pose = getEEPose();
+  move_to_contact_result_.contact_forces.x = last_wrench_.wrench.force.x;
+  move_to_contact_result_.contact_forces.y = last_wrench_.wrench.force.y;
+  move_to_contact_result_.contact_forces.z = last_wrench_.wrench.force.z;
+
   move_to_contact_server_->setSucceeded(move_to_contact_result_);
 
-  ROS_INFO("Trying to switch back to %s...", IMPEDANCE_CONTROLLER.c_str());
-  controller_manager_msgs::SwitchController switch_back_controller;
-  switch_back_controller.request.start_controllers.push_back(IMPEDANCE_CONTROLLER);
-  switch_back_controller.request.stop_controllers.push_back(IMPEDANCE_DIRECTION_CONTROLLER);
-  switch_back_controller.request.strictness = 2;
-
+  ROS_WARN("Setting the robot to default impedance controller");
   adjustImpedanceControllerStiffness();
-  controller_manager_switch_.call(switch_back_controller);
-  ROS_INFO("and... %s", switch_back_controller.response.ok ? "SUCCESS" : "FAILURE");
-  if (!switch_back_controller.response.ok)
-    return;
 }
 
 void DemoInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal){

@@ -38,7 +38,6 @@ private:
 
   // const controller names
   const std::string IMPEDANCE_CONTROLLER = "cartesian_impedance_example_controller";
-  const std::string IMPEDANCE_DIRECTION_CONTROLLER = "cartesian_impedance_direction_controller";
 
   // const frame names
   const std::string BASE_FRAME = "panda_link0";
@@ -62,7 +61,6 @@ private:
 
   // ROS SERVICES ====== clients
   ros::ServiceClient cartesian_impedance_dynamic_reconfigure_client_;
-  ros::ServiceClient cartesian_impedance_direction_dynamic_reconfigure_client_;
   ros::ServiceClient forcetorque_collision_client_;
   ros::ServiceClient controller_manager_switch_;
 
@@ -96,8 +94,6 @@ private:
   bool adjustFTThreshold(double);
   bool adjustImpedanceControllerStiffness(double transl_stiff, double rotat_stiff, double ft_mult);
   bool adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
-  bool adjustDirectionControllerParameters(geometry_msgs::Vector3 direction, double speed, double transl_stiff,
-          double rotat_stiff, double ft_mult);
 public:
   DemoInterface();
 };
