@@ -9,7 +9,7 @@ DemoInterface::DemoInterface():
   close_gripper_server_ = nh_.advertiseService("close_gripper", &DemoInterface::closeGripperCallback, this);
 
   // TODO: to be removed once we have the pbd implemented
-  move_to_ee_test_server_ = nh_.advertiseService("move_to_ee_test", &DemoInterface::moveToEETestCallback, this);
+  move_to_ee_test_server_ = nh_.advertiseService("move_to_test", &DemoInterface::moveToTestCallback, this);
 
   // Publishers
   equilibrium_pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/equilibrium_pose", 10);
@@ -46,6 +46,8 @@ DemoInterface::DemoInterface():
   // TODO: to be removed once we have the pbd implemented
   move_to_ee_client_ = new actionlib::SimpleActionClient<panda_pbd::MoveToEEAction>(
           "/demo_interface_node/move_to_ee_server", true);
+  move_to_contact_client_ = new actionlib::SimpleActionClient<panda_pbd::MoveToContactAction>(
+          "/demo_interface_node/move_to_contact_server", true);
 
   gripper_grasp_client_->waitForServer();
   gripper_move_client_->waitForServer();
@@ -520,7 +522,7 @@ void DemoInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal
   adjustImpedanceControllerStiffness();
 }
 
-bool DemoInterface::moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res){
+bool DemoInterface::moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res){
   ROS_INFO("Test for the move to EE... going in teaching mode");
   // TODO: error handling
   // TODO: assuming cartesian impedance controller here
@@ -536,35 +538,63 @@ bool DemoInterface::moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs
           current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z,
           current_pose.pose.orientation.x, current_pose.pose.orientation.y, current_pose.pose.orientation.z, current_pose.pose.orientation.w);
 
-  if (!move_to_ee_client_->waitForServer(ros::Duration(1))){
-    ROS_ERROR("Cannot reach MoveToEE Server");
-    res.success = false;
-    return res.success;
-  }
+  // req.data ? move to EE : move to contact
+  if (req.data){
+    if (!move_to_ee_client_->waitForServer(ros::Duration(1))){
+      ROS_ERROR("Cannot reach MoveToEE Server");
+      res.success = false;
+      return res.success;
+    }
 
-  panda_pbd::MoveToEEGoal goal;
-  goal.pose = goal_pose;
-  goal.position_speed = 0.04;
-  goal.rotation_speed = 1.0;
+    panda_pbd::MoveToEEGoal goal;
+    goal.pose = goal_pose;
+    goal.position_speed = 0.04;
+    goal.rotation_speed = 1.0;
 
-  ROS_INFO("Sending the goal, to itself...");
+    ROS_INFO("Sending the goal, to myself...");
 
-  move_to_ee_client_->sendGoalAndWait(goal);
-  if (move_to_ee_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED){
-    ROS_ERROR("Error in the moveToEE action: %s", move_to_ee_client_->getState().getText().c_str());
-    res.success = false;
+    move_to_ee_client_->sendGoalAndWait(goal);
+    if (move_to_ee_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED){
+      ROS_ERROR("Error in the moveToEE action: %s", move_to_ee_client_->getState().getText().c_str());
+      res.success = false;
+    } else {
+      res.success = true;
+    }
+
+    current_pose = getEEPose();
+    ROS_WARN("Move to EE test: current position [%f, %f, %f] and orientation [%f %f %f %f]",
+             current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z,
+             current_pose.pose.orientation.x, current_pose.pose.orientation.y, current_pose.pose.orientation.z, current_pose.pose.orientation.w);
+
+    ROS_WARN("Was trying to move here: goal position [%f, %f, %f] and orientation [%f %f %f %f]",
+             goal_pose.pose.position.x, goal_pose.pose.position.y, goal_pose.pose.position.z,
+             goal_pose.pose.orientation.x, goal_pose.pose.orientation.y, goal_pose.pose.orientation.z, goal_pose.pose.orientation.w);
   } else {
-    res.success = true;
+    if (!move_to_contact_client_->waitForServer(ros::Duration(1))){
+      ROS_ERROR("Cannot reach MoveToContact Server");
+      res.success = false;
+      return res.success;
+    }
+
+    panda_pbd::MoveToContactGoal goal;
+    goal.pose = goal_pose;
+    goal.position_speed = 0.04;
+    goal.rotation_speed = 1.0;
+    goal.force_threshold = 5.0;
+
+    ROS_INFO("Sending the goal, to myself...");
+
+    move_to_contact_client_->sendGoalAndWait(goal);
+    if (move_to_contact_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED){
+      ROS_ERROR("Error in the moveToContact action: %s", move_to_contact_client_->getState().getText().c_str());
+      res.success = false;
+    } else {
+      res.success = true;
+    }
+
+    ROS_INFO("Moved until force threshold was passed (contact reached?)");
   }
 
-  current_pose = getEEPose();
-  ROS_WARN("Move to EE test: current position [%f, %f, %f] and orientation [%f %f %f %f]",
-           current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z,
-           current_pose.pose.orientation.x, current_pose.pose.orientation.y, current_pose.pose.orientation.z, current_pose.pose.orientation.w);
-
-  ROS_WARN("Was trying to move here: goal position [%f, %f, %f] and orientation [%f %f %f %f]",
-           goal_pose.pose.position.x, goal_pose.pose.position.y, goal_pose.pose.position.z,
-           goal_pose.pose.orientation.x, goal_pose.pose.orientation.y, goal_pose.pose.orientation.z, goal_pose.pose.orientation.w);
 
   return res.success;
 }

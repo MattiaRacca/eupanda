@@ -71,6 +71,7 @@ private:
   actionlib::SimpleActionClient<franka_gripper::GraspAction> *gripper_grasp_client_;
   actionlib::SimpleActionClient<franka_gripper::MoveAction> *gripper_move_client_;
   actionlib::SimpleActionClient<panda_pbd::MoveToEEAction> *move_to_ee_client_;
+  actionlib::SimpleActionClient<panda_pbd::MoveToContactAction> *move_to_contact_client_;
 
   // ACTIONLIB ====== servers
   actionlib::SimpleActionServer<panda_pbd::MoveToContactAction> *move_to_contact_server_;
@@ -81,7 +82,7 @@ private:
   bool kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
   bool closeGripperCallback(panda_pbd::CloseGripper::Request &req, panda_pbd::CloseGripper::Response &res);
   bool openGripperCallback(panda_pbd::OpenGripper::Request &req, panda_pbd::OpenGripper::Response &res);
-  bool moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
+  bool moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
 
   // Callbacks ====== actionlib
   void moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal);
