@@ -1,12 +1,17 @@
 ## Goal definition
-# TODO
+# pose is the "goal" pose in panda_link0 frame towards which the robot will move
+# position_speed is in m/s
+# rotation_speed is in rad/s
+
 geometry_msgs/PoseStamped pose
 float64 position_speed
 float64 rotation_speed
 ---
 ## Result definition
-# TODO
+# final_pose is the end effector pose in panda_link0 frame at the end of motion
+
 geometry_msgs/PoseStamped final_pose
 ---
 ## Feedback
+# progression is [0,1], where 0 is start and 1 is end of the interpolation
 float64 progression

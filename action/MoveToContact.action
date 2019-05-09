@@ -1,7 +1,10 @@
 ## Goal definition
-# direction is the vector of motion, in the EE frame
-# speed is motion speed, in m/s
-# force_threshold is the force threshold that triggers the stop
+# pose is the "goal" pose in panda_link0 frame towards which the robot will move
+# position_speed is in m/s
+# rotation_speed is in rad/s
+# force_threshold is the force threshold that triggers the stop, in N
+# torque_threshold, in Nm/rad
+
 geometry_msgs/PoseStamped pose
 float64 position_speed
 float64 rotation_speed
@@ -9,11 +12,14 @@ float64 force_threshold
 float64 torque_threshold
 ---
 ## Result definition
-# ee_pose is the end effector pose, when contact was reached
+# final_pose is the end effector pose in panda_link0 frame, when contact was reached
+# contact_forces and contact_torques at the end of the motion
+
 geometry_msgs/PoseStamped final_pose
 geometry_msgs/Vector3 contact_forces
 geometry_msgs/Vector3 contact_torques
 ---
 ## Feedback
+
 geometry_msgs/Vector3 contact_forces
 geometry_msgs/Vector3 contact_torques
