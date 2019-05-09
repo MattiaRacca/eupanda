@@ -33,11 +33,15 @@ DemoInterface::DemoInterface():
 
   // Service clients
   forcetorque_collision_client_ = nh_.
-                                  serviceClient<franka_control::SetForceTorqueCollisionBehavior>
-                                          ("/franka_control/set_force_torque_collision_behavior");
+          serviceClient<franka_control::SetForceTorqueCollisionBehavior>
+          ("/franka_control/set_force_torque_collision_behavior");
   controller_manager_switch_ = nh_.
           serviceClient<controller_manager_msgs::SwitchController>
           ("/controller_manager/switch_controller");
+
+  controller_manager_list_ = nh_.
+          serviceClient<controller_manager_msgs::ListControllers>
+          ("/controller_manager/list_controllers");
 
   // Action clients
   gripper_grasp_client_ = new actionlib::SimpleActionClient<franka_gripper::GraspAction>("/franka_gripper/grasp", true);
@@ -54,14 +58,32 @@ DemoInterface::DemoInterface():
 
   // Controller Manager interface
   ROS_DEBUG("Waiting for the controller manager");
-  controller_manager_switch_.waitForExistence();
+  bool manager_is_there = controller_manager_switch_.waitForExistence(ros::Duration(10));
+
+  if (!manager_is_there){
+    ROS_ERROR("Controller Manager not reachable... Expect errors");
+  }
+
+  bool cartesian_impedance_found = false;
+  controller_manager_msgs::ListControllers list;
+  if (controller_manager_list_.call(list)){
+    for(const controller_manager_msgs::ControllerState &controller : list.response.controller){
+      ROS_DEBUG("Controller %s found (state: %s)", controller.name.c_str(), controller.state.c_str());
+      if (controller.name == IMPEDANCE_CONTROLLER){
+        cartesian_impedance_found = true;
+      }
+    }
+  }
+
+  if (!cartesian_impedance_found){
+    ROS_ERROR("Cartesian Impedance controller not found... Expect errors");
+  }
 
   ROS_DEBUG("Starting the %s...", IMPEDANCE_CONTROLLER.c_str());
   controller_manager_msgs::SwitchController switch_controller;
   switch_controller.request.start_controllers.push_back(IMPEDANCE_CONTROLLER);
   switch_controller.request.strictness = 2;
 
-  // TODO: proper handling here please
   bool loaded_controller = false;
   while (!loaded_controller){
     controller_manager_switch_.call(switch_controller);
@@ -74,7 +96,7 @@ DemoInterface::DemoInterface():
     }
   }
 
-  ROS_INFO("Demo Interface: initialization completed");
+  ROS_INFO("======= Demo Interface: initialization completed =======");
 }
 
 geometry_msgs::PoseStamped DemoInterface::getPose(const std::string ref_frame, const std::string child_frame)
@@ -320,14 +342,12 @@ void DemoInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal
   }
   user_sync_server_->setSucceeded(user_sync_result_);
 
-  // setting stiffnes back to default
+  // setting stiffness back to default
   adjustImpedanceControllerStiffness();
 }
 
 void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal){
   ROS_DEBUG("Received MoveToContact request");
-  // TODO: assuming the cartesian impedance controller is active
-
   ROS_WARN("Setting the robot to be stiff (to execute trajectory)");
   adjustImpedanceControllerStiffness(1500.0, 300.0, 10.0);
 
@@ -428,8 +448,6 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
     }
   }
 
-  // TODO: remove this after testing
-  ros::Duration(1).sleep();
   move_to_contact_result_.final_pose = getEEPose();
   move_to_contact_result_.contact_forces.x = last_wrench_.wrench.force.x;
   move_to_contact_result_.contact_forces.y = last_wrench_.wrench.force.y;
@@ -440,13 +458,12 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
 
   move_to_contact_server_->setSucceeded(move_to_contact_result_);
 
-  ROS_WARN("Setting the robot to default impedance controller");
+  ROS_WARN("Setting the robot to default Impedance controller");
   adjustImpedanceControllerStiffness();
 }
 
 void DemoInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal){
   ROS_DEBUG("Received MoveToEE request");
-  // TODO: assuming the cartesian impedance controller is active
 
   ROS_WARN("Setting the robot to be stiff (to execute trajectory)");
   adjustImpedanceControllerStiffness(1500.0, 300.0, 1.0);
@@ -522,8 +539,6 @@ void DemoInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal
     }
   }
 
-  // TODO: remove this after testing
-  ros::Duration(1).sleep();
   move_to_ee_result_.final_pose = getEEPose();
   move_to_ee_server_->setSucceeded(move_to_ee_result_);
 
@@ -533,8 +548,8 @@ void DemoInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal
 
 bool DemoInterface::moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res){
   ROS_INFO("Test for the move to EE... going in teaching mode");
+
   // TODO: error handling
-  // TODO: assuming cartesian impedance controller here
   auto result = adjustImpedanceControllerStiffness(0.0, 0.0, 5.0);
   ROS_INFO("Move the robot to new position");
   ros::Duration(20).sleep();
