@@ -7,6 +7,8 @@ DemoInterface::DemoInterface():
   kinesthetic_server_ = nh_.advertiseService("kinesthetic_teaching", &DemoInterface::kinestheticTeachingCallback, this);
   open_gripper_server_ = nh_.advertiseService("open_gripper", &DemoInterface::openGripperCallback, this);
   close_gripper_server_ = nh_.advertiseService("close_gripper", &DemoInterface::closeGripperCallback, this);
+
+  // TODO: to be removed once we have the pbd implemented
   move_to_ee_test_server_ = nh_.advertiseService("move_to_ee_test", &DemoInterface::moveToEETestCallback, this);
 
   // Publishers
@@ -33,10 +35,6 @@ DemoInterface::DemoInterface():
           serviceClient<dynamic_reconfigure::Reconfigure>
                   ("/dynamic_reconfigure_cartesian_impedance_direction_param_node/set_parameters");
 
-  cartesian_impedance_trajectory_dynamic_reconfigure_client_ = nh_.
-          serviceClient<dynamic_reconfigure::Reconfigure>
-          ("/dynamic_reconfigure_cartesian_impedance_trajectory_param_node/set_parameters");
-
   // Service clients
   forcetorque_collision_client_ = nh_.
                                   serviceClient<franka_control::SetForceTorqueCollisionBehavior>
@@ -48,12 +46,13 @@ DemoInterface::DemoInterface():
   // Action clients
   gripper_grasp_client_ = new actionlib::SimpleActionClient<franka_gripper::GraspAction>("/franka_gripper/grasp", true);
   gripper_move_client_ = new actionlib::SimpleActionClient<franka_gripper::MoveAction>("/franka_gripper/move", true);
-  move_to_ee_client_ = new actionlib::SimpleActionClient<franka_more_controllers::LinearMotionAction>(
-          "/cartesian_impedance_trajectory_controller/move_to_ee_server", true);
+
+  // TODO: to be removed once we have the pbd implemented
+  move_to_ee_client_ = new actionlib::SimpleActionClient<panda_pbd::MoveToEEAction>(
+          "/demo_interface_node/move_to_ee_server", true);
 
   gripper_grasp_client_->waitForServer();
   gripper_move_client_->waitForServer();
-  move_to_ee_client_->waitForServer();
 
   // Controller Manager interface
   ROS_DEBUG("Waiting for the controller manager");
@@ -179,64 +178,6 @@ bool DemoInterface::adjustImpedanceControllerStiffness(double transl_stiff = 200
   return cartesian_impedance_dynamic_reconfigure_client_.call(stiffness_srv);
 }
 
-bool DemoInterface::adjustDirectionControllerParameters(geometry_msgs::Vector3 direction,
-                                                        double speed = 0.0,
-                                                        double transl_stiff = 1500.0,
-                                                        double rotat_stiff = 300.0,
-                                                        double ft_mult = 10.0
-                                                        ){
-  dynamic_reconfigure::Reconfigure direction_srv;
-  dynamic_reconfigure::DoubleParameter translational_stiff, rotational_stiff;
-  dynamic_reconfigure::DoubleParameter vx_d, vy_d, vz_d, speed_d;
-
-  adjustFTThreshold(ft_mult);
-
-  translational_stiff.name = "translational_stiffness";
-  rotational_stiff.name = "rotational_stiffness";
-  vx_d.name = "vx_d";
-  vy_d.name = "vy_d";
-  vz_d.name = "vz_d";
-  speed_d.name = "speed";
-
-  translational_stiff.value = transl_stiff;
-  rotational_stiff.value = rotat_stiff;
-  vx_d.value = direction.x;
-  vy_d.value = direction.y;
-  vz_d.value = direction.z;
-  speed_d.value = speed;
-
-  direction_srv.request.config.doubles.push_back(translational_stiff);
-  direction_srv.request.config.doubles.push_back(rotational_stiff);
-  direction_srv.request.config.doubles.push_back(vx_d);
-  direction_srv.request.config.doubles.push_back(vy_d);
-  direction_srv.request.config.doubles.push_back(vz_d);
-  direction_srv.request.config.doubles.push_back(speed_d);
-
-  ROS_INFO("Changing %s parameters...", IMPEDANCE_DIRECTION_CONTROLLER.c_str());
-  return cartesian_impedance_direction_dynamic_reconfigure_client_.call(direction_srv);
-}
-
-bool DemoInterface::adjustTrajectoryControllerParameters(double transl_stiff = 1500.0,
-                                                        double rotat_stiff = 300.0,
-                                                        double ft_mult = 1.0)
-{
-  dynamic_reconfigure::Reconfigure stiffness_srv;
-
-  dynamic_reconfigure::DoubleParameter translational_stiff, rotational_stiff;
-  translational_stiff.name = "translational_stiffness";
-  rotational_stiff.name = "rotational_stiffness";
-
-  adjustFTThreshold(ft_mult);
-  translational_stiff.value = transl_stiff;
-  rotational_stiff.value = rotat_stiff;
-
-  stiffness_srv.request.config.doubles.push_back(translational_stiff);
-  stiffness_srv.request.config.doubles.push_back(rotational_stiff);
-
-  ROS_INFO("Changing %s parameters...", IMPEDANCE_TRAJECTORY_CONTROLLER.c_str());
-  return cartesian_impedance_trajectory_dynamic_reconfigure_client_.call(stiffness_srv);
-}
-
 bool DemoInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req,
                                                        panda_pbd::EnableTeaching::Response &res)
 {
@@ -272,6 +213,43 @@ bool DemoInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching
   res.ee_pose = getEEPose();
 
   return result;
+}
+
+bool DemoInterface::adjustDirectionControllerParameters(geometry_msgs::Vector3 direction,
+                                                        double speed = 0.0,
+                                                        double transl_stiff = 1500.0,
+                                                        double rotat_stiff = 300.0,
+                                                        double ft_mult = 10.0
+){
+  dynamic_reconfigure::Reconfigure direction_srv;
+  dynamic_reconfigure::DoubleParameter translational_stiff, rotational_stiff;
+  dynamic_reconfigure::DoubleParameter vx_d, vy_d, vz_d, speed_d;
+
+  adjustFTThreshold(ft_mult);
+
+  translational_stiff.name = "translational_stiffness";
+  rotational_stiff.name = "rotational_stiffness";
+  vx_d.name = "vx_d";
+  vy_d.name = "vy_d";
+  vz_d.name = "vz_d";
+  speed_d.name = "speed";
+
+  translational_stiff.value = transl_stiff;
+  rotational_stiff.value = rotat_stiff;
+  vx_d.value = direction.x;
+  vy_d.value = direction.y;
+  vz_d.value = direction.z;
+  speed_d.value = speed;
+
+  direction_srv.request.config.doubles.push_back(translational_stiff);
+  direction_srv.request.config.doubles.push_back(rotational_stiff);
+  direction_srv.request.config.doubles.push_back(vx_d);
+  direction_srv.request.config.doubles.push_back(vy_d);
+  direction_srv.request.config.doubles.push_back(vz_d);
+  direction_srv.request.config.doubles.push_back(speed_d);
+
+  ROS_INFO("Changing %s parameters...", IMPEDANCE_DIRECTION_CONTROLLER.c_str());
+  return cartesian_impedance_direction_dynamic_reconfigure_client_.call(direction_srv);
 }
 
 bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req,
@@ -543,23 +521,13 @@ void DemoInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal
 bool DemoInterface::moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res){
   ROS_INFO("Test for the move to EE... going in teaching mode");
   // TODO: error handling
+  // TODO: assuming cartesian impedance controller here
   auto result = adjustImpedanceControllerStiffness(0.0, 0.0, 5.0);
   ROS_INFO("Move the robot to new position");
   ros::Duration(20).sleep();
   geometry_msgs::PoseStamped goal_pose = getEEPose();
   ROS_INFO("Move it back now!");
   ros::Duration(20).sleep();
-
-  ROS_INFO("Trying to switch to the %s...", IMPEDANCE_TRAJECTORY_CONTROLLER.c_str());
-  controller_manager_msgs::SwitchController switch_controller;
-  switch_controller.request.stop_controllers.push_back(IMPEDANCE_CONTROLLER);
-  switch_controller.request.start_controllers.push_back(IMPEDANCE_TRAJECTORY_CONTROLLER);
-  switch_controller.request.strictness = 2;
-
-  controller_manager_switch_.call(switch_controller);
-  ROS_INFO("and... %s", switch_controller.response.ok ? "SUCCESS" : "FAILURE");
-  if (!switch_controller.response.ok)
-    return false;
 
   geometry_msgs::PoseStamped current_pose = getEEPose();
   ROS_WARN("Move to EE test: current position [%f, %f, %f] and orientation [%f %f %f %f]",
@@ -572,13 +540,12 @@ bool DemoInterface::moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs
     return res.success;
   }
 
-  ROS_WARN("Setting the robot to be stiff (to execute trajectory)");
-  adjustTrajectoryControllerParameters();
-
-  franka_more_controllers::LinearMotionGoal goal;
+  panda_pbd::MoveToEEGoal goal;
   goal.pose = goal_pose;
   goal.position_speed = 0.04;
   goal.rotation_speed = 1.0;
+
+  ROS_INFO("Sending the goal, to itself...");
 
   move_to_ee_client_->sendGoalAndWait(goal);
   if (move_to_ee_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED){
@@ -596,17 +563,6 @@ bool DemoInterface::moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs
   ROS_WARN("Was trying to move here: goal position [%f, %f, %f] and orientation [%f %f %f %f]",
            goal_pose.pose.position.x, goal_pose.pose.position.y, goal_pose.pose.position.z,
            goal_pose.pose.orientation.x, goal_pose.pose.orientation.y, goal_pose.pose.orientation.z, goal_pose.pose.orientation.w);
-
-  ROS_INFO("Trying to switch to %s...", IMPEDANCE_CONTROLLER.c_str());
-  controller_manager_msgs::SwitchController switch_back_controller;
-  switch_back_controller.request.stop_controllers.push_back(IMPEDANCE_TRAJECTORY_CONTROLLER);
-  switch_back_controller.request.start_controllers.push_back(IMPEDANCE_CONTROLLER);
-  switch_back_controller.request.strictness = 2;
-
-  controller_manager_switch_.call(switch_back_controller);
-  ROS_INFO("and... %s", switch_back_controller.response.ok ? "SUCCESS" : "FAILURE");
-  if (!switch_back_controller.response.ok)
-    return false;
 
   return res.success;
 }
