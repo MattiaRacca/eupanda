@@ -531,8 +531,13 @@ void DemoInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal
     }
   }
 
+  // TODO: remove this after testing
+  ros::Duration(1).sleep();
   move_to_ee_result_.final_pose = getEEPose();
   move_to_ee_server_->setSucceeded(move_to_ee_result_);
+
+  ROS_WARN("Setting the robot to default impedance controller");
+  adjustImpedanceControllerStiffness();
 }
 
 bool DemoInterface::moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res){
