@@ -4,6 +4,7 @@
 // Generic includes
 #include <boost/array.hpp>
 #include <boost/shared_ptr.hpp>
+#include <Eigen/Dense>
 
 // ROS includes
 #include <ros/ros.h>
@@ -28,6 +29,7 @@
 #include "panda_pbd/CloseGripper.h"
 #include "panda_pbd/MoveToContactAction.h"
 #include "panda_pbd/UserSyncAction.h"
+#include "panda_pbd/MoveToEEAction.h"
 #include "franka_more_controllers/LinearMotionAction.h"
 
 class DemoInterface
@@ -44,12 +46,15 @@ private:
   const std::string BASE_FRAME = "panda_link0";
   const std::string EE_FRAME = "panda_K";         // N.B.: panda_K and panda_EE are the same thing
 
-  // Internal variable
+  // Internal variables
   geometry_msgs::WrenchStamped last_wrench_;
   panda_pbd::MoveToContactFeedback move_to_contact_feedback_;
   panda_pbd::MoveToContactResult move_to_contact_result_;
+  panda_pbd::MoveToEEFeedback move_to_ee_feedback_;
+  panda_pbd::MoveToEEResult move_to_ee_result_;
   panda_pbd::UserSyncFeedback user_sync_feedback_;
   panda_pbd::UserSyncResult user_sync_result_;
+  tf::TransformListener pose_listener_;
 
   // ROS SERVICES ====== servers
   ros::ServiceServer kinesthetic_server_;
@@ -64,24 +69,27 @@ private:
   ros::ServiceClient forcetorque_collision_client_;
   ros::ServiceClient controller_manager_switch_;
 
-  // Topics (publishers and subscribers)
+  // ROS TOPICS ====== publishers
   ros::Publisher equilibrium_pose_publisher_;
 
-  // Action (servers and clients)
+  // ACTIONLIB ====== clients
   actionlib::SimpleActionClient<franka_gripper::GraspAction> *gripper_grasp_client_;
   actionlib::SimpleActionClient<franka_gripper::MoveAction> *gripper_move_client_;
   actionlib::SimpleActionClient<franka_more_controllers::LinearMotionAction> *move_to_ee_client_;
+
+  // ACTIONLIB ====== servers
   actionlib::SimpleActionServer<panda_pbd::MoveToContactAction> *move_to_contact_server_;
+  actionlib::SimpleActionServer<panda_pbd::MoveToEEAction> *move_to_ee_server_;
   actionlib::SimpleActionServer<panda_pbd::UserSyncAction> *user_sync_server_;
 
-  // TF
-  tf::TransformListener pose_listener_;
-
-  // Callbacks
+  // Callbacks ====== services
   bool kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
   bool closeGripperCallback(panda_pbd::CloseGripper::Request &req, panda_pbd::CloseGripper::Response &res);
   bool openGripperCallback(panda_pbd::OpenGripper::Request &req, panda_pbd::OpenGripper::Response &res);
   bool moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
+
+  // Callbacks ====== actionlib
+  void moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal);
   void userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal);
   void moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal);
 

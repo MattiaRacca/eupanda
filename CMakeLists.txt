@@ -25,7 +25,7 @@ add_service_files(
 
 add_action_files(
   DIRECTORY action
-  FILES MoveToContact.action UserSync.action
+  FILES MoveToContact.action UserSync.action MoveToEE.action
 )
 
 generate_messages(

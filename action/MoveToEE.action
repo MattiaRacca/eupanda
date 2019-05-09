@@ -1,0 +1,12 @@
+## Goal definition
+# TODO
+geometry_msgs/PoseStamped pose
+float64 position_speed
+float64 rotation_speed
+---
+## Result definition
+# TODO
+geometry_msgs/PoseStamped final_pose
+---
+## Feedback
+float64 progression

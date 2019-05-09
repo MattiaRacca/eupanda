@@ -17,6 +17,10 @@ DemoInterface::DemoInterface():
           nh_, "move_to_contact_server",boost::bind(&DemoInterface::moveToContactCallback, this, _1), false);
   move_to_contact_server_->start();
 
+  move_to_ee_server_ = new actionlib::SimpleActionServer<panda_pbd::MoveToEEAction>(
+          nh_, "move_to_ee_server",boost::bind(&DemoInterface::moveToEECallback, this, _1), false);
+  move_to_ee_server_->start();
+
   user_sync_server_ = new actionlib::SimpleActionServer<panda_pbd::UserSyncAction>(
           nh_, "user_sync_server",boost::bind(&DemoInterface::userSyncCallback, this, _1), false);
   user_sync_server_->start();
@@ -447,6 +451,88 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
   ROS_INFO("and... %s", switch_back_controller.response.ok ? "SUCCESS" : "FAILURE");
   if (!switch_back_controller.response.ok)
     return;
+}
+
+void DemoInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal){
+  ROS_DEBUG("Received MoveToEE request");
+  // TODO: assuming the cartesian impedance controller is active
+
+  ROS_WARN("Setting the robot to be stiff (to execute trajectory)");
+  adjustImpedanceControllerStiffness(1500.0, 300.0, 1.0);
+
+  // Put current pose in Eigen form
+  auto current_pose = getEEPose();
+  Eigen::Vector3d current_position;
+  current_position << current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z;
+  Eigen::Quaterniond current_orientation;
+  current_orientation.coeffs() << current_pose.pose.orientation.x, current_pose.pose.orientation.y,
+          current_pose.pose.orientation.z, current_pose.pose.orientation.w;
+
+  // Put target pose in Eigen form
+  Eigen::Vector3d target_position;
+  target_position << goal->pose.pose.position.x, goal->pose.pose.position.y, goal->pose.pose.position.z;
+  Eigen::Quaterniond target_orientation;
+
+  target_orientation.coeffs() << goal->pose.pose.orientation.x, goal->pose.pose.orientation.y,
+          goal->pose.pose.orientation.z, goal->pose.pose.orientation.w;
+
+  if (current_orientation.coeffs().dot(target_orientation.coeffs()) < 0.0) {
+    target_orientation.coeffs() << -target_orientation.coeffs();
+  }
+
+  double position_speed_target = goal->position_speed; // m/s
+  double rotation_speed_target = goal->rotation_speed; // rad/s
+
+  // Compute "pace" of motion
+  Eigen::Vector3d position_difference = target_position - current_position;
+  Eigen::Quaterniond rotation_difference(target_orientation * current_orientation.inverse());
+
+  // Convert to axis angle
+  Eigen::AngleAxisd rotation_difference_angle_axis(rotation_difference);
+
+  double desired_time = std::max(rotation_difference_angle_axis.angle()/rotation_speed_target,
+                           position_difference.norm()/position_speed_target);
+  double progression = 0.0;
+  bool motion_done = false;
+
+  ros::Time starting_time = ros::Time::now();
+
+  while(!motion_done)
+  {
+    ros::Time current_time = ros::Time::now();
+    progression = (current_time - starting_time).toSec();
+
+    double tau = std::min(progression/desired_time, 1.0);
+    // Position
+    Eigen::Vector3d desired_position = current_position*(1 - tau) + target_position*tau;
+    // Orientation
+    Eigen::Quaterniond desired_orientation = current_orientation.slerp(tau, target_orientation);
+
+    // command to Impedance controller
+    geometry_msgs::PoseStamped desired_pose;
+
+    desired_pose.pose.position.x = desired_position[0];
+    desired_pose.pose.position.y = desired_position[1];
+    desired_pose.pose.position.z = desired_position[2];
+
+    desired_pose.pose.orientation.x = desired_orientation.x();
+    desired_pose.pose.orientation.y = desired_orientation.y();
+    desired_pose.pose.orientation.z = desired_orientation.z();
+    desired_pose.pose.orientation.w = desired_orientation.w();
+
+    equilibrium_pose_publisher_.publish(desired_pose);
+
+    if(tau < 1.0){
+      move_to_ee_feedback_.progression = tau;
+      // TODO: way to make this throttled?
+      move_to_ee_server_->publishFeedback(move_to_ee_feedback_);
+    } else {
+      motion_done = true;
+    }
+  }
+
+  move_to_ee_result_.final_pose = getEEPose();
+  move_to_ee_server_->setSucceeded(move_to_ee_result_);
 }
 
 bool DemoInterface::moveToEETestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res){
