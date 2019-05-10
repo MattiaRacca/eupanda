@@ -48,9 +48,9 @@ include_directories(
   ${EIGEN3_INCLUDE_DIRS}
 )
 
-add_executable(demo_interface src/demo_interface_node.cpp
-        src/demo_interface.cpp)
+add_executable(primitive_interface src/primitive_interface_node.cpp
+        src/primitive_interface.cpp)
 
-target_link_libraries(demo_interface
+target_link_libraries(primitive_interface
    ${catkin_LIBRARIES}
 )

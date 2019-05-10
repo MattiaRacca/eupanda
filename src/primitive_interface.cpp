@@ -1,30 +1,30 @@
-#include "panda_pbd/demo_interface.h"
+#include "panda_pbd/primitive_interface.h"
 
-DemoInterface::DemoInterface():
+PrimitiveInterface::PrimitiveInterface():
   nh_("~")
 {
   // Service servers
-  kinesthetic_server_ = nh_.advertiseService("kinesthetic_teaching", &DemoInterface::kinestheticTeachingCallback, this);
-  open_gripper_server_ = nh_.advertiseService("open_gripper", &DemoInterface::openGripperCallback, this);
-  close_gripper_server_ = nh_.advertiseService("close_gripper", &DemoInterface::closeGripperCallback, this);
+  kinesthetic_server_ = nh_.advertiseService("kinesthetic_teaching", &PrimitiveInterface::kinestheticTeachingCallback, this);
+  open_gripper_server_ = nh_.advertiseService("open_gripper", &PrimitiveInterface::openGripperCallback, this);
+  close_gripper_server_ = nh_.advertiseService("close_gripper", &PrimitiveInterface::closeGripperCallback, this);
 
   // TODO: to be removed once we have the pbd implemented
-  move_to_ee_test_server_ = nh_.advertiseService("move_to_test", &DemoInterface::moveToTestCallback, this);
+  move_to_ee_test_server_ = nh_.advertiseService("move_to_test", &PrimitiveInterface::moveToTestCallback, this);
 
   // Publishers
   equilibrium_pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/equilibrium_pose", 10);
 
   // Action servers
   move_to_contact_server_ = new actionlib::SimpleActionServer<panda_pbd::MoveToContactAction>(
-          nh_, "move_to_contact_server",boost::bind(&DemoInterface::moveToContactCallback, this, _1), false);
+    nh_, "move_to_contact_server", boost::bind(&PrimitiveInterface::moveToContactCallback, this, _1), false);
   move_to_contact_server_->start();
 
   move_to_ee_server_ = new actionlib::SimpleActionServer<panda_pbd::MoveToEEAction>(
-          nh_, "move_to_ee_server",boost::bind(&DemoInterface::moveToEECallback, this, _1), false);
+    nh_, "move_to_ee_server", boost::bind(&PrimitiveInterface::moveToEECallback, this, _1), false);
   move_to_ee_server_->start();
 
   user_sync_server_ = new actionlib::SimpleActionServer<panda_pbd::UserSyncAction>(
-          nh_, "user_sync_server",boost::bind(&DemoInterface::userSyncCallback, this, _1), false);
+    nh_, "user_sync_server", boost::bind(&PrimitiveInterface::userSyncCallback, this, _1), false);
   user_sync_server_->start();
 
   // Reconfigure clients
@@ -33,15 +33,15 @@ DemoInterface::DemoInterface():
 
   // Service clients
   forcetorque_collision_client_ = nh_.
-          serviceClient<franka_control::SetForceTorqueCollisionBehavior>
-          ("/franka_control/set_force_torque_collision_behavior");
+                                  serviceClient<franka_control::SetForceTorqueCollisionBehavior>
+                                  ("/franka_control/set_force_torque_collision_behavior");
   controller_manager_switch_ = nh_.
-          serviceClient<controller_manager_msgs::SwitchController>
-          ("/controller_manager/switch_controller");
+                               serviceClient<controller_manager_msgs::SwitchController>
+                               ("/controller_manager/switch_controller");
 
   controller_manager_list_ = nh_.
-          serviceClient<controller_manager_msgs::ListControllers>
-          ("/controller_manager/list_controllers");
+                             serviceClient<controller_manager_msgs::ListControllers>
+                             ("/controller_manager/list_controllers");
 
   // Action clients
   gripper_grasp_client_ = new actionlib::SimpleActionClient<franka_gripper::GraspAction>("/franka_gripper/grasp", true);
@@ -49,9 +49,9 @@ DemoInterface::DemoInterface():
 
   // TODO: to be removed once we have the pbd implemented
   move_to_ee_client_ = new actionlib::SimpleActionClient<panda_pbd::MoveToEEAction>(
-          "/demo_interface_node/move_to_ee_server", true);
+    "/primitive_interface_node/move_to_ee_server", true);
   move_to_contact_client_ = new actionlib::SimpleActionClient<panda_pbd::MoveToContactAction>(
-          "/demo_interface_node/move_to_contact_server", true);
+    "/primitive_interface_node/move_to_contact_server", true);
 
   gripper_grasp_client_->waitForServer();
   gripper_move_client_->waitForServer();
@@ -60,22 +60,27 @@ DemoInterface::DemoInterface():
   ROS_DEBUG("Waiting for the controller manager");
   bool manager_is_there = controller_manager_switch_.waitForExistence(ros::Duration(10));
 
-  if (!manager_is_there){
+  if (!manager_is_there)
+  {
     ROS_ERROR("Controller Manager not reachable... Expect errors");
   }
 
   bool cartesian_impedance_found = false;
   controller_manager_msgs::ListControllers list;
-  if (controller_manager_list_.call(list)){
-    for(const controller_manager_msgs::ControllerState &controller : list.response.controller){
+  if (controller_manager_list_.call(list))
+  {
+    for (const controller_manager_msgs::ControllerState &controller : list.response.controller)
+    {
       ROS_DEBUG("Controller %s found (state: %s)", controller.name.c_str(), controller.state.c_str());
-      if (controller.name == IMPEDANCE_CONTROLLER){
+      if (controller.name == IMPEDANCE_CONTROLLER)
+      {
         cartesian_impedance_found = true;
       }
     }
   }
 
-  if (!cartesian_impedance_found){
+  if (!cartesian_impedance_found)
+  {
     ROS_ERROR("Cartesian Impedance controller not found... Expect errors");
   }
 
@@ -85,21 +90,25 @@ DemoInterface::DemoInterface():
   switch_controller.request.strictness = 2;
 
   bool loaded_controller = false;
-  while (!loaded_controller){
+  while (!loaded_controller)
+  {
     controller_manager_switch_.call(switch_controller);
     loaded_controller = switch_controller.response.ok;
-    if (loaded_controller){
+    if (loaded_controller)
+    {
       ROS_DEBUG("%s started", IMPEDANCE_CONTROLLER.c_str());
-    } else {
+    }
+    else
+    {
       ROS_ERROR("Cannot start %s. Trying again in 2 seconds...", IMPEDANCE_CONTROLLER.c_str());
       ros::Duration(2).sleep();
     }
   }
 
-  ROS_INFO("======= Demo Interface: initialization completed =======");
+  ROS_INFO("======= Primitive Interface: initialization completed =======");
 }
 
-geometry_msgs::PoseStamped DemoInterface::getPose(const std::string ref_frame, const std::string child_frame)
+geometry_msgs::PoseStamped PrimitiveInterface::getPose(const std::string ref_frame, const std::string child_frame)
 {
   std::string tf_err_msg;
   tf::StampedTransform transform;
@@ -121,7 +130,7 @@ geometry_msgs::PoseStamped DemoInterface::getPose(const std::string ref_frame, c
     catch (const tf::TransformException &e)
     {
       ROS_ERROR_STREAM("Error in lookupTransform of " << child_frame << " in "
-                                                      << ref_frame);
+                       << ref_frame);
     }
   }
 
@@ -138,19 +147,20 @@ geometry_msgs::PoseStamped DemoInterface::getPose(const std::string ref_frame, c
   return current_ee_pose;
 }
 
-geometry_msgs::PoseStamped DemoInterface::getEEPose()
+geometry_msgs::PoseStamped PrimitiveInterface::getEEPose()
 {
   return getPose(BASE_FRAME, EE_FRAME);
 }
 
-bool DemoInterface::adjustFTThreshold(double ft_multiplier)
+bool PrimitiveInterface::adjustFTThreshold(double ft_multiplier)
 {
   franka_control::SetForceTorqueCollisionBehavior collision_srv;
 
   boost::array<double, 6> force_threshold{ {20.0, 20.0, 20.0, 25.0, 25.0, 25.0} };
   boost::array<double, 7> torque_threshold{ {20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0} };
 
-  if (ft_multiplier < 1.0){
+  if (ft_multiplier < 1.0)
+  {
     ROS_WARN("ForceTorque Multiplier has to be greater than 1.0...");
     ROS_WARN("Setting to Default (1.0)");
     ft_multiplier = 1.0;
@@ -173,9 +183,10 @@ bool DemoInterface::adjustFTThreshold(double ft_multiplier)
   forcetorque_collision_client_.call(collision_srv);
 }
 
-bool DemoInterface::adjustImpedanceControllerStiffness(double transl_stiff = 200.0,
-                                                       double rotat_stiff = 10.0,
-                                                       double ft_mult = 1.0) {
+bool PrimitiveInterface::adjustImpedanceControllerStiffness(double transl_stiff = 200.0,
+    double rotat_stiff = 10.0,
+    double ft_mult = 1.0)
+{
 
   auto ee_pose = getEEPose();
   equilibrium_pose_publisher_.publish(ee_pose);
@@ -198,35 +209,41 @@ bool DemoInterface::adjustImpedanceControllerStiffness(double transl_stiff = 200
   return cartesian_impedance_dynamic_reconfigure_client_.call(stiffness_srv);
 }
 
-bool DemoInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req,
-                                                       panda_pbd::EnableTeaching::Response &res)
+bool PrimitiveInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req,
+    panda_pbd::EnableTeaching::Response &res)
 {
   bool result;
-  switch (req.teaching) {
-    case 0: {
-      ROS_INFO("Teaching mode deactivated...");
-      result = adjustImpedanceControllerStiffness();
-      break;
-    }
-    case 1: {
-      ROS_INFO("Full Teaching mode activated...");
-      result = adjustImpedanceControllerStiffness(0.0, 0.0, req.ft_threshold_multiplier);
-      break;
-    }
-    case 2: {
-      ROS_INFO("Position Teaching mode activated...");
-      result = adjustImpedanceControllerStiffness(0.0, 10.0, req.ft_threshold_multiplier);
-      break;
-    }
-    case 3: {
-      ROS_INFO("Orientation Teaching mode activated...");
-      result = adjustImpedanceControllerStiffness(200.0, 0.0, req.ft_threshold_multiplier);
-      break;
-    }
-    default: {
-      ROS_ERROR("Unknown value of teaching - nothing happened");
-      result = false;
-    }
+  switch (req.teaching)
+  {
+  case 0:
+  {
+    ROS_INFO("Teaching mode deactivated...");
+    result = adjustImpedanceControllerStiffness();
+    break;
+  }
+  case 1:
+  {
+    ROS_INFO("Full Teaching mode activated...");
+    result = adjustImpedanceControllerStiffness(0.0, 0.0, req.ft_threshold_multiplier);
+    break;
+  }
+  case 2:
+  {
+    ROS_INFO("Position Teaching mode activated...");
+    result = adjustImpedanceControllerStiffness(0.0, 10.0, req.ft_threshold_multiplier);
+    break;
+  }
+  case 3:
+  {
+    ROS_INFO("Orientation Teaching mode activated...");
+    result = adjustImpedanceControllerStiffness(200.0, 0.0, req.ft_threshold_multiplier);
+    break;
+  }
+  default:
+  {
+    ROS_ERROR("Unknown value of teaching - nothing happened");
+    result = false;
+  }
   }
 
   res.success = result;
@@ -235,15 +252,16 @@ bool DemoInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching
   return result;
 }
 
-bool DemoInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req,
-                                                panda_pbd::EnableTeaching::Response &res)
+bool PrimitiveInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req,
+    panda_pbd::EnableTeaching::Response &res)
 {
-  res.success = adjustImpedanceControllerStiffness(req,res);
+  res.success = adjustImpedanceControllerStiffness(req, res);
   return res.success;
 }
 
-bool DemoInterface::openGripperCallback(panda_pbd::OpenGripper::Request &req,
-                                        panda_pbd::OpenGripper::Response &res) {
+bool PrimitiveInterface::openGripperCallback(panda_pbd::OpenGripper::Request &req,
+    panda_pbd::OpenGripper::Response &res)
+{
   franka_gripper::MoveGoal move_goal;
   // TODO: Do we have a way to check the range for the gripper width?
   // clunky way through the /franka_gripper/joint_states topic
@@ -251,24 +269,29 @@ bool DemoInterface::openGripperCallback(panda_pbd::OpenGripper::Request &req,
   move_goal.width = std::max(0.0, std::min(req.width, 0.08));
   move_goal.speed = 0.01; // in m/s
 
-  if (!gripper_move_client_->waitForServer(ros::Duration(1))){
+  if (!gripper_move_client_->waitForServer(ros::Duration(1)))
+  {
     ROS_ERROR("Cannot reach MoveAction Server");
     res.success = false;
     return res.success;
   }
 
   gripper_move_client_->sendGoalAndWait(move_goal);
-  if (gripper_move_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED){
+  if (gripper_move_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED)
+  {
     ROS_ERROR("Error in the grasp goal: %s", gripper_move_client_->getState().getText().c_str());
     res.success = false;
-  } else {
+  }
+  else
+  {
     res.success = true;
   }
   return res.success;;
 }
 
-bool DemoInterface::closeGripperCallback(panda_pbd::CloseGripper::Request &req,
-                                         panda_pbd::CloseGripper::Response &res) {
+bool PrimitiveInterface::closeGripperCallback(panda_pbd::CloseGripper::Request &req,
+    panda_pbd::CloseGripper::Response &res)
+{
   franka_gripper::GraspGoal grasping_goal;
 
   // TODO: Do we have a way to check the range for the gripper width?
@@ -283,23 +306,28 @@ bool DemoInterface::closeGripperCallback(panda_pbd::CloseGripper::Request &req,
   grasping_goal.epsilon.inner = 0.5;
   grasping_goal.epsilon.outer = 0.5;
 
-  if (!gripper_grasp_client_->waitForServer(ros::Duration(1))){
+  if (!gripper_grasp_client_->waitForServer(ros::Duration(1)))
+  {
     ROS_ERROR("Cannot reach GraspAction Server");
     res.success = false;
     return res.success;
   }
 
   gripper_grasp_client_->sendGoalAndWait(grasping_goal);
-  if (gripper_grasp_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED){
+  if (gripper_grasp_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED)
+  {
     ROS_ERROR("Error in the grasp goal: %s", gripper_grasp_client_->getState().getText().c_str());
     res.success = false;
-  } else {
+  }
+  else
+  {
     res.success = true;
   }
   return res.success;
 }
 
-void DemoInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal){
+void PrimitiveInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal)
+{
   boost::shared_ptr<geometry_msgs::WrenchStamped const> last_external_wrench_ptr;
   user_sync_result_.unlock = false;
 
@@ -314,7 +342,7 @@ void DemoInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal
      * Positive value when the force is applied AGAINST the axis
      */
     last_external_wrench_ptr = ros::topic::waitForMessage<geometry_msgs::WrenchStamped>(
-            "/franka_state_controller/F_ext");
+                                 "/franka_state_controller/F_ext");
 
     if (last_external_wrench_ptr != nullptr)
     {
@@ -325,15 +353,17 @@ void DemoInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal
       {
         ROS_DEBUG("Robot unlocked!");
         ROS_DEBUG("[%f %f %f] sensed",
-                 last_wrench_.wrench.force.x,
-                 last_wrench_.wrench.force.y,
-                 last_wrench_.wrench.force.z);
+                  last_wrench_.wrench.force.x,
+                  last_wrench_.wrench.force.y,
+                  last_wrench_.wrench.force.z);
         user_sync_result_.unlock = true;
-      } else {
+      }
+      else
+      {
         ROS_DEBUG_THROTTLE(10, "Not enough force ([%f %f %f] sensed)",
-                          last_wrench_.wrench.force.x,
-                          last_wrench_.wrench.force.y,
-                          last_wrench_.wrench.force.z);
+                           last_wrench_.wrench.force.x,
+                           last_wrench_.wrench.force.y,
+                           last_wrench_.wrench.force.z);
         user_sync_feedback_.contact_forces.x = last_wrench_.wrench.force.x;
         user_sync_feedback_.contact_forces.y = last_wrench_.wrench.force.y;
         user_sync_feedback_.contact_forces.z = last_wrench_.wrench.force.z;
@@ -347,7 +377,8 @@ void DemoInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal
   adjustImpedanceControllerStiffness();
 }
 
-void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal){
+void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal)
+{
   ROS_DEBUG("Received MoveToContact request");
   ROS_WARN("Setting the robot to be stiff (to execute trajectory)");
   adjustImpedanceControllerStiffness(1500.0, 300.0, 10.0);
@@ -358,7 +389,7 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
   current_position << current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z;
   Eigen::Quaterniond current_orientation;
   current_orientation.coeffs() << current_pose.pose.orientation.x, current_pose.pose.orientation.y,
-          current_pose.pose.orientation.z, current_pose.pose.orientation.w;
+                             current_pose.pose.orientation.z, current_pose.pose.orientation.w;
 
   // Put target pose in Eigen form
   Eigen::Vector3d target_position;
@@ -366,9 +397,10 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
   Eigen::Quaterniond target_orientation;
 
   target_orientation.coeffs() << goal->pose.pose.orientation.x, goal->pose.pose.orientation.y,
-          goal->pose.pose.orientation.z, goal->pose.pose.orientation.w;
+                            goal->pose.pose.orientation.z, goal->pose.pose.orientation.w;
 
-  if (current_orientation.coeffs().dot(target_orientation.coeffs()) < 0.0) {
+  if (current_orientation.coeffs().dot(target_orientation.coeffs()) < 0.0)
+  {
     target_orientation.coeffs() << -target_orientation.coeffs();
   }
 
@@ -382,21 +414,21 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
   // Convert to axis angle
   Eigen::AngleAxisd rotation_difference_angle_axis(rotation_difference);
 
-  double expected_time = std::max(rotation_difference_angle_axis.angle()/rotation_speed_target,
-                                 position_difference.norm()/position_speed_target);
+  double expected_time = std::max(rotation_difference_angle_axis.angle() / rotation_speed_target,
+                                  position_difference.norm() / position_speed_target);
   double progression = 0.0;
   bool in_contact = false;
 
   ros::Time starting_time = ros::Time::now();
 
-  while(!in_contact)
+  while (!in_contact)
   {
     ros::Time current_time = ros::Time::now();
     progression = (current_time - starting_time).toSec();
 
-    double tau = progression/expected_time;
+    double tau = progression / expected_time;
     // Position
-    Eigen::Vector3d desired_position = current_position*(1 - tau) + target_position*tau;
+    Eigen::Vector3d desired_position = current_position * (1 - tau) + target_position * tau;
     // Orientation
     Eigen::Quaterniond desired_orientation = current_orientation.slerp(tau, target_orientation);
 
@@ -415,7 +447,7 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
     equilibrium_pose_publisher_.publish(desired_pose);
 
     auto last_external_wrench_ptr = ros::topic::waitForMessage<geometry_msgs::WrenchStamped>(
-            "/franka_state_controller/F_ext");
+                                      "/franka_state_controller/F_ext");
 
     if (last_external_wrench_ptr != nullptr)
     {
@@ -433,7 +465,9 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
                   last_wrench_.wrench.force.y,
                   last_wrench_.wrench.force.z);
         in_contact = true;
-      } else {
+      }
+      else
+      {
         ROS_DEBUG_THROTTLE(10, "Not enough force ([%f %f %f] sensed)",
                            last_wrench_.wrench.force.x,
                            last_wrench_.wrench.force.y,
@@ -463,7 +497,8 @@ void DemoInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalCons
   adjustImpedanceControllerStiffness();
 }
 
-void DemoInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal){
+void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal)
+{
   ROS_DEBUG("Received MoveToEE request");
 
   ROS_WARN("Setting the robot to be stiff (to execute trajectory)");
@@ -475,7 +510,7 @@ void DemoInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal
   current_position << current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z;
   Eigen::Quaterniond current_orientation;
   current_orientation.coeffs() << current_pose.pose.orientation.x, current_pose.pose.orientation.y,
-          current_pose.pose.orientation.z, current_pose.pose.orientation.w;
+                             current_pose.pose.orientation.z, current_pose.pose.orientation.w;
 
   // Put target pose in Eigen form
   Eigen::Vector3d target_position;
@@ -483,9 +518,10 @@ void DemoInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal
   Eigen::Quaterniond target_orientation;
 
   target_orientation.coeffs() << goal->pose.pose.orientation.x, goal->pose.pose.orientation.y,
-          goal->pose.pose.orientation.z, goal->pose.pose.orientation.w;
+                            goal->pose.pose.orientation.z, goal->pose.pose.orientation.w;
 
-  if (current_orientation.coeffs().dot(target_orientation.coeffs()) < 0.0) {
+  if (current_orientation.coeffs().dot(target_orientation.coeffs()) < 0.0)
+  {
     target_orientation.coeffs() << -target_orientation.coeffs();
   }
 
@@ -499,21 +535,21 @@ void DemoInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal
   // Convert to axis angle
   Eigen::AngleAxisd rotation_difference_angle_axis(rotation_difference);
 
-  double desired_time = std::max(rotation_difference_angle_axis.angle()/rotation_speed_target,
-                           position_difference.norm()/position_speed_target);
+  double desired_time = std::max(rotation_difference_angle_axis.angle() / rotation_speed_target,
+                                 position_difference.norm() / position_speed_target);
   double progression = 0.0;
   bool motion_done = false;
 
   ros::Time starting_time = ros::Time::now();
 
-  while(!motion_done)
+  while (!motion_done)
   {
     ros::Time current_time = ros::Time::now();
     progression = (current_time - starting_time).toSec();
 
-    double tau = std::min(progression/desired_time, 1.0);
+    double tau = std::min(progression / desired_time, 1.0);
     // Position
-    Eigen::Vector3d desired_position = current_position*(1 - tau) + target_position*tau;
+    Eigen::Vector3d desired_position = current_position * (1 - tau) + target_position * tau;
     // Orientation
     Eigen::Quaterniond desired_orientation = current_orientation.slerp(tau, target_orientation);
 
@@ -531,11 +567,14 @@ void DemoInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal
 
     equilibrium_pose_publisher_.publish(desired_pose);
 
-    if(tau < 1.0){
+    if (tau < 1.0)
+    {
       move_to_ee_feedback_.progression = tau;
       // TODO: way to make this throttled?
       move_to_ee_server_->publishFeedback(move_to_ee_feedback_);
-    } else {
+    }
+    else
+    {
       motion_done = true;
     }
   }
@@ -547,7 +586,8 @@ void DemoInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal
   adjustImpedanceControllerStiffness();
 }
 
-bool DemoInterface::moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res){
+bool PrimitiveInterface::moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res)
+{
   ROS_INFO("Test for the move to EE... going in teaching mode");
 
   // TODO: error handling
@@ -560,12 +600,14 @@ bool DemoInterface::moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::
 
   geometry_msgs::PoseStamped current_pose = getEEPose();
   ROS_WARN("Move to test: current position [%f, %f, %f] and orientation [%f %f %f %f]",
-          current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z,
-          current_pose.pose.orientation.x, current_pose.pose.orientation.y, current_pose.pose.orientation.z, current_pose.pose.orientation.w);
+           current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z,
+           current_pose.pose.orientation.x, current_pose.pose.orientation.y, current_pose.pose.orientation.z, current_pose.pose.orientation.w);
 
   // req.data ? move to EE : move to contact
-  if (req.data){
-    if (!move_to_ee_client_->waitForServer(ros::Duration(1))){
+  if (req.data)
+  {
+    if (!move_to_ee_client_->waitForServer(ros::Duration(1)))
+    {
       ROS_ERROR("Cannot reach MoveToEE Server");
       res.success = false;
       return res.success;
@@ -579,10 +621,13 @@ bool DemoInterface::moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::
     ROS_INFO("Sending the goal, to myself...");
 
     move_to_ee_client_->sendGoalAndWait(goal);
-    if (move_to_ee_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED){
+    if (move_to_ee_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED)
+    {
       ROS_ERROR("Error in the moveToEE action: %s", move_to_ee_client_->getState().getText().c_str());
       res.success = false;
-    } else {
+    }
+    else
+    {
       res.success = true;
     }
 
@@ -594,8 +639,11 @@ bool DemoInterface::moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::
     ROS_WARN("Was trying to move here: goal position [%f, %f, %f] and orientation [%f %f %f %f]",
              goal_pose.pose.position.x, goal_pose.pose.position.y, goal_pose.pose.position.z,
              goal_pose.pose.orientation.x, goal_pose.pose.orientation.y, goal_pose.pose.orientation.z, goal_pose.pose.orientation.w);
-  } else {
-    if (!move_to_contact_client_->waitForServer(ros::Duration(1))){
+  }
+  else
+  {
+    if (!move_to_contact_client_->waitForServer(ros::Duration(1)))
+    {
       ROS_ERROR("Cannot reach MoveToContact Server");
       res.success = false;
       return res.success;
@@ -611,10 +659,13 @@ bool DemoInterface::moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::
     ROS_INFO("Sending the goal, to myself...");
 
     move_to_contact_client_->sendGoalAndWait(goal);
-    if (move_to_contact_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED){
+    if (move_to_contact_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED)
+    {
       ROS_ERROR("Error in the moveToContact action: %s", move_to_contact_client_->getState().getText().c_str());
       res.success = false;
-    } else {
+    }
+    else
+    {
       res.success = true;
     }
 

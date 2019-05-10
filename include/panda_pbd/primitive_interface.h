@@ -1,5 +1,5 @@
-#ifndef DEMO_INTERFACE_H
-#define DEMO_INTERFACE_H
+#ifndef PRIMITIVE_INTERFACE_H
+#define PRIMITIVE_INTERFACE_H
 
 // Generic includes
 #include <boost/array.hpp>
@@ -32,7 +32,7 @@
 #include "panda_pbd/UserSyncAction.h"
 #include "panda_pbd/MoveToEEAction.h"
 
-class DemoInterface
+class PrimitiveInterface
 {
 private:
   ros::NodeHandle nh_;
@@ -98,7 +98,7 @@ private:
   bool adjustImpedanceControllerStiffness(double transl_stiff, double rotat_stiff, double ft_mult);
   bool adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
 public:
-  DemoInterface();
+  PrimitiveInterface();
 };
 
-#endif // DEMO_INTERFACE_H
+#endif // PRIMITIVE_INTERFACE_H
