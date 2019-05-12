@@ -16,6 +16,8 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(Eigen3 REQUIRED)
 
+catkin_python_setup()
+
 add_service_files(
   FILES
   EnableTeaching.srv
