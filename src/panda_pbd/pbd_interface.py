@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 
 import rospy
-import panda_primitive as primitive
+import panda_primitive as pp
 from panda_pbd.srv import EnableTeaching, EnableTeachingRequest
 from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
 from panda_pbd.srv import CloseGripperRequest, OpenGripperRequest
 from sensor_msgs.msg import JointState
 
-class ProgrammingByDemonstrationInterface(object):
+class PandaProgrammingByDemonstrationInterface(object):
     def __init__(self):
-        self.program = primitive.PandaProgram('A Panda Program')
+        self.program = pp.PandaProgram('A Panda Program')
         self.ft_threshold = 5.0
 
         # TODO: this implementation of last pose is probably not the best way to do this
@@ -119,7 +119,7 @@ class ProgrammingByDemonstrationInterface(object):
             goal.position_speed = self.move_to_ee_default_position_speed
             goal.rotation_speed = self.move_to_ee_default_rotation_speed
 
-            move_to_ee_primitive = primitive.MoveToEE()
+            move_to_ee_primitive = pp.MoveToEE()
             move_to_ee_primitive.set_parameter_container(goal)
             self.program.insert_primitive(move_to_ee_primitive)
 
@@ -134,7 +134,7 @@ class ProgrammingByDemonstrationInterface(object):
             goal.force_threshold = self.move_to_contact_default_force_threshold
             goal.torque_threshold = self.move_to_contact_default_torque_threshold
 
-            move_to_contact_primitive = primitive.MoveToContact()
+            move_to_contact_primitive = pp.MoveToContact()
             move_to_contact_primitive.set_parameter_container(goal)
             self.program.insert_primitive(move_to_contact_primitive)
 
@@ -142,7 +142,7 @@ class ProgrammingByDemonstrationInterface(object):
         goal = UserSyncGoal()
         goal.force_threshold = self.user_sync_default_force_threshold
 
-        user_sync_primitive = primitive.UserSync()
+        user_sync_primitive = pp.UserSync()
         self.program.insert_primitive(user_sync_primitive)
 
     def insert_close_gripper(self):
@@ -150,7 +150,7 @@ class ProgrammingByDemonstrationInterface(object):
         request.width = self.last_gripper_width
         request.force = self.close_gripper_default_force
 
-        close_gripper_primitive = primitive.CloseGripper()
+        close_gripper_primitive = pp.CloseGripper()
         close_gripper_primitive.set_parameter_container(request)
         self.program.insert_primitive(close_gripper_primitive)
 
@@ -158,6 +158,6 @@ class ProgrammingByDemonstrationInterface(object):
         request = OpenGripperRequest()
         request.width = self.last_gripper_width
 
-        open_gripper_primitive = primitive.OpenGripper()
+        open_gripper_primitive = pp.OpenGripper()
         open_gripper_primitive.set_parameter_container(request)
         self.program.insert_primitive(open_gripper_primitive)

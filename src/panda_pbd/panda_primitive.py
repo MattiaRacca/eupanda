@@ -61,7 +61,13 @@ class PandaProgram(object):
         return id
 
     def __str__(self):
-        return self.name + ': ' + self.description
+        full_description = ''
+        full_description += self.name + ': ' + self.description + '\n'
+        # TODO: iterate over the program dictionary
+        # for prim in self.primitives:
+        #    full_description +=
+
+        return full_description
 
     def delete_primitive(self, id):
         try:
