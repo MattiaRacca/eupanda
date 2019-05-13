@@ -69,6 +69,9 @@ private:
   // ROS TOPICS ====== publishers
   ros::Publisher equilibrium_pose_publisher_;
 
+  // TODO: current implementation of move_to_contact presents problem if we enable frames other than panda_link0
+  // possible solution: save the goal pose in EE space?
+
   // ACTIONLIB ====== clients
   actionlib::SimpleActionClient<franka_gripper::GraspAction> *gripper_grasp_client_;
   actionlib::SimpleActionClient<franka_gripper::MoveAction> *gripper_move_client_;
