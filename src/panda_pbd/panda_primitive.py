@@ -2,56 +2,48 @@
 
 from __future__ import division
 from collections import OrderedDict
-
-# TODO: maybe instead of self.parameters could I put directly the msg or the service req that I need?
+from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
+from panda_pbd.srv import CloseGripperRequest, OpenGripperRequest
 
 class PandaPrimitive(object):
     def __init__(self, description="An abstract Panda primitive"):
         self.description = description
-        self.parameters = {}
-        self.fully_specified = False
+        self.parameter_container = None # either a Goal or a Request message, depending on the primitive
+        self.expected_container = None # type of the container expected, depending again on the primitive
 
     def __str__(self):
         return self.description
 
-    def set_all_parameters(self, **kwargs):
-        self.fully_specified = all(param in kwargs.keys() for param in self.parameters.keys())
-        if self.fully_specified:
-            for param in kwargs.keys():
-                self.parameters[param] = kwargs[param]
-        return self.fully_specified
+    def set_parameter_container(self, container):
+        container_filled = isinstance(container, self.expected_container)
+        if container_filled:
+            self.parameter_container = container
+        return container_filled
 
 class UserSync(PandaPrimitive):
     def __init__(self, description="A User Synchronization primitive"):
         super(UserSync, self).__init__(description)
-        self.parameters = {'force_threshold': None}
+        self.expected_container = UserSyncGoal
 
 class MoveToEE(PandaPrimitive):
     def __init__(self, description="A Move to End-Effector primitive"):
         super(MoveToEE, self).__init__(description)
-        self.parameters = {'pose': None,\
-                           'position_speed': None,\
-                           'rotation_speed': None}
+        self.expected_container = MoveToEEGoal
 
 class MoveToContact(PandaPrimitive):
     def __init__(self, description="A Move to Contact primitive"):
         super(MoveToContact, self).__init__(description)
-        self.parameters = {'pose': None, \
-                           'position_speed': None, \
-                           'rotation_speed': None, \
-                           'force_threshold': None, \
-                           'torque_threshold': None}
+        self.expected_container = MoveToContactGoal
 
 class OpenGripper(PandaPrimitive):
     def __init__(self, description="A Open Gripper primitive"):
         super(OpenGripper, self).__init__(description)
-        self.parameters = {'width': None}
+        self.expected_container = OpenGripperRequest
 
 class CloseGripper(PandaPrimitive):
     def __init__(self, description="A Close Gripper primitive"):
         super(CloseGripper, self).__init__(description)
-        self.parameters = {'width': None,\
-                           'force': None}
+        self.expected_container = CloseGripperRequest
 
 class PandaProgram(object):
     def __init__(self, name="Unnamed Program", description="Empty Description"):
