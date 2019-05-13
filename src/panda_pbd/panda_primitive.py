@@ -63,9 +63,8 @@ class PandaProgram(object):
     def __str__(self):
         full_description = ''
         full_description += self.name + ': ' + self.description + '\n'
-        # TODO: iterate over the program dictionary
-        # for prim in self.primitives:
-        #    full_description +=
+        for prim in self.primitives.items():
+            full_description += '{:0>3d}'.format(prim[0]) + prim[1].__str__ + '\n'
 
         return full_description
 

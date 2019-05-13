@@ -47,11 +47,10 @@ class PandaProgrammingByDemonstrationInterface(object):
             rospy.logerr('Cannot create Kinesthetic Teaching client!')
 
     def gripper_state_callback(self, data):
-        # TODO: self.last_gripper_width = data something?
-        pass
+        self.last_gripper_width = data.position[0] + data.position[1]
 
     def relax(self):
-        req = EnableTeachingRequest
+        req = EnableTeachingRequest()
         req.ft_threshold_multiplier = self.ft_threshold
         req.teaching = 1
 
@@ -66,7 +65,7 @@ class PandaProgrammingByDemonstrationInterface(object):
         return True
 
     def relax_only_arm(self):
-        req = EnableTeachingRequest
+        req = EnableTeachingRequest()
         req.ft_threshold_multiplier = self.ft_threshold
         req.teaching = 2
 
@@ -81,7 +80,7 @@ class PandaProgrammingByDemonstrationInterface(object):
         return True
 
     def relax_only_wrist(self):
-        req = EnableTeachingRequest
+        req = EnableTeachingRequest()
         req.ft_threshold_multiplier = self.ft_threshold
         req.teaching = 3
 
@@ -96,7 +95,7 @@ class PandaProgrammingByDemonstrationInterface(object):
         return True
 
     def freeze(self):
-        req = EnableTeachingRequest
+        req = EnableTeachingRequest()
         req.ft_threshold_multiplier = self.ft_threshold
         req.teaching = 0
 
