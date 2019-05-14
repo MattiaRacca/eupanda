@@ -41,7 +41,7 @@ class PandaPBDInterface(object):
             rospy.logerr('Cannot create Kinesthetic Teaching client!')
 
         try:
-            self.kinesthetic_client(5) # TODO: why 5 seconds?
+            self.kinesthetic_client.wait_for_service(5.0) # TODO: why 5 seconds?
         except rospy.ROSException:
             rospy.logerr('Cannot contact the Primitive Interface Node!')
 

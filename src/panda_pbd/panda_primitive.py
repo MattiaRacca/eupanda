@@ -74,3 +74,12 @@ class PandaProgram(object):
             return True
         except:
             return False
+
+    def get_program_length(self):
+        return len(self.primitives.values())
+
+    def get_nth_primitive(self, N):
+        try:
+            return self.primitives.values()[N]
+        except:
+            return None
