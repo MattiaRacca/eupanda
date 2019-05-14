@@ -2,6 +2,7 @@
 
 import rospy
 import panda_primitive as pp
+import program_interpreter as interpreter
 from panda_pbd.srv import EnableTeaching, EnableTeachingRequest
 from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
 from panda_pbd.srv import CloseGripperRequest, OpenGripperRequest
@@ -45,7 +46,7 @@ class PandaPBDInterface(object):
         except rospy.ROSException:
             rospy.logerr('Cannot contact the Primitive Interface Node!')
 
-
+        self.interpreter = interpreter.PandaProgramInterpreter()
 
         self.freeze()
 
@@ -205,3 +206,10 @@ class PandaPBDInterface(object):
 
         if was_relaxed:
             self.relax()
+
+    def close_gripper_now(self, primitive):
+        temp_program = pp.PandaProgram()
+        temp_program.insert_primitive(primitive)
+
+        self.interpreter.load_program(temp_program)
+        return self.interpreter.execute_entire_program()

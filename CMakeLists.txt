@@ -56,3 +56,6 @@ add_executable(primitive_interface src/primitive_interface_node.cpp
 target_link_libraries(primitive_interface
    ${catkin_LIBRARIES}
 )
+
+install(PROGRAMS scripts/pbd_interface_node.py
+        DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})

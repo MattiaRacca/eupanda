@@ -90,7 +90,6 @@ class PandaProgramInterpreter(object):
 
         return True
 
-
     def execute_open_gripper(self):
         rospy.loginfo('Trying to execute a open gripper')
         response = self.open_gripper_client.call(self.current_primitive.container)
@@ -123,3 +122,7 @@ class PandaProgramInterpreter(object):
         success = self.move_to_ee_client.wait_for_result()
         rospy.loginfo('Success? :' + success)
         return success
+
+    def load_program(self, program):
+        self.current_program = program
+        self.current_step = 0
