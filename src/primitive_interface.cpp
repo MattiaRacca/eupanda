@@ -497,7 +497,7 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
   ROS_DEBUG("Received MoveToEE request");
 
   ROS_WARN("Setting the robot to be stiff (to execute trajectory)");
-  adjustImpedanceControllerStiffness(1500.0, 300.0, 1.0);
+  adjustImpedanceControllerStiffness(3000.0, 600.0, 1.0);
 
   // Put current pose in Eigen form
   auto current_pose = getEEPose();

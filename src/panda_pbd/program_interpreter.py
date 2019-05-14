@@ -6,11 +6,9 @@ import panda_primitive as pp
 from panda_pbd.msg import UserSyncAction, MoveToContactAction, MoveToEEAction
 from panda_pbd.srv import OpenGripper, CloseGripper
 
-
 class PandaProgramInterpreter(object):
     def __init__(self):
         self.current_program = None
-        self.current_primitive = None
         self.current_step = 0
 
         # TO THE PRIMITIVE_INTERFACE
@@ -70,7 +68,7 @@ class PandaProgramInterpreter(object):
         primitive_to_execute = self.current_program.get_nth_primitive(self.current_step)
 
         if primitive_to_execute is None:
-            rospy.logwarn('nothing left to execute')
+            rospy.logwarn('Nothing left to execute OR Empty program')
             return False
 
         callback = self.callback_switcher.get(primitive_to_execute.__class__, lambda: None)
@@ -79,7 +77,7 @@ class PandaProgramInterpreter(object):
             rospy.logwarn("I don't know how to execute this primitive; did you define the callback?")
             return False
 
-        result = callback()
+        result = callback(primitive_to_execute)
 
         if result:
             rospy.loginfo('Executed primitive ' + primitive_to_execute.__str__())
@@ -90,37 +88,37 @@ class PandaProgramInterpreter(object):
 
         return True
 
-    def execute_open_gripper(self):
+    def execute_open_gripper(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a open gripper')
-        response = self.open_gripper_client.call(self.current_primitive.container)
-        rospy.loginfo('Success? :' + response.success)
+        response = self.open_gripper_client.call(primitive_to_execute.parameter_container)
+        rospy.loginfo('Success? :' + str(response.success))
         return response.success
 
-    def execute_close_gripper(self):
+    def execute_close_gripper(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a close gripper')
-        response = self.close_gripper_client.call(self.current_primitive.container)
-        rospy.loginfo('Success? :' + response.success)
+        response = self.close_gripper_client.call(primitive_to_execute.parameter_container)
+        rospy.loginfo('Success? :' + str(response.success))
         return response.success
 
-    def execute_user_sync(self):
+    def execute_user_sync(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a user sync')
-        self.user_sync_client.send_goal(self.current_primitive.container)
+        self.user_sync_client.send_goal(primitive_to_execute.parameter_container)
         success = self.user_sync_client.wait_for_result()
-        rospy.loginfo('Success? :' + success)
+        rospy.loginfo('Success? :' + str(success))
         return success
 
-    def execute_move_to_contact(self):
+    def execute_move_to_contact(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a move to contact')
-        self.move_to_contact_client.send_goal(self.current_primitive.container)
+        self.move_to_contact_client.send_goal(primitive_to_execute.parameter_container)
         success = self.move_to_contact_client.wait_for_result()
-        rospy.loginfo('Success? :' + success)
+        rospy.loginfo('Success? :' + str(success))
         return success
 
-    def execute_move_to_ee(self):
+    def execute_move_to_ee(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a move to EE')
-        self.move_to_ee_client.send_goal(self.current_primitive.container)
+        self.move_to_ee_client.send_goal(primitive_to_execute.parameter_container)
         success = self.move_to_ee_client.wait_for_result()
-        rospy.loginfo('Success? :' + success)
+        rospy.loginfo('Success? :' + str(success))
         return success
 
     def load_program(self, program):

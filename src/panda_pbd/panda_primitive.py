@@ -64,7 +64,7 @@ class PandaProgram(object):
         full_description = ''
         full_description += self.name + ': ' + self.description + '\n'
         for prim in self.primitives.items():
-            full_description += '{:0>3d}'.format(prim[0]) + prim[1].__str__ + '\n'
+            full_description += str(prim[0]).zfill(3) + ': ' + prim[1].__str__() + '\n'
 
         return full_description
 
