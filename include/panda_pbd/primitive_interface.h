@@ -71,6 +71,7 @@ private:
 
   // TODO: current implementation of move_to_contact presents problem if we enable frames other than panda_link0
   // possible solution: save the goal pose in EE space?
+  // other position: specify the frame of reference, as for the MoveToEE primitive?
 
   // ACTIONLIB ====== clients
   actionlib::SimpleActionClient<franka_gripper::GraspAction> *gripper_grasp_client_;

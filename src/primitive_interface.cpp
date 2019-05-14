@@ -263,9 +263,6 @@ bool PrimitiveInterface::openGripperCallback(panda_pbd::OpenGripper::Request &re
     panda_pbd::OpenGripper::Response &res)
 {
   franka_gripper::MoveGoal move_goal;
-  // TODO: Do we have a way to check the range for the gripper width?
-  // clunky way through the /franka_gripper/joint_states topic
-
   move_goal.width = std::max(0.0, std::min(req.width, 0.08));
   move_goal.speed = 0.01; // in m/s
 
@@ -294,8 +291,6 @@ bool PrimitiveInterface::closeGripperCallback(panda_pbd::CloseGripper::Request &
 {
   franka_gripper::GraspGoal grasping_goal;
 
-  // TODO: Do we have a way to check the range for the gripper width?
-  // see open gripper callback
   // TODO: Do we want to enforce a force range?
 
   grasping_goal.width = std::max(0.0, std::min(req.width, 0.08));;
