@@ -42,9 +42,13 @@ class PandaProgramInterpreter(object):
             return 'No program loaded'
         full_description = self.current_program.__str__()
         full_description += 'Current at primitive {}:'.format(self.current_step) +\
-                            self.current_program.values()[self.current_step].__str__()
+                            self.current_program.get_nth_primitive(self.current_step).__str__()
 
         return full_description
+
+    def load_program(self, program):
+        self.current_program = program
+        self.current_step = 0
 
     def execute_entire_program(self):
         partial_success = True
@@ -55,7 +59,7 @@ class PandaProgramInterpreter(object):
             if partial_success:
                 primitive_counter += 1
 
-        if primitive_counter == self.current_program.get_program_length():
+        if primitive_counter == self.current_program.get_program_length() - 1:
             return True
         else:
             return False
@@ -88,6 +92,7 @@ class PandaProgramInterpreter(object):
 
         return True
 
+    ### PRIMITIVE CALLBACKS
     def execute_open_gripper(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a open gripper')
         response = self.open_gripper_client.call(primitive_to_execute.parameter_container)
@@ -120,7 +125,3 @@ class PandaProgramInterpreter(object):
         success = self.move_to_ee_client.wait_for_result()
         rospy.loginfo('Success? :' + str(success))
         return success
-
-    def load_program(self, program):
-        self.current_program = program
-        self.current_step = 0
