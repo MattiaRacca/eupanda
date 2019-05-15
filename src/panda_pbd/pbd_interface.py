@@ -46,9 +46,13 @@ class PandaPBDInterface(object):
         except rospy.ROSException:
             rospy.logerr('Cannot contact the Primitive Interface Node!')
 
-        self.interpreter = interpreter.PandaProgramInterpreter()
+        self.interpreter = interpreter.PandaProgramInterpreter() # internal interpreter, for now actions!
 
         self.freeze()
+
+        if self.last_pose is not None and self.last_gripper_width is not None:
+            self.program.save_arm_state(self.last_pose)
+            self.program.save_gripper_state(self.last_gripper_width)
 
     def gripper_state_callback(self, data):
         self.last_gripper_width = data.position[0] + data.position[1]
@@ -135,46 +139,47 @@ class PandaPBDInterface(object):
         return True
 
     def insert_move_to_ee(self):
-        if self.last_pose is None:
-            return False
-        else:
-            was_relaxed = self.relaxed
-            if was_relaxed:
-                self.freeze()
+        was_relaxed = self.relaxed
+        if was_relaxed:
+            self.freeze()
 
-            goal = MoveToEEGoal()
-            goal.pose = self.last_pose
-            goal.position_speed = self.move_to_ee_default_position_speed
-            goal.rotation_speed = self.move_to_ee_default_rotation_speed
+        # create new Goal for the primitive
+        goal = MoveToEEGoal()
+        goal.pose = self.last_pose
+        goal.position_speed = self.move_to_ee_default_position_speed
+        goal.rotation_speed = self.move_to_ee_default_rotation_speed
 
-            move_to_ee_primitive = pp.MoveToEE()
-            move_to_ee_primitive.set_parameter_container(goal)
-            self.program.insert_primitive(move_to_ee_primitive)
+        # create the primitive to be added
+        move_to_ee_primitive = pp.MoveToEE()
+        move_to_ee_primitive.set_parameter_container(goal)
+        self.program.insert_primitive(move_to_ee_primitive)
 
-            if was_relaxed:
-                self.relax()
+        # save current pose to the program states
+        self.program.save_arm_state(goal.pose)
+
+        if was_relaxed:
+            self.relax()
 
     def insert_move_to_contact(self):
-        if self.last_pose is None:
-            return False
-        else:
-            was_relaxed = self.relaxed
-            if was_relaxed:
-                self.freeze()
+        was_relaxed = self.relaxed
+        if was_relaxed:
+            self.freeze()
 
-            goal = MoveToContactGoal()
-            goal.pose = self.last_pose
-            goal.position_speed = self.move_to_contact_default_position_speed
-            goal.rotation_speed = self.move_to_contact_default_rotation_speed
-            goal.force_threshold = self.move_to_contact_default_force_threshold
-            goal.torque_threshold = self.move_to_contact_default_torque_threshold
+        goal = MoveToContactGoal()
+        goal.pose = self.last_pose
+        goal.position_speed = self.move_to_contact_default_position_speed
+        goal.rotation_speed = self.move_to_contact_default_rotation_speed
+        goal.force_threshold = self.move_to_contact_default_force_threshold
+        goal.torque_threshold = self.move_to_contact_default_torque_threshold
 
-            move_to_contact_primitive = pp.MoveToContact()
-            move_to_contact_primitive.set_parameter_container(goal)
-            self.program.insert_primitive(move_to_contact_primitive)
+        move_to_contact_primitive = pp.MoveToContact()
+        move_to_contact_primitive.set_parameter_container(goal)
+        self.program.insert_primitive(move_to_contact_primitive)
 
-            if was_relaxed:
-                self.relax()
+        self.program.save_arm_state(goal.pose)
+
+        if was_relaxed:
+            self.relax()
 
     def insert_user_sync(self):
         goal = UserSyncGoal()
@@ -205,6 +210,9 @@ class PandaPBDInterface(object):
 
         self.execute_primitive_now(close_gripper_primitive)
 
+        # TODO: this is probably not enough to revert!
+        self.program.save_gripper_state(request.width)
+
         if was_relaxed:
             self.relax()
 
@@ -219,6 +227,10 @@ class PandaPBDInterface(object):
         open_gripper_primitive = pp.OpenGripper()
         open_gripper_primitive.set_parameter_container(request)
         self.program.insert_primitive(open_gripper_primitive)
+
+        self.execute_primitive_now(open_gripper_primitive)
+
+        self.program.save_gripper_state(request.width)
 
         if was_relaxed:
             self.relax()

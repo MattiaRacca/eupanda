@@ -10,15 +10,21 @@ class PandaPrimitive(object):
         self.description = description
         self.parameter_container = None # either a Goal or a Request message, depending on the primitive
         self.expected_container = None # type of the container expected, depending again on the primitive
+        self.starting_arm_state_id = None # pose of the robot at the beginning of this primitive
+        self.starting_gripper_state_id = None # gripper state at the beginning of this primitive (finger width)
 
     def __str__(self):
-        return self.description
+        return self.description + '(' + self.starting_arm_state_id + ', ' + self.starting_gripper_state_id + ')'
 
     def set_parameter_container(self, container):
         container_filled = isinstance(container, self.expected_container)
         if container_filled:
             self.parameter_container = container
         return container_filled
+
+    def set_starting_conditions(self, starting_arm_state_id, starting_gripper_state_id):
+        self.starting_arm_state_id = starting_arm_state_id
+        self.starting_gripper_state_id = starting_gripper_state_id
 
 class UserSync(PandaPrimitive):
     def __init__(self, description="A User Synchronization primitive"):
@@ -50,6 +56,31 @@ class PandaProgram(object):
         self.name = name
         self.description = description
         self.primitives = OrderedDict()
+        self.arm_state_list = OrderedDict()
+        self.gripper_state_list = OrderedDict()
+
+    def save_arm_state(self, arm_state):
+        if len(self.arm_state_list.items()) == 0:
+            id = 0
+            self.arm_state_list[0] = arm_state
+        else:
+            id = max(self.arm_state_list.keys()) + 1
+            self.arm_state_list[id] = arm_state
+        return id
+
+    def save_gripper_state(self, gripper_state):
+        if len(self.gripper_state_list.items()) == 0:
+            id = 0
+            self.gripper_state_list[0] = gripper_state
+        else:
+            id = max(self.gripper_state_list.keys()) + 1
+            self.gripper_state_list[id] = gripper_state
+        return id
+
+    def get_nth_primitive_preconditions(self, N):
+        arm_state = self.arm_state_list[self.get_nth_primitive(N).starting_arm_state_id]
+        gripper_state = self.gripper_state_list[self.get_nth_primitive(N).starting_gripper_state_id]
+        return arm_state, gripper_state
 
     def insert_primitive(self, primitive):
         if len(self.primitives.items()) == 0:
@@ -58,6 +89,9 @@ class PandaProgram(object):
         else:
             id = max(self.primitives.keys()) + 1
             self.primitives[id] = primitive
+
+        self.primitives[id].starting_arm_state_id = self.arm_state_list.keys()[-1]
+        self.primitives[id].starting_arm_state_id = self.arm_state_list.keys()[-1]
         return id
 
     def __str__(self):
