@@ -32,7 +32,7 @@ class PandaPBDInterface(object):
         self.move_to_contact_default_position_speed = .04 # m/s
         self.move_to_contact_default_rotation_speed = 1.0  # rad/s
 
-        self.gripper_state_subscriber  = rospy.Subscriber("/franka_gripper/joint_states",
+        self.gripper_state_subscriber = rospy.Subscriber("/franka_gripper/joint_states",
                                                           JointState, self.gripper_state_callback)
 
         try:
@@ -42,11 +42,11 @@ class PandaPBDInterface(object):
             rospy.logerr('Cannot create Kinesthetic Teaching client!')
 
         try:
-            self.kinesthetic_client.wait_for_service(5.0) # TODO: why 5 seconds?
+            self.kinesthetic_client.wait_for_service(5.0)  # TODO: why 5 seconds?
         except rospy.ROSException:
             rospy.logerr('Cannot contact the Primitive Interface Node!')
 
-        self.interpreter = interpreter.PandaProgramInterpreter() # internal interpreter, for now actions!
+        self.interpreter = interpreter.PandaProgramInterpreter()  # internal interpreter, for now actions!
 
         self.freeze()
 
@@ -120,7 +120,7 @@ class PandaPBDInterface(object):
         temp_program.insert_primitive(open_gripper_primitive)
 
         self.interpreter.load_program(temp_program)
-        return self.interpreter.execute_entire_program()
+        return self.interpreter.execute_rest_of_program()
 
     def freeze(self):
         req = EnableTeachingRequest()
@@ -240,4 +240,4 @@ class PandaPBDInterface(object):
         temp_program.insert_primitive(primitive)
 
         self.interpreter.load_program(temp_program)
-        return self.interpreter.execute_entire_program()
+        return self.interpreter.execute_rest_of_program()

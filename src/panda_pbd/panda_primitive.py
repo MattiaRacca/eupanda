@@ -2,6 +2,9 @@
 
 from __future__ import division
 from collections import OrderedDict
+import pickle
+import os
+
 from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
 from panda_pbd.srv import CloseGripperRequest, OpenGripperRequest
 
@@ -117,3 +120,15 @@ class PandaProgram(object):
             return self.primitives.values()[N]
         except:
             return None
+
+    def dump_to_file(self, filepath='~', filename='program.pkl'):
+        dump_program_to_file(self, filepath, filename)
+
+def dump_program_to_file(program, filepath='~', filename='program.pkl'):
+    with open(os.path.join(os.path.expanduser(filepath), filename),'wb') as f:
+        pickle.dump(program, f)
+
+def load_program_from_file(filepath='~', filename='program.pkl'):
+    with open(os.path.join(os.path.expanduser(filepath), filename),'rb') as f:
+        loaded_program = pickle.load(f)
+        return loaded_program
