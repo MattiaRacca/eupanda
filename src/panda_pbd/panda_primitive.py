@@ -8,13 +8,14 @@ import os
 from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
 from panda_pbd.srv import CloseGripperRequest, OpenGripperRequest
 
+
 class PandaPrimitive(object):
     def __init__(self, description="An abstract Panda primitive"):
         self.description = description
-        self.parameter_container = None # either a Goal or a Request message, depending on the primitive
-        self.expected_container = None # type of the container expected, depending again on the primitive
-        self.starting_arm_state_id = None # pose of the robot at the beginning of this primitive
-        self.starting_gripper_state_id = None # gripper state at the beginning of this primitive (finger width)
+        self.parameter_container = None  # either a Goal or a Request message, depending on the primitive
+        self.expected_container = None  # type of the container expected, depending again on the primitive
+        self.starting_arm_state_id = None  # pose of the robot at the beginning of this primitive
+        self.starting_gripper_state_id = None  # gripper state at the beginning of this primitive (finger width)
 
     def __str__(self):
         return self.description + '(' + self.starting_arm_state_id + ', ' + self.starting_gripper_state_id + ')'
@@ -29,30 +30,36 @@ class PandaPrimitive(object):
         self.starting_arm_state_id = starting_arm_state_id
         self.starting_gripper_state_id = starting_gripper_state_id
 
+
 class UserSync(PandaPrimitive):
     def __init__(self, description="A User Synchronization primitive"):
         super(UserSync, self).__init__(description)
         self.expected_container = UserSyncGoal
+
 
 class MoveToEE(PandaPrimitive):
     def __init__(self, description="A Move to End-Effector primitive"):
         super(MoveToEE, self).__init__(description)
         self.expected_container = MoveToEEGoal
 
+
 class MoveToContact(PandaPrimitive):
     def __init__(self, description="A Move to Contact primitive"):
         super(MoveToContact, self).__init__(description)
         self.expected_container = MoveToContactGoal
+
 
 class OpenGripper(PandaPrimitive):
     def __init__(self, description="A Open Gripper primitive"):
         super(OpenGripper, self).__init__(description)
         self.expected_container = OpenGripperRequest
 
+
 class CloseGripper(PandaPrimitive):
     def __init__(self, description="A Close Gripper primitive"):
         super(CloseGripper, self).__init__(description)
         self.expected_container = CloseGripperRequest
+
 
 class PandaProgram(object):
     def __init__(self, name="Unnamed Program", description="Empty Description"):
@@ -124,11 +131,13 @@ class PandaProgram(object):
     def dump_to_file(self, filepath='~', filename='program.pkl'):
         dump_program_to_file(self, filepath, filename)
 
+
 def dump_program_to_file(program, filepath='~', filename='program.pkl'):
-    with open(os.path.join(os.path.expanduser(filepath), filename),'wb') as f:
+    with open(os.path.join(os.path.expanduser(filepath), filename), 'wb') as f:
         pickle.dump(program, f)
 
+
 def load_program_from_file(filepath='~', filename='program.pkl'):
-    with open(os.path.join(os.path.expanduser(filepath), filename),'rb') as f:
+    with open(os.path.join(os.path.expanduser(filepath), filename), 'rb') as f:
         loaded_program = pickle.load(f)
         return loaded_program

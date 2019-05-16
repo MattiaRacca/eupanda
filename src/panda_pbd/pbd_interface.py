@@ -20,16 +20,16 @@ class PandaPBDInterface(object):
         # TODO: make the default values encoded in ros parameters
         self.kinesthestic_ft_threshold = 5.0
 
-        self.move_to_ee_default_position_speed = .04 # m/s
+        self.move_to_ee_default_position_speed = .04  # m/s
         self.move_to_ee_default_rotation_speed = 1.0  # rad/s
 
-        self.user_sync_default_force_threshold = 10.0 # N
+        self.user_sync_default_force_threshold = 10.0  # N
 
-        self.close_gripper_default_force = 5.0 # N
+        self.close_gripper_default_force = 5.0  # N
 
-        self.move_to_contact_default_force_threshold = 5.0 # N
-        self.move_to_contact_default_torque_threshold = 5.0 # Nm/rad
-        self.move_to_contact_default_position_speed = .04 # m/s
+        self.move_to_contact_default_force_threshold = 5.0  # N
+        self.move_to_contact_default_torque_threshold = 5.0  # Nm/rad
+        self.move_to_contact_default_position_speed = .04  # m/s
         self.move_to_contact_default_rotation_speed = 1.0  # rad/s
 
         self.gripper_state_subscriber = rospy.Subscriber("/franka_gripper/joint_states",
