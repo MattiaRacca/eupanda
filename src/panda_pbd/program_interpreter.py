@@ -158,10 +158,11 @@ class PandaProgramInterpreter(object):
             rospy.logwarn('Should the next_primitive_index be 0? now it is {}'.format(self.next_primitive_index))
             return True
         else:
-            rospy.logerr('Something went south while reverting. Program now at step {}'.format(self.next_primitive_index))
+            rospy.logerr('Something went south while reverting. Program now at step {}'.format(
+                self.next_primitive_index))
             return False
 
-    ### PRIMITIVE CALLBACKS
+    # PRIMITIVE CALLBACKS
     def execute_open_gripper(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a open gripper')
         response = self.open_gripper_client.call(primitive_to_execute.parameter_container)
@@ -195,7 +196,7 @@ class PandaProgramInterpreter(object):
         rospy.loginfo('Success? :' + str(success))
         return success
 
-    ## REVERT PRIMITIVE CALLBACK
+    # REVERT PRIMITIVE CALLBACK
     def revert_open_gripper(self, primitive_to_revert):
         rospy.loginfo('Trying to revert a open gripper')
         pose, width = primitive_to_revert.get_nth_primitive_preconditions()
