@@ -115,11 +115,11 @@ class PandaProgram(object):
     # to check the post-conditions of N, check the preconditions of N+1
     # if N is the last primitive, return the last items of the state lists
     def get_nth_primitive_postconditions(self, n):
-        next_primitive = self.get_nth_primitive(n+1)
+        next_primitive = self.get_nth_primitive(n + 1)
         if next_primitive is None:  # N is the last primitive
             return self.arm_state_list[-1], self.gripper_state_list[-1]
         else:
-            return self.get_nth_primitive_preconditions(n+1)
+            return self.get_nth_primitive_preconditions(n + 1)
 
     def insert_primitive(self, primitive, post_conditions):
         self.primitives.append(primitive)

@@ -110,13 +110,13 @@ class PandaProgramInterpreter(object):
             rospy.logwarn('Nothing left to revert OR Empty program OR wrong indexing')
             return False
 
-        callback = self.callback_switcher.get(primitive_to_revert.__class__, None)
+        callback = self.revert_callback_switcher.get(primitive_to_revert.__class__, None)
 
         if callback is None:
             rospy.logwarn("I don't know how to revert this primitive; did you define the revert callback?")
             return False
 
-        result = callback(primitive_to_revert)
+        result = callback(self.next_primitive_index - 1)
 
         if result:
             rospy.loginfo('Reverted primitive ' + primitive_to_revert.__str__())
@@ -154,8 +154,6 @@ class PandaProgramInterpreter(object):
 
         if primitive_counter == 0:
             rospy.loginfo('Reverted to beginning of the program!')
-            # TODO: check here value of next_primitive_index
-            rospy.logwarn('Should the next_primitive_index be 0? now it is {}'.format(self.next_primitive_index))
             return True
         else:
             rospy.logerr('Something went south while reverting. Program now at step {}'.format(
@@ -197,9 +195,9 @@ class PandaProgramInterpreter(object):
         return success
 
     # REVERT PRIMITIVE CALLBACK
-    def revert_open_gripper(self, primitive_to_revert):
-        rospy.loginfo('Trying to revert a open gripper')
-        pose, width = primitive_to_revert.get_nth_primitive_preconditions()
+    def revert_open_gripper(self, primitive_index):
+        pose, width = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+        rospy.loginfo('Trying to revert a open gripper to {}'.format(width))
 
         request = OpenGripperRequest()
         request.width = width
@@ -209,9 +207,9 @@ class PandaProgramInterpreter(object):
         rospy.loginfo('Success? :' + str(response.success))
         return response.success
 
-    def revert_close_gripper(self, primitive_to_revert):
-        rospy.loginfo('Trying to revert a close gripper')
-        pose, width = primitive_to_revert.get_nth_primitive_preconditions()
+    def revert_close_gripper(self, primitive_index):
+        pose, width = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+        rospy.loginfo('Trying to revert a close gripper to {}'.format(width))
 
         request = OpenGripperRequest()
         request.width = width
@@ -227,9 +225,9 @@ class PandaProgramInterpreter(object):
         rospy.loginfo('Success? :' + str(success))
         return success
 
-    def revert_move_to_contact(self, primitive_to_revert):
+    def revert_move_to_contact(self, primitive_index):
+        pose, width = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
         rospy.loginfo('Trying to revert a move to contact')
-        pose, width = primitive_to_revert.get_nth_primitive_preconditions()
 
         # create new Goal for the primitive
         goal = MoveToEEGoal()
@@ -242,9 +240,9 @@ class PandaProgramInterpreter(object):
         rospy.loginfo('Success? :' + str(success))
         return success
 
-    def revert_move_to_ee(self, primitive_to_revert):
+    def revert_move_to_ee(self, primitive_index):
+        pose, width = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
         rospy.loginfo('Trying to revert a move to EE')
-        pose, width = primitive_to_revert.get_nth_primitive_preconditions()
 
         # create new Goal for the primitive
         goal = MoveToEEGoal()
