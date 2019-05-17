@@ -136,7 +136,7 @@ class PandaProgramInterpreter(object):
             if partial_success:
                 primitive_counter += 1
 
-        if primitive_counter == self.loaded_program.get_program_length() - 1:
+        if primitive_counter == self.loaded_program.get_program_length():
             rospy.loginfo('Executed rest of the program!')
             return True
         else:

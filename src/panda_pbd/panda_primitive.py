@@ -17,7 +17,8 @@ class PandaPrimitive(object):
         self.starting_gripper_state_index = None  # gripper state at the beginning of this primitive (finger width)
 
     def __str__(self):
-        return self.description + '(' + self.starting_arm_state_index + ', ' + self.starting_gripper_state_index + ')'
+        return self.description + '(' + str(self.starting_arm_state_index) + ', ' +\
+               str(self.starting_gripper_state_index) + ')'
 
     def set_parameter_container(self, container):
         container_filled = isinstance(container, self.expected_container)
@@ -95,6 +96,8 @@ class PandaProgram(object):
         return len(self.primitives)
 
     def get_nth_primitive(self, n):
+        if n < 0: # stupid Python with -n indexing
+            return None
         try:
             return self.primitives[n]
         except IndexError:
