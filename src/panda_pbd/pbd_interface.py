@@ -205,11 +205,11 @@ class PandaPBDInterface(object):
         close_gripper_primitive = pp.CloseGripper()
         close_gripper_primitive.set_parameter_container(request)
 
+        # TODO: is it worth to investigate this copy bug? with the deepcopy the code works as intended...
+        self.execute_primitive_now(close_gripper_primitive)
+
         # TODO: this is probably not enough to revert!
         self.program.insert_primitive(close_gripper_primitive, [None, request.width])
-
-        # TODO: is it worth to investigate this copy bug? with the deepcopy the code works as intended...
-        self.execute_primitive_now(copy.deepcopy(close_gripper_primitive))
 
         if was_relaxed:
             self.relax()
@@ -227,14 +227,14 @@ class PandaPBDInterface(object):
         self.program.insert_primitive(open_gripper_primitive, [None, request.width])
 
         # TODO: is it worth to investigate this copy bug? with the deepcopy the code works as intended...
-        self.execute_primitive_now(copy.deepcopy(open_gripper_primitive))
+        self.execute_primitive_now(open_gripper_primitive)
 
         if was_relaxed:
             self.relax()
 
     def execute_primitive_now(self, primitive):
         temp_program = pp.PandaProgram()
-        temp_program.insert_primitive(primitive, [self.last_pose, self.last_gripper_width])
+        temp_program.insert_primitive(copy.deepcopy(primitive), [self.last_pose, self.last_gripper_width])
 
         self.interpreter.load_program(temp_program)
         return self.interpreter.execute_rest_of_program()
