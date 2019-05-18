@@ -21,6 +21,8 @@ catkin_python_setup()
 add_service_files(
   FILES
   EnableTeaching.srv
+  MoveFingers.srv
+  ApplyForceFingers.srv
   OpenGripper.srv
   CloseGripper.srv
 )

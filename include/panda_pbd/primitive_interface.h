@@ -26,11 +26,13 @@
 
 // Custom services
 #include "panda_pbd/EnableTeaching.h"
-#include "panda_pbd/OpenGripper.h"
-#include "panda_pbd/CloseGripper.h"
 #include "panda_pbd/MoveToContactAction.h"
 #include "panda_pbd/UserSyncAction.h"
 #include "panda_pbd/MoveToEEAction.h"
+#include "panda_pbd/MoveFingers.h"
+#include "panda_pbd/ApplyForceFingers.h"
+#include "panda_pbd/OpenGripper.h"
+#include "panda_pbd/CloseGripper.h"
 
 class PrimitiveInterface
 {
@@ -56,9 +58,13 @@ private:
 
   // ROS SERVICES ====== servers
   ros::ServiceServer kinesthetic_server_;
-  ros::ServiceServer close_gripper_server_;
-  ros::ServiceServer open_gripper_server_;
+  ros::ServiceServer move_fingers_server_;
+  ros::ServiceServer apply_force_fingers_server_;
   ros::ServiceServer move_to_ee_test_server_;
+
+  // LEGACY SERVICES
+  ros::ServiceServer open_gripper_server_;
+  ros::ServiceServer close_gripper_server_;
 
   // ROS SERVICES ====== clients
   ros::ServiceClient cartesian_impedance_dynamic_reconfigure_client_;
@@ -86,9 +92,13 @@ private:
 
   // Callbacks ====== services
   bool kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
+  bool moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
+  bool moveFingersCallback(panda_pbd::MoveFingers::Request &req, panda_pbd::MoveFingers::Response &res);
+  bool applyForceFingersCallback(panda_pbd::ApplyForceFingers::Request &req, panda_pbd::ApplyForceFingers::Response &res);
+
+  // Callbacks ====== LEGACY services
   bool closeGripperCallback(panda_pbd::CloseGripper::Request &req, panda_pbd::CloseGripper::Response &res);
   bool openGripperCallback(panda_pbd::OpenGripper::Request &req, panda_pbd::OpenGripper::Response &res);
-  bool moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
 
   // Callbacks ====== actionlib
   void moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal);

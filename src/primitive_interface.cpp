@@ -7,6 +7,9 @@ PrimitiveInterface::PrimitiveInterface():
   kinesthetic_server_ = nh_.advertiseService("kinesthetic_teaching", &PrimitiveInterface::kinestheticTeachingCallback, this);
   open_gripper_server_ = nh_.advertiseService("open_gripper", &PrimitiveInterface::openGripperCallback, this);
   close_gripper_server_ = nh_.advertiseService("close_gripper", &PrimitiveInterface::closeGripperCallback, this);
+  move_fingers_server_ = nh_.advertiseService(",move_fingers", &PrimitiveInterface::moveFingersCallback, this);
+  apply_force_fingers_server_ = nh_.advertiseService("apply_force_fingers_gripper",
+          &PrimitiveInterface::applyForceFingersCallback, this);
 
   // TODO: to be removed once we have the pbd implemented
   move_to_ee_test_server_ = nh_.advertiseService("move_to_test", &PrimitiveInterface::moveToTestCallback, this);
@@ -259,6 +262,66 @@ bool PrimitiveInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::
   return res.success;
 }
 
+bool PrimitiveInterface::moveFingersCallback(panda_pbd::MoveFingers::Request &req,
+                                             panda_pbd::MoveFingers::Response &res){
+  franka_gripper::MoveGoal move_goal;
+  move_goal.width = std::max(0.0, std::min(req.width, 0.08));
+  // TODO: make this parameter a rosparam?
+  move_goal.speed = 0.03;// in m/s
+
+  if (!gripper_move_client_->waitForServer(ros::Duration(1)))
+  {
+    ROS_ERROR("Cannot reach MoveAction Server");
+    res.success = false;
+    return res.success;
+  }
+
+  gripper_move_client_->sendGoalAndWait(move_goal);
+  if (gripper_move_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED)
+  {
+    ROS_ERROR("Move fingers primitive failed: %s", gripper_move_client_->getState().getText().c_str());
+    res.success = false;
+  }
+  else
+  {
+    res.success = true;
+  }
+  return res.success;;
+}
+
+bool PrimitiveInterface::applyForceFingersCallback(panda_pbd::ApplyForceFingers::Request &req,
+                                                   panda_pbd::ApplyForceFingers::Response &res){
+  franka_gripper::GraspGoal grasping_goal;
+
+  // TODO: Do we want to enforce a force range?
+  grasping_goal.width = 0.0;
+  grasping_goal.force = req.force;
+  grasping_goal.speed = 0.03; // in m/s
+
+  // TODO: this epsilon value will never trigger an error basically (neglectful handling)
+  grasping_goal.epsilon.inner = 0.5;
+  grasping_goal.epsilon.outer = 0.5;
+
+  if (!gripper_grasp_client_->waitForServer(ros::Duration(1)))
+  {
+    ROS_ERROR("Cannot reach GraspAction Server");
+    res.success = false;
+    return res.success;
+  }
+
+  gripper_grasp_client_->sendGoalAndWait(grasping_goal);
+  if (gripper_grasp_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED)
+  {
+    ROS_ERROR("Apply Force with Fingers primitived failed: %s", gripper_grasp_client_->getState().getText().c_str());
+    res.success = false;
+  }
+  else
+  {
+    res.success = true;
+  }
+  return res.success;
+}
+
 bool PrimitiveInterface::openGripperCallback(panda_pbd::OpenGripper::Request &req,
     panda_pbd::OpenGripper::Response &res)
 {
@@ -293,7 +356,7 @@ bool PrimitiveInterface::closeGripperCallback(panda_pbd::CloseGripper::Request &
 
   // TODO: Do we want to enforce a force range?
 
-  grasping_goal.width = std::max(0.0, std::min(req.width, 0.08));;
+  grasping_goal.width = std::max(0.0, std::min(req.width, 0.08));
   grasping_goal.force = req.force;
   grasping_goal.speed = 0.01; // in m/s
 
