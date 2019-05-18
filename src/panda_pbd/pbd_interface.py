@@ -6,7 +6,7 @@ import panda_primitive as pp
 import program_interpreter as interpreter
 from panda_pbd.srv import EnableTeaching, EnableTeachingRequest
 from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
-from panda_pbd.srv import CloseGripperRequest, OpenGripperRequest
+from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest, CloseGripperRequest, OpenGripperRequest
 from sensor_msgs.msg import JointState
 
 
@@ -21,16 +21,17 @@ class PandaPBDInterface(object):
         # TODO: make the default values encoded in ros parameters
         self.kinesthestic_ft_threshold = 5.0
 
-        self.move_to_ee_default_position_speed = .04  # m/s
+        self.move_to_ee_default_position_speed = .05  # m/s
         self.move_to_ee_default_rotation_speed = 1.0  # rad/s
 
         self.user_sync_default_force_threshold = 10.0  # N
 
-        self.close_gripper_default_force = 5.0  # N
+        self.close_gripper_default_force = 5.0  # N, TODO: to be removed at some point
+        self.apply_force_fingers_default_force = 5.0  # N
 
         self.move_to_contact_default_force_threshold = 5.0  # N
         self.move_to_contact_default_torque_threshold = 5.0  # Nm/rad
-        self.move_to_contact_default_position_speed = .04  # m/s
+        self.move_to_contact_default_position_speed = .05  # m/s
         self.move_to_contact_default_rotation_speed = 1.0  # rad/s
 
         self.gripper_state_subscriber = rospy.Subscriber("/franka_gripper/joint_states", JointState,
@@ -56,7 +57,8 @@ class PandaPBDInterface(object):
             rospy.sleep(1.0)
 
         self.program.save_arm_state(self.last_pose)
-        self.program.save_gripper_state(self.last_gripper_width)
+        # TODO: assumption here, I am not grasping at the beginning...
+        self.program.save_gripper_state(pp.GripperState(self.last_gripper_width, 0.0))
 
     def gripper_state_callback(self, data):
         self.last_gripper_width = data.position[0] + data.position[1]
@@ -121,7 +123,7 @@ class PandaPBDInterface(object):
         open_gripper_primitive = pp.OpenGripper()
         open_gripper_primitive.set_parameter_container(request)
 
-        temp_program.insert_primitive(open_gripper_primitive, [None, self.last_gripper_width])
+        temp_program.insert_primitive(open_gripper_primitive, [None, pp.GripperState(self.last_gripper_width, 0.0)])
 
         self.interpreter.load_program(temp_program)
         return self.interpreter.execute_rest_of_program()
@@ -194,6 +196,44 @@ class PandaPBDInterface(object):
         if was_relaxed:
             self.relax()
 
+    def insert_apply_force_fingers(self):
+        request = ApplyForceFingersRequest()
+        request.force = self.apply_force_fingers_default_force
+
+        was_relaxed = self.relaxed
+        if was_relaxed:
+            self.freeze()
+
+        close_gripper_primitive = pp.ApplyForceFingers()
+        close_gripper_primitive.set_parameter_container(request)
+
+        # TODO: is it worth to investigate this copy bug? with the deepcopy the code works as intended...
+        self.execute_primitive_now(close_gripper_primitive)
+
+        self.program.insert_primitive(close_gripper_primitive, [None, pp.GripperState(self.last_gripper_width,
+                                                                                      request.force)])
+
+        if was_relaxed:
+            self.relax()
+
+    def insert_move_fingers(self):
+        request = MoveFingersRequest()
+        request.width = self.last_gripper_width
+
+        was_relaxed = self.relaxed
+        if was_relaxed:
+            self.freeze()
+
+        open_gripper_primitive = pp.MoveFingers()
+        open_gripper_primitive.set_parameter_container(request)
+        self.program.insert_primitive(open_gripper_primitive, [None, pp.GripperState(self.last_gripper_width, 0.0)])
+
+        # TODO: is it worth to investigate this copy bug? with the deepcopy the code works as intended...
+        self.execute_primitive_now(open_gripper_primitive)
+
+        if was_relaxed:
+            self.relax()
+
     def insert_close_gripper(self):
         request = CloseGripperRequest()
         request.width = self.last_gripper_width
@@ -210,7 +250,8 @@ class PandaPBDInterface(object):
         self.execute_primitive_now(close_gripper_primitive)
 
         # TODO: this is probably not enough to revert!
-        self.program.insert_primitive(close_gripper_primitive, [None, self.last_gripper_width])
+        self.program.insert_primitive(close_gripper_primitive, [None, pp.GripperState(self.last_gripper_width,
+                                                                                      request.force)])
 
         if was_relaxed:
             self.relax()
@@ -225,7 +266,7 @@ class PandaPBDInterface(object):
 
         open_gripper_primitive = pp.OpenGripper()
         open_gripper_primitive.set_parameter_container(request)
-        self.program.insert_primitive(open_gripper_primitive, [None, request.width])
+        self.program.insert_primitive(open_gripper_primitive, [None, pp.GripperState(self.last_gripper_width, 0.0)])
 
         # TODO: is it worth to investigate this copy bug? with the deepcopy the code works as intended...
         self.execute_primitive_now(open_gripper_primitive)
@@ -235,7 +276,7 @@ class PandaPBDInterface(object):
 
     def execute_primitive_now(self, primitive):
         temp_program = pp.PandaProgram()
-        temp_program.insert_primitive(copy.deepcopy(primitive), [self.last_pose, self.last_gripper_width])
+        temp_program.insert_primitive(copy.deepcopy(primitive), [None, None])
 
         self.interpreter.load_program(temp_program)
         return self.interpreter.execute_rest_of_program()

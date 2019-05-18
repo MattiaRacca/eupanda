@@ -5,7 +5,7 @@ import pickle
 import os
 
 from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
-from panda_pbd.srv import CloseGripperRequest, OpenGripperRequest
+from panda_pbd.srv import CloseGripperRequest, OpenGripperRequest, MoveFingersRequest, ApplyForceFingersRequest
 
 
 class PandaPrimitive(object):
@@ -49,6 +49,18 @@ class MoveToContact(PandaPrimitive):
         self.expected_container = MoveToContactGoal
 
 
+class MoveFingers(PandaPrimitive):
+    def __init__(self, description="A Move Fingers primitive"):
+        super(MoveFingers, self).__init__(description)
+        self.expected_container = MoveFingersRequest
+
+
+class ApplyForceFingers(PandaPrimitive):
+    def __init__(self, description="A Apply Force (with) Fingers primitive"):
+        super(ApplyForceFingers, self).__init__(description)
+        self.expected_container = ApplyForceFingersRequest
+
+
 class OpenGripper(PandaPrimitive):
     def __init__(self, description="A Open Gripper primitive"):
         super(OpenGripper, self).__init__(description)
@@ -66,17 +78,19 @@ class PandaProgram(object):
         self.name = name
         self.description = description
         self.primitives = []
-        self.arm_state_list = []
-        self.gripper_state_list = []
+        self.arm_state_list = []  # list of EE poses
+        self.gripper_state_list = []  # list of GripperState
 
         # dictionary of the effect of primitives on the [arm_state_list, gripper_state_list]
         # e.g., MoveToEE affects the arm pose but not the gripper
         self.effect_of_primitive = {
-            OpenGripper: [False, True],
-            CloseGripper: [False, True],
             UserSync: [False, False],
             MoveToContact: [True, False],
-            MoveToEE: [True, False]
+            MoveToEE: [True, False],
+            MoveFingers: [False, True],
+            ApplyForceFingers: [False, True],
+            OpenGripper: [False, True],
+            CloseGripper: [False, True]
         }
 
     def __str__(self):
@@ -96,7 +110,7 @@ class PandaProgram(object):
         return len(self.primitives)
 
     def get_nth_primitive(self, n):
-        if n < 0: # stupid Python with -n indexing
+        if n < 0:  # stupid python with -n indexing
             return None
         try:
             return self.primitives[n]
@@ -169,6 +183,12 @@ class PandaProgram(object):
 
     def dump_to_file(self, filepath='~', filename='program.pkl'):
         dump_program_to_file(self, filepath, filename)
+
+
+class GripperState(object):
+    def __init__(self, width, force):
+        self.width = width
+        self.force = force
 
 
 def dump_program_to_file(program, filepath='~', filename='program.pkl'):
