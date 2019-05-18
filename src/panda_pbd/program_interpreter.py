@@ -217,6 +217,8 @@ class PandaProgramInterpreter(object):
         return response.success
 
     # REVERT PRIMITIVE CALLBACK
+    # TODO: revert functions should check for get_nth_primitive_preconditions to not raise errors
+    # TODO: revert functions should check if a primitive is revertible
     def revert_user_sync(self, primitive_to_revert):
         rospy.loginfo('Trying to revert a user sync')
         # User Sync does not require robot motions to be reset

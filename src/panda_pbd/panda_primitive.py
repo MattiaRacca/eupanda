@@ -16,6 +16,7 @@ class PandaPrimitive(object):
         self.starting_arm_state_index = None  # pose of the robot at the beginning of this primitive
         self.starting_gripper_state_index = None  # gripper state at the beginning of this primitive
         self.parameters_with_effects_on_robot_state = None  # for the subclasses
+        self.revertible = True
 
     def __str__(self):
         return self.description + ' (' + str(self.starting_arm_state_index) + ', ' +\
@@ -101,8 +102,6 @@ class PandaProgram(object):
             CloseGripper: [False, True]
         }
 
-        self.revertible = True  # to be set to False by SOME primitives update
-
     def __str__(self):
         full_description = self.name + ': ' + self.description + '\n'
         for i, prim in enumerate(self.primitives):
@@ -131,7 +130,7 @@ class PandaProgram(object):
         try:
             prim = self.get_nth_primitive(n)
         except PandaProgramException:
-            return None, None  # TODO: fix accordingly
+            raise
 
         arm_state = self.arm_state_list[prim.starting_arm_state_index]
         gripper_state = self.gripper_state_list[prim.starting_gripper_state_index]
@@ -144,7 +143,7 @@ class PandaProgram(object):
             if n == self.get_program_length() - 1:
                 next_primitive = None
             else:
-                raise PandaProgramException(0)  # TODO: better handling here?
+                raise
 
         if next_primitive is None:  # N is the last primitive
             return -1, -1
@@ -170,12 +169,12 @@ class PandaProgram(object):
         try:
             to_be_deleted = self.get_nth_primitive(n)
         except PandaProgramException:
-            return False
+            raise
 
         try:
             arm_state_index, gripper_state_index = self.get_nth_primitive_postcondition_indexes(n)
         except PandaProgramException:
-            return False
+            raise
 
         effect = self.effect_of_primitive.get(to_be_deleted.__class__, [False, False])
 
@@ -197,10 +196,10 @@ class PandaProgram(object):
         try:
             primitive = self.get_nth_primitive(n)
         except PandaProgramException:
-            return False  # TODO: better handling?
+            raise
 
         if hasattr(primitive.expected_container, parameter_name) is False:
-            return False  # no parameter with name parameter_name  TODO: raise error instead?
+            raise PandaProgramException(1)
 
         try:
             primitive.parameters_with_effects_on_robot_state.index(parameter_name)
@@ -209,8 +208,13 @@ class PandaProgram(object):
             revertible = True
 
         setattr(primitive.parameter_container, parameter_name, parameter_value)
-        if not revertible:
-            self.revertible = False
+
+        try:
+            next_primitive = self.get_nth_primitive(n + 1)
+        except PandaProgramException:
+            pass
+        else:
+            next_primitive.revertible = revertible
 
         return True
 
@@ -218,11 +222,11 @@ class PandaProgram(object):
         try:
             primitive = self.get_nth_primitive(n)
         except PandaProgramException:
-            return False  # TODO: better handling?
+            raise
         try:
             arm_index, gripper_index = self.get_nth_primitive_postcondition_indexes(n)
         except PandaProgramException:
-            return False  # TODO: better handling?
+            raise
 
         effect = self.effect_of_primitive.get(primitive.__class__, [False, False])
 
@@ -231,7 +235,13 @@ class PandaProgram(object):
         if effect[1]:
             self.gripper_state_list[gripper_index] = new_post_conditions[1]
 
-        self.revertible = True  # TODO: probably better to move revertible inside each Primitive!
+        try:
+            next_primitive = self.get_nth_primitive(n + 1)
+        except PandaProgramException:
+            pass
+        else:
+            next_primitive.revertible = True
+
         return True
 
     def dump_to_file(self, filepath='~', filename='program.pkl'):
@@ -241,7 +251,8 @@ class PandaProgram(object):
 class PandaProgramException(Exception):
     def __init__(self, error_id):
         error_messages = {
-            0: 'Error: Primitive nth does not exist'
+            0: 'Error: Primitive nth does not exist',
+            1: 'Error: Wrong parameter name in the primitive update'
         }
         message = error_messages.get(error_id, 'Unknown Error')
         super(PandaProgramException, self).__init__(message)
