@@ -51,6 +51,7 @@ class PandaPBDInterface(object):
 
         self.freeze()
 
+        # TODO: what if I don't like the starting position?
         while self.last_pose is None or self.last_gripper_width is None:
             rospy.sleep(1.0)
 
@@ -209,7 +210,7 @@ class PandaPBDInterface(object):
         self.execute_primitive_now(close_gripper_primitive)
 
         # TODO: this is probably not enough to revert!
-        self.program.insert_primitive(close_gripper_primitive, [None, request.width])
+        self.program.insert_primitive(close_gripper_primitive, [None, self.last_gripper_width])
 
         if was_relaxed:
             self.relax()
@@ -238,6 +239,3 @@ class PandaPBDInterface(object):
 
         self.interpreter.load_program(temp_program)
         return self.interpreter.execute_rest_of_program()
-
-    def reset_program(self):
-        pass

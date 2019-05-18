@@ -121,6 +121,14 @@ class PandaProgram(object):
         else:
             return self.get_nth_primitive_preconditions(n + 1)
 
+    def get_nth_primitive_postcondition_indexes(self, n):
+        next_primitive = self.get_nth_primitive(n + 1)
+        if next_primitive is None:  # N is the last primitive
+            return -1, -1
+        else:
+            return self.get_nth_primitive(n + 1).starting_arm_state_index, \
+                   self.get_nth_primitive(n + 1).starting_gripper_state_index
+
     def insert_primitive(self, primitive, post_conditions):
         self.primitives.append(primitive)
 
@@ -142,7 +150,7 @@ class PandaProgram(object):
         except IndexError:
             return False
 
-        arm_state_index, gripper_state_index = self.get_nth_primitive_postconditions(n)
+        arm_state_index, gripper_state_index = self.get_nth_primitive_postcondition_indexes(n)
         effect = self.effect_of_primitive.get(to_be_deleted.__class__, [False, False])
 
         if effect[0]:
