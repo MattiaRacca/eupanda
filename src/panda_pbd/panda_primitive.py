@@ -132,6 +132,9 @@ class PandaProgram(object):
         except PandaProgramException:
             raise
 
+        if prim.starting_arm_state_index < 0 or prim.starting_gripper_state_index < 0:
+            raise PandaProgramException(0)
+
         arm_state = self.arm_state_list[prim.starting_arm_state_index]
         gripper_state = self.gripper_state_list[prim.starting_gripper_state_index]
         return arm_state, gripper_state

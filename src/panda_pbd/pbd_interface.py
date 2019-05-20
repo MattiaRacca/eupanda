@@ -47,15 +47,16 @@ class PandaPBDInterface(object):
             rospy.logerr('Cannot create Kinesthetic Teaching client!')
 
         try:
-            self.kinesthetic_client.wait_for_service(5.0)  # TODO: why 5 seconds?
+            self.kinesthetic_client.wait_for_service(5.0)
         except rospy.ROSException:
             rospy.logerr('Cannot contact the Primitive Interface Node!')
 
-        self.interpreter = interpreter.PandaProgramInterpreter()  # internal interpreter, for now actions!
+        self.interpreter = interpreter.PandaProgramInterpreter()  # internal interpreter, for execute_now_primitives
 
         self.freeze()
 
-        # TODO: what if I don't like the starting position?
+    def initialize_program(self):
+        # TODO: maybe enforce some check on the rest of the functions? to check for initialization
         while self.last_pose is None or self.last_gripper_width is None:
             rospy.sleep(1.0)
 

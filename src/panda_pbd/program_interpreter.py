@@ -79,10 +79,40 @@ class PandaProgramInterpreter(object):
         self.loaded_program = program
         self.next_primitive_index = 0
 
-    # TODO: implement this?
     def go_to_starting_state(self):
         if self.loaded_program is None:
             return False
+
+        try:
+            arm_state, gripper_state = self.loaded_program.get_nth_primitive_preconditions(0)
+        except pp.PandaProgramException:
+            rospy.logerr('Cannot find starting conditions: did you save the starting state to begin with?')
+            return False
+
+        # create new Goal for the primitive
+        goal = MoveToEEGoal()
+        goal.pose = arm_state
+        goal.position_speed = self.revert_default_position_speed
+        goal.rotation_speed = self.revert_default_rotation_speed
+
+        self.move_to_ee_client.send_goal(goal)
+        success_arm = self.move_to_ee_client.wait_for_result()
+        rospy.loginfo('Success? :' + str(success_arm))
+
+        if gripper_state.force > 0.0:
+            # need to revert to a apply_force_fingers
+            request = ApplyForceFingersRequest()
+            request.force = gripper_state.force
+            response = self.apply_force_fingers_client.call(request)
+        else:
+            # need to revert to a move_fingers
+            request = MoveFingersRequest()
+            request.width = gripper_state.width
+            response = self.move_fingers_client.call(request)
+
+        rospy.loginfo('Success? :' + str(response.success))
+
+        return success_arm and response.success
 
     def execute_one_step(self):
         if self.loaded_program is None:
