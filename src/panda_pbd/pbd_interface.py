@@ -122,10 +122,10 @@ class PandaPBDInterface(object):
         request = OpenGripperRequest()
         request.width = self.last_gripper_width
 
-        open_gripper_primitive = pp.OpenGripper()
-        open_gripper_primitive.set_parameter_container(request)
+        move_fingers_primitive = pp.OpenGripper()
+        move_fingers_primitive.set_parameter_container(request)
 
-        temp_program.insert_primitive(open_gripper_primitive, [None, pp.GripperState(self.last_gripper_width, 0.0)])
+        temp_program.insert_primitive(move_fingers_primitive, [None, pp.GripperState(self.last_gripper_width, 0.0)])
 
         self.interpreter.load_program(temp_program)
         return self.interpreter.execute_rest_of_program()

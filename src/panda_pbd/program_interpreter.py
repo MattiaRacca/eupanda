@@ -79,6 +79,7 @@ class PandaProgramInterpreter(object):
         self.loaded_program = program
         self.next_primitive_index = 0
 
+    # TODO: implement this?
     def go_to_starting_state(self):
         if self.loaded_program is None:
             return False
@@ -233,6 +234,7 @@ class PandaProgramInterpreter(object):
         return success
 
     def revert_move_to_contact(self, primitive_index):
+        # TODO: reverting something AFTER a move_to_contact might not be that easy...
         try:
             pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
         except pp.PandaProgramException:

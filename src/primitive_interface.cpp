@@ -7,8 +7,8 @@ PrimitiveInterface::PrimitiveInterface():
   kinesthetic_server_ = nh_.advertiseService("kinesthetic_teaching", &PrimitiveInterface::kinestheticTeachingCallback, this);
   open_gripper_server_ = nh_.advertiseService("open_gripper", &PrimitiveInterface::openGripperCallback, this);
   close_gripper_server_ = nh_.advertiseService("close_gripper", &PrimitiveInterface::closeGripperCallback, this);
-  move_fingers_server_ = nh_.advertiseService(",move_fingers", &PrimitiveInterface::moveFingersCallback, this);
-  apply_force_fingers_server_ = nh_.advertiseService("apply_force_fingers_gripper",
+  move_fingers_server_ = nh_.advertiseService("move_fingers", &PrimitiveInterface::moveFingersCallback, this);
+  apply_force_fingers_server_ = nh_.advertiseService("apply_force_fingers",
           &PrimitiveInterface::applyForceFingersCallback, this);
 
   // TODO: to be removed once we have the pbd implemented
@@ -186,6 +186,31 @@ bool PrimitiveInterface::adjustFTThreshold(double ft_multiplier)
   forcetorque_collision_client_.call(collision_srv);
 }
 
+bool PrimitiveInterface::adjustImpedanceControllerStiffness(geometry_msgs::PoseStamped desired_pose,
+        double transl_stiff = 200.0, double rotat_stiff = 10.0, double ft_mult = 1.0)
+{
+
+  auto ee_pose = desired_pose;
+  equilibrium_pose_publisher_.publish(ee_pose);
+  ros::Duration(0.5).sleep(); // to allow the controller to receive the new equilibrium pose
+
+  dynamic_reconfigure::Reconfigure stiffness_srv;
+
+  dynamic_reconfigure::DoubleParameter translational_stiff, rotational_stiff;
+  translational_stiff.name = "translational_stiffness";
+  rotational_stiff.name = "rotational_stiffness";
+
+  adjustFTThreshold(ft_mult);
+  translational_stiff.value = transl_stiff;
+  rotational_stiff.value = rotat_stiff;
+
+  stiffness_srv.request.config.doubles.push_back(translational_stiff);
+  stiffness_srv.request.config.doubles.push_back(rotational_stiff);
+
+  ROS_INFO("Changing %s parameters...", IMPEDANCE_CONTROLLER.c_str());
+  return cartesian_impedance_dynamic_reconfigure_client_.call(stiffness_srv);
+}
+
 bool PrimitiveInterface::adjustImpedanceControllerStiffness(double transl_stiff = 200.0,
     double rotat_stiff = 10.0,
     double ft_mult = 1.0)
@@ -355,7 +380,6 @@ bool PrimitiveInterface::closeGripperCallback(panda_pbd::CloseGripper::Request &
   franka_gripper::GraspGoal grasping_goal;
 
   // TODO: Do we want to enforce a force range?
-
   grasping_goal.width = std::max(0.0, std::min(req.width, 0.08));
   grasping_goal.force = req.force;
   grasping_goal.speed = 0.01; // in m/s
@@ -541,6 +565,8 @@ void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoa
     }
   }
 
+  // TODO: is this enough to give the EE_pose time to update?
+  ros::Duration(1.0).sleep();
   move_to_contact_result_.final_pose = getEEPose();
   move_to_contact_result_.contact_forces.x = last_wrench_.wrench.force.x;
   move_to_contact_result_.contact_forces.y = last_wrench_.wrench.force.y;
@@ -600,6 +626,9 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
 
   ros::Time starting_time = ros::Time::now();
 
+  // command to Impedance controller
+  geometry_msgs::PoseStamped desired_pose;
+
   while (!motion_done)
   {
     ros::Time current_time = ros::Time::now();
@@ -610,9 +639,6 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
     Eigen::Vector3d desired_position = current_position * (1 - tau) + target_position * tau;
     // Orientation
     Eigen::Quaterniond desired_orientation = current_orientation.slerp(tau, target_orientation);
-
-    // command to Impedance controller
-    geometry_msgs::PoseStamped desired_pose;
 
     desired_pose.pose.position.x = desired_position[0];
     desired_pose.pose.position.y = desired_position[1];
@@ -637,11 +663,14 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
     }
   }
 
-  move_to_ee_result_.final_pose = getEEPose();
+  // TODO: the waiting here is ugly...
+  ros::Duration(1.0).sleep();
+  move_to_ee_result_.final_pose = desired_pose;
   move_to_ee_server_->setSucceeded(move_to_ee_result_);
 
   ROS_WARN("Setting the robot to default impedance controller");
-  adjustImpedanceControllerStiffness();
+  // TODO: might cause high speed motions! check that we are not far from current pose?
+  adjustImpedanceControllerStiffness(desired_pose);
 }
 
 bool PrimitiveInterface::moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res)

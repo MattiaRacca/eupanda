@@ -110,6 +110,7 @@ private:
   geometry_msgs::PoseStamped getEEPose();
   bool adjustFTThreshold(double);
   bool adjustImpedanceControllerStiffness(double transl_stiff, double rotat_stiff, double ft_mult);
+  bool adjustImpedanceControllerStiffness(geometry_msgs::PoseStamped desired_pose, double transl_stiff, double rotat_stiff, double ft_mult);
   bool adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
 public:
   PrimitiveInterface();

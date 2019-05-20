@@ -20,7 +20,7 @@ class PandaPrimitive(object):
 
     def __str__(self):
         return self.description + ' (' + str(self.starting_arm_state_index) + ', ' +\
-               str(self.starting_gripper_state_index) + ')'
+               str(self.starting_gripper_state_index) + ', R: ' + str(self.revertible) + ')'
 
     def set_parameter_container(self, container):
         container_filled = isinstance(container, self.expected_container)
