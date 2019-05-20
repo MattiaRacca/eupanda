@@ -266,6 +266,9 @@ class GripperState(object):
         self.width = width
         self.force = force
 
+    def __str__(self):
+        return 'Gripper state. Width: {}, Force: {}'.format(self.width, self.force)
+
 
 def dump_program_to_file(program, filepath='~', filename='program.pkl'):
     with open(os.path.join(os.path.expanduser(filepath), filename), 'wb') as f:

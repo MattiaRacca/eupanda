@@ -461,6 +461,7 @@ void PrimitiveInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr 
 
 void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal)
 {
+  // TODO: this function needs to listen to the robot errors and stop accordingly!
   ROS_DEBUG("Received MoveToContact request");
   ROS_WARN("Setting the robot to be stiff (to execute trajectory)");
   adjustImpedanceControllerStiffness(1500.0, 300.0, 10.0);

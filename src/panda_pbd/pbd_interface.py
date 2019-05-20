@@ -60,9 +60,16 @@ class PandaPBDInterface(object):
         while self.last_pose is None or self.last_gripper_width is None:
             rospy.sleep(1.0)
 
+        was_relaxed = self.relaxed
+        if was_relaxed:
+            self.freeze()
+
         self.program.save_arm_state(self.last_pose)
         # TODO: assumption here, I am not grasping at the beginning...
         self.program.save_gripper_state(pp.GripperState(self.last_gripper_width, 0.0))
+
+        if was_relaxed:
+            self.relax()
 
     def gripper_state_callback(self, data):
         self.last_gripper_width = data.position[0] + data.position[1]
@@ -194,6 +201,7 @@ class PandaPBDInterface(object):
             self.freeze()
 
         user_sync_primitive = pp.UserSync()
+        user_sync_primitive.set_parameter_container(goal)
         self.program.insert_primitive(user_sync_primitive, [None, None])
 
         if was_relaxed:

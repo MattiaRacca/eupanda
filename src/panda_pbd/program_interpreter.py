@@ -67,7 +67,7 @@ class PandaProgramInterpreter(object):
             return 'No program loaded'
         full_description = self.loaded_program.__str__()
         try:
-            full_description += 'Currently ready to execute primitive {}:'.format(self.next_primitive_index) + \
+            full_description += 'Currently ready to execute primitive {}: '.format(self.next_primitive_index) + \
                             self.loaded_program.get_nth_primitive(self.next_primitive_index).__str__()
         except pp.PandaProgramException:
             full_description += 'Interpreter instruction pointer {} out of program range!'.\
@@ -111,6 +111,9 @@ class PandaProgramInterpreter(object):
             response = self.move_fingers_client.call(request)
 
         rospy.loginfo('Success? :' + str(response.success))
+
+        if success_arm and response.success:
+            self.next_primitive_index = 0
 
         return success_arm and response.success
 
@@ -200,6 +203,8 @@ class PandaProgramInterpreter(object):
                 primitive_counter -= 1
 
         if primitive_counter == 0:
+            # TODO: maybe this should be handled by revert_one_step?
+            self.go_to_starting_state()
             rospy.loginfo('Reverted to beginning of the program!')
             return True
         else:
@@ -219,6 +224,8 @@ class PandaProgramInterpreter(object):
         rospy.loginfo('Trying to execute a move to contact')
         self.move_to_contact_client.send_goal(primitive_to_execute.parameter_container)
         success = self.move_to_contact_client.wait_for_result()
+        result = self.move_to_contact_client.get_result()
+        rospy.loginfo(result.final_pose)
         rospy.loginfo('Success? :' + str(success))
         return success
 
