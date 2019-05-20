@@ -66,8 +66,12 @@ class PandaProgramInterpreter(object):
         if self.loaded_program is None:
             return 'No program loaded'
         full_description = self.loaded_program.__str__()
-        full_description += 'Currently ready to execute primitive {}:'.format(self.next_primitive_index) + \
+        try:
+            full_description += 'Currently ready to execute primitive {}:'.format(self.next_primitive_index) + \
                             self.loaded_program.get_nth_primitive(self.next_primitive_index).__str__()
+        except pp.PandaProgramException:
+            full_description += 'Interpreter instruction pointer {} out of program range!'.\
+                format(self.next_primitive_index)
 
         return full_description
 
@@ -84,9 +88,9 @@ class PandaProgramInterpreter(object):
             rospy.logwarn('no program loaded')
             return False
 
-        primitive_to_execute = self.loaded_program.get_nth_primitive(self.next_primitive_index)
-
-        if primitive_to_execute is None:
+        try:
+            primitive_to_execute = self.loaded_program.get_nth_primitive(self.next_primitive_index)
+        except pp.PandaProgramException:
             rospy.logwarn('Nothing left to execute OR Empty program OR wrong indexing')
             return False
 
@@ -112,10 +116,14 @@ class PandaProgramInterpreter(object):
             rospy.logwarn('no program loaded')
             return False
 
-        primitive_to_revert = self.loaded_program.get_nth_primitive(self.next_primitive_index - 1)
-
-        if primitive_to_revert is None:
+        try:
+            primitive_to_revert = self.loaded_program.get_nth_primitive(self.next_primitive_index - 1)
+        except pp.PandaProgramException:
             rospy.logwarn('Nothing left to revert OR Empty program OR wrong indexing')
+            return False
+
+        if not primitive_to_revert.revertible:
+            rospy.logwarn('Cannot revert this primitive! the previous primitives was not completely updated...')
             return False
 
         callback = self.revert_callback_switcher.get(primitive_to_revert.__class__, None)
@@ -217,8 +225,6 @@ class PandaProgramInterpreter(object):
         return response.success
 
     # REVERT PRIMITIVE CALLBACK
-    # TODO: revert functions should check for get_nth_primitive_preconditions to not raise errors
-    # TODO: revert functions should check if a primitive is revertible
     def revert_user_sync(self, primitive_to_revert):
         rospy.loginfo('Trying to revert a user sync')
         # User Sync does not require robot motions to be reset
@@ -227,7 +233,12 @@ class PandaProgramInterpreter(object):
         return success
 
     def revert_move_to_contact(self, primitive_index):
-        pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+        try:
+            pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+        except pp.PandaProgramException:
+            rospy.logerr('Cannot revert: this primitive does not exist')
+            return False
+
         rospy.loginfo('Trying to revert a move to contact')
 
         # create new Goal for the primitive
@@ -242,7 +253,12 @@ class PandaProgramInterpreter(object):
         return success
 
     def revert_move_to_ee(self, primitive_index):
-        pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+        try:
+            pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+        except pp.PandaProgramException:
+            rospy.logerr('Cannot revert: this primitive does not exist')
+            return False
+
         rospy.loginfo('Trying to revert a move to EE')
 
         # create new Goal for the primitive
@@ -257,7 +273,12 @@ class PandaProgramInterpreter(object):
         return success
 
     def revert_move_fingers(self, primitive_index):
-        pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+        try:
+            pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+        except pp.PandaProgramException:
+            rospy.logerr('Cannot revert: this primitive does not exist')
+            return False
+
         rospy.loginfo('Trying to revert a move fingers to {}, {}'.format(gripper_state.width, gripper_state.force))
 
         if gripper_state.force > 0.0:
@@ -275,7 +296,12 @@ class PandaProgramInterpreter(object):
         return response.success
 
     def revert_apply_force_fingers(self, primitive_index):
-        pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+        try:
+            pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+        except pp.PandaProgramException:
+            rospy.logerr('Cannot revert: this primitive does not exist')
+            return False
+
         rospy.loginfo('Trying to revert an apply force fingers to {}, {}'.format(gripper_state.width,
                                                                                  gripper_state.force))
 
@@ -295,7 +321,12 @@ class PandaProgramInterpreter(object):
 
     def revert_open_gripper(self, primitive_index):
         # LEGACY
-        pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+        try:
+            pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+        except pp.PandaProgramException:
+            rospy.logerr('Cannot revert: this primitive does not exist')
+            return False
+
         rospy.loginfo('Trying to revert a open gripper to {}'.format(gripper_state.width))
 
         request = OpenGripperRequest()
@@ -308,7 +339,12 @@ class PandaProgramInterpreter(object):
 
     def revert_close_gripper(self, primitive_index):
         # LEGACY
-        pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+        try:
+            pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+        except pp.PandaProgramException:
+            rospy.logerr('Cannot revert: this primitive does not exist')
+            return False
+
         rospy.loginfo('Trying to revert a close gripper to {}'.format(gripper_state.width))
 
         request = OpenGripperRequest()
