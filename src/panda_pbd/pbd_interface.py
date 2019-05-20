@@ -18,21 +18,24 @@ class PandaPBDInterface(object):
         self.last_gripper_width = None
         self.relaxed = False
 
-        # TODO: make the default values encoded in ros parameters
-        self.kinesthestic_ft_threshold = 5.0
+        self.default_parameters = {'kinesthestic_ft_threshold': 5.0,
+                                   'move_to_ee_default_position_speed': 0.05,
+                                   'move_to_ee_default_rotation_speed': 1.0,
+                                   'user_sync_default_force_threshold': 10.0,
+                                   'close_gripper_default_force': 5.0,
+                                   'apply_force_fingers_default_force': 5.0,
+                                   'move_to_contact_default_force_threshold': 5.0,
+                                   'move_to_contact_default_torque_threshold': 5.0,
+                                   'move_to_contact_default_position_speed': 0.05,
+                                   'move_to_contact_default_rotation_speed': 1.0}
 
-        self.move_to_ee_default_position_speed = .05  # m/s
-        self.move_to_ee_default_rotation_speed = 1.0  # rad/s
-
-        self.user_sync_default_force_threshold = 10.0  # N
-
-        self.close_gripper_default_force = 5.0  # N, TODO: to be removed at some point
-        self.apply_force_fingers_default_force = 5.0  # N
-
-        self.move_to_contact_default_force_threshold = 5.0  # N
-        self.move_to_contact_default_torque_threshold = 5.0  # Nm/rad
-        self.move_to_contact_default_position_speed = .05  # m/s
-        self.move_to_contact_default_rotation_speed = 1.0  # rad/s
+        for parameter_name in self.default_parameters.keys():
+            if not rospy.has_param('~' + parameter_name):
+                rospy.logwarn('Parameter ' + parameter_name + ' not found. Will use default parameter {}'.
+                              format(self.default_parameters[parameter_name]))
+            else:
+                self.default_parameters[parameter_name] = rospy.get_param('~' + parameter_name,
+                                                                          self.default_parameters[parameter_name])
 
         self.gripper_state_subscriber = rospy.Subscriber("/franka_gripper/joint_states", JointState,
                                                          self.gripper_state_callback)
@@ -65,7 +68,7 @@ class PandaPBDInterface(object):
 
     def relax(self):
         req = EnableTeachingRequest()
-        req.ft_threshold_multiplier = self.kinesthestic_ft_threshold
+        req.ft_threshold_multiplier = self.default_parameters['kinesthestic_ft_threshold']
         req.teaching = 1
 
         try:
@@ -82,7 +85,7 @@ class PandaPBDInterface(object):
 
     def relax_only_arm(self):
         req = EnableTeachingRequest()
-        req.ft_threshold_multiplier = self.kinesthestic_ft_threshold
+        req.ft_threshold_multiplier = self.default_parameters['kinesthestic_ft_threshold']
         req.teaching = 2
 
         try:
@@ -99,7 +102,7 @@ class PandaPBDInterface(object):
 
     def relax_only_wrist(self):
         req = EnableTeachingRequest()
-        req.ft_threshold_multiplier = self.kinesthestic_ft_threshold
+        req.ft_threshold_multiplier = self.default_parameters['kinesthestic_ft_threshold']
         req.teaching = 3
 
         try:
@@ -152,8 +155,8 @@ class PandaPBDInterface(object):
         # create new Goal for the primitive
         goal = MoveToEEGoal()
         goal.pose = self.last_pose
-        goal.position_speed = self.move_to_ee_default_position_speed
-        goal.rotation_speed = self.move_to_ee_default_rotation_speed
+        goal.position_speed = self.default_parameters['move_to_ee_default_position_speed']
+        goal.rotation_speed = self.default_parameters['move_to_ee_default_rotation_speed']
 
         # create the primitive to be added
         move_to_ee_primitive = pp.MoveToEE()
@@ -170,10 +173,10 @@ class PandaPBDInterface(object):
 
         goal = MoveToContactGoal()
         goal.pose = self.last_pose
-        goal.position_speed = self.move_to_contact_default_position_speed
-        goal.rotation_speed = self.move_to_contact_default_rotation_speed
-        goal.force_threshold = self.move_to_contact_default_force_threshold
-        goal.torque_threshold = self.move_to_contact_default_torque_threshold
+        goal.position_speed = self.default_parameters['move_to_contact_default_position_speed']
+        goal.rotation_speed = self.default_parameters['move_to_contact_default_rotation_speed']
+        goal.force_threshold = self.default_parameters['move_to_contact_default_force_threshold']
+        goal.torque_threshold = self.default_parameters['move_to_contact_default_torque_threshold']
 
         move_to_contact_primitive = pp.MoveToContact()
         move_to_contact_primitive.set_parameter_container(goal)
@@ -184,7 +187,7 @@ class PandaPBDInterface(object):
 
     def insert_user_sync(self):
         goal = UserSyncGoal()
-        goal.force_threshold = self.user_sync_default_force_threshold
+        goal.force_threshold = self.default_parameters['user_sync_default_force_threshold']
 
         was_relaxed = self.relaxed
         if was_relaxed:
@@ -198,7 +201,7 @@ class PandaPBDInterface(object):
 
     def insert_apply_force_fingers(self):
         request = ApplyForceFingersRequest()
-        request.force = self.apply_force_fingers_default_force
+        request.force = self.default_parameters['apply_force_fingers_default_force']
 
         was_relaxed = self.relaxed
         if was_relaxed:
@@ -237,7 +240,7 @@ class PandaPBDInterface(object):
     def insert_close_gripper(self):
         request = CloseGripperRequest()
         request.width = self.last_gripper_width
-        request.force = self.close_gripper_default_force
+        request.force = self.default_parameters['close_gripper_default_force']
 
         was_relaxed = self.relaxed
         if was_relaxed:
