@@ -23,6 +23,8 @@
 #include <franka_control/SetForceTorqueCollisionBehavior.h>
 #include <franka_gripper/GraspAction.h>
 #include <franka_gripper/MoveAction.h>
+#include <franka_msgs/FrankaState.h>
+#include <franka_msgs/Errors.h>
 
 // Custom services
 #include "panda_pbd/EnableTeaching.h"
@@ -55,6 +57,8 @@ private:
   panda_pbd::UserSyncFeedback user_sync_feedback_;
   panda_pbd::UserSyncResult user_sync_result_;
   tf::TransformListener pose_listener_;
+  franka_msgs::Errors current_errors_;
+  boost::atomic_bool error_state_;  // TODO: maybe the atomic is an overkill
 
   // ROS SERVICES ====== servers
   ros::ServiceServer kinesthetic_server_;
@@ -74,6 +78,8 @@ private:
 
   // ROS TOPICS ====== publishers
   ros::Publisher equilibrium_pose_publisher_;
+  // ROS TOPICS ====== publishers
+  ros::Subscriber franka_state_subscriber_;
 
   // TODO: current implementation of move_to_contact presents problem if we enable frames other than panda_link0
   // possible solution: save the goal pose in EE space?
@@ -104,6 +110,9 @@ private:
   void moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr &goal);
   void userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal);
   void moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal);
+
+  // Callbacks ====== subscribers
+  void frankaStateCallback(const franka_msgs::FrankaState::ConstPtr& msg);
 
   // Helper functions
   geometry_msgs::PoseStamped getPose(std::string origin, std::string destination);

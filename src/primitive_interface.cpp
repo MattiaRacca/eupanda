@@ -11,11 +11,16 @@ PrimitiveInterface::PrimitiveInterface():
   apply_force_fingers_server_ = nh_.advertiseService("apply_force_fingers",
           &PrimitiveInterface::applyForceFingersCallback, this);
 
-  // TODO: to be removed once we have the pbd implemented
+  // TODO: test_server to be removed once we have the pbd implemented
   move_to_ee_test_server_ = nh_.advertiseService("move_to_test", &PrimitiveInterface::moveToTestCallback, this);
 
   // Publishers
   equilibrium_pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/equilibrium_pose", 10);
+  // Subscribers
+  franka_state_subscriber_ = nh_.subscribe("/franka_state_controller/franka_states", 10,
+          &PrimitiveInterface::frankaStateCallback, this);
+
+  error_state_ = false;
 
   // Action servers
   move_to_contact_server_ = new actionlib::SimpleActionServer<panda_pbd::MoveToContactAction>(
@@ -189,9 +194,7 @@ bool PrimitiveInterface::adjustFTThreshold(double ft_multiplier)
 bool PrimitiveInterface::adjustImpedanceControllerStiffness(geometry_msgs::PoseStamped desired_pose,
         double transl_stiff = 200.0, double rotat_stiff = 10.0, double ft_mult = 1.0)
 {
-
-  auto ee_pose = desired_pose;
-  equilibrium_pose_publisher_.publish(ee_pose);
+  equilibrium_pose_publisher_.publish(desired_pose);
   ros::Duration(0.5).sleep(); // to allow the controller to receive the new equilibrium pose
 
   dynamic_reconfigure::Reconfigure stiffness_srv;
@@ -283,6 +286,12 @@ bool PrimitiveInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTea
 bool PrimitiveInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req,
     panda_pbd::EnableTeaching::Response &res)
 {
+  if(error_state_.load()){
+    ROS_ERROR("Robot is in an error state - please recover from error first!");
+    res.success = false;
+    return res.success;
+  }
+
   res.success = adjustImpedanceControllerStiffness(req, res);
   return res.success;
 }
@@ -297,6 +306,12 @@ bool PrimitiveInterface::moveFingersCallback(panda_pbd::MoveFingers::Request &re
   if (!gripper_move_client_->waitForServer(ros::Duration(1)))
   {
     ROS_ERROR("Cannot reach MoveAction Server");
+    res.success = false;
+    return res.success;
+  }
+
+  if(error_state_.load()){
+    ROS_ERROR("Robot is in an error state - please recover from error first!");
     res.success = false;
     return res.success;
   }
@@ -334,6 +349,12 @@ bool PrimitiveInterface::applyForceFingersCallback(panda_pbd::ApplyForceFingers:
     return res.success;
   }
 
+  if(error_state_.load()){
+    ROS_ERROR("Robot is in an error state - please recover from error first!");
+    res.success = false;
+    return res.success;
+  }
+
   gripper_grasp_client_->sendGoalAndWait(grasping_goal);
   if (gripper_grasp_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED)
   {
@@ -357,6 +378,12 @@ bool PrimitiveInterface::openGripperCallback(panda_pbd::OpenGripper::Request &re
   if (!gripper_move_client_->waitForServer(ros::Duration(1)))
   {
     ROS_ERROR("Cannot reach MoveAction Server");
+    res.success = false;
+    return res.success;
+  }
+
+  if(error_state_.load()){
+    ROS_ERROR("Robot is in an error state - please recover from error first!");
     res.success = false;
     return res.success;
   }
@@ -395,6 +422,12 @@ bool PrimitiveInterface::closeGripperCallback(panda_pbd::CloseGripper::Request &
     return res.success;
   }
 
+  if(error_state_.load()){
+    ROS_ERROR("Robot is in an error state - please recover from error first!");
+    res.success = false;
+    return res.success;
+  }
+
   gripper_grasp_client_->sendGoalAndWait(grasping_goal);
   if (gripper_grasp_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED)
   {
@@ -412,6 +445,7 @@ void PrimitiveInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr 
 {
   boost::shared_ptr<geometry_msgs::WrenchStamped const> last_external_wrench_ptr;
   user_sync_result_.unlock = false;
+  bool error_happened = false;
 
   adjustImpedanceControllerStiffness(1000.0, 200.0, 10.0);
   ROS_WARN("Setting the robot to be stiff (to be pushable)");
@@ -420,6 +454,13 @@ void PrimitiveInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr 
 
   while (!user_sync_result_.unlock)
   {
+    if(error_state_.load()){
+      ROS_ERROR("Robot is in an error state - please recover from error first!");
+      user_sync_result_.unlock = false;
+      error_happened = true;
+      break;
+    }
+
     /* The external wrench is in the EE frame
      * Positive value when the force is applied AGAINST the axis
      */
@@ -453,15 +494,17 @@ void PrimitiveInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr 
       }
     }
   }
-  user_sync_server_->setSucceeded(user_sync_result_);
-
+  if (error_happened){
+    user_sync_server_->setAborted(user_sync_result_);
+  } else {
+    user_sync_server_->setSucceeded(user_sync_result_);
+  }
   // setting stiffness back to default
   adjustImpedanceControllerStiffness();
 }
 
 void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal)
 {
-  // TODO: this function needs to listen to the robot errors and stop accordingly!
   ROS_DEBUG("Received MoveToContact request");
   ROS_WARN("Setting the robot to be stiff (to execute trajectory)");
   adjustImpedanceControllerStiffness(1500.0, 300.0, 10.0);
@@ -501,11 +544,18 @@ void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoa
                                   position_difference.norm() / position_speed_target);
   double progression = 0.0;
   bool in_contact = false;
+  bool error_happened = false;
 
   ros::Time starting_time = ros::Time::now();
 
   while (!in_contact)
   {
+    if(error_state_.load()){
+      ROS_ERROR("Robot went in an error state while executing move_to_contact - please recover from error first!");
+      error_happened = true;
+      break;
+    }
+
     ros::Time current_time = ros::Time::now();
     progression = (current_time - starting_time).toSec();
 
@@ -565,7 +615,6 @@ void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoa
       }
     }
   }
-
   // TODO: is this enough to give the EE_pose time to update?
   ros::Duration(1.0).sleep();
   move_to_contact_result_.final_pose = getEEPose();
@@ -576,7 +625,12 @@ void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoa
   move_to_contact_result_.contact_torques.y = last_wrench_.wrench.torque.y;
   move_to_contact_result_.contact_torques.z = last_wrench_.wrench.torque.z;
 
-  move_to_contact_server_->setSucceeded(move_to_contact_result_);
+
+  if (error_happened){
+    move_to_contact_server_->setAborted(move_to_contact_result_);
+  } else {
+    move_to_contact_server_->setSucceeded(move_to_contact_result_);
+  }
 
   ROS_WARN("Setting the robot to default Impedance controller");
   adjustImpedanceControllerStiffness();
@@ -624,6 +678,7 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
                                  position_difference.norm() / position_speed_target);
   double progression = 0.0;
   bool motion_done = false;
+  bool error_happened = false;
 
   ros::Time starting_time = ros::Time::now();
 
@@ -632,6 +687,12 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
 
   while (!motion_done)
   {
+    if(error_state_.load()){
+      ROS_ERROR("Robot went in an error state while executing move_to_ee - please recover from error first!");
+      error_happened = true;
+      break;
+    }
+
     ros::Time current_time = ros::Time::now();
     progression = (current_time - starting_time).toSec();
 
@@ -667,7 +728,12 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
   // TODO: the waiting here is ugly...
   ros::Duration(1.0).sleep();
   move_to_ee_result_.final_pose = desired_pose;
-  move_to_ee_server_->setSucceeded(move_to_ee_result_);
+
+  if (error_happened){
+    move_to_ee_server_->setAborted(move_to_ee_result_);
+  } else {
+    move_to_ee_server_->setSucceeded(move_to_ee_result_);
+  }
 
   ROS_WARN("Setting the robot to default impedance controller");
   // TODO: might cause high speed motions! check that we are not far from current pose?
@@ -760,4 +826,16 @@ bool PrimitiveInterface::moveToTestCallback(std_srvs::SetBoolRequest &req, std_s
     ROS_INFO("Moved until force threshold was passed (contact reached?)");
   }
   return res.success;
+}
+
+void PrimitiveInterface::frankaStateCallback(const franka_msgs::FrankaState::ConstPtr& msg){
+  bool temp = msg->current_errors.joint_position_limits_violation || msg->current_errors.cartesian_position_limits_violation ||
+              msg->current_errors.self_collision_avoidance_violation || msg->current_errors.joint_velocity_violation ||
+              msg->current_errors.cartesian_velocity_violation || msg->current_errors.force_control_safety_violation ||
+              msg->current_errors.joint_reflex || msg->current_errors.cartesian_reflex;
+  if (temp){
+    ROS_INFO("I heard %d", temp);
+  }
+  error_state_.store(temp);
+
 }
