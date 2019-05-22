@@ -82,7 +82,7 @@ class PandaPBDInterface(object):
         try:
             res = self.kinesthetic_client(req)
         except rospy.ServiceException:
-            rospy.logerr('Cannot create Kinesthetic Teaching client!')
+            rospy.logerr('Cannot contact Kinesthetic Teaching client!')
             self.last_pose = None
             return False
 
@@ -99,7 +99,7 @@ class PandaPBDInterface(object):
         try:
             res = self.kinesthetic_client(req)
         except rospy.ServiceException:
-            rospy.logerr('Cannot create Kinesthetic Teaching client!')
+            rospy.logerr('Cannot contact Kinesthetic Teaching client!')
             self.last_pose = None
             return False
 
@@ -116,7 +116,7 @@ class PandaPBDInterface(object):
         try:
             res = self.kinesthetic_client(req)
         except rospy.ServiceException:
-            rospy.logerr('Cannot create Kinesthetic Teaching client!')
+            rospy.logerr('Cannot contact Kinesthetic Teaching client!')
             self.last_pose = None
             return False
 
@@ -145,7 +145,7 @@ class PandaPBDInterface(object):
         try:
             res = self.kinesthetic_client(req)
         except rospy.ServiceException:
-            rospy.logerr('Cannot create Kinesthetic Teaching client!')
+            rospy.logerr('Cannot contact Kinesthetic Teaching client!')
             self.last_pose = None
             return False
 

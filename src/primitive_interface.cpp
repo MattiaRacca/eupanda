@@ -338,7 +338,7 @@ bool PrimitiveInterface::applyForceFingersCallback(panda_pbd::ApplyForceFingers:
   grasping_goal.force = req.force;
   grasping_goal.speed = 0.03; // in m/s
 
-  // TODO: this epsilon value will never trigger an error basically (neglectful handling)
+  // this epsilon value will never trigger an error basically (neglectful handling)
   grasping_goal.epsilon.inner = 0.5;
   grasping_goal.epsilon.outer = 0.5;
 
@@ -411,7 +411,7 @@ bool PrimitiveInterface::closeGripperCallback(panda_pbd::CloseGripper::Request &
   grasping_goal.force = req.force;
   grasping_goal.speed = 0.01; // in m/s
 
-  // TODO: this epsilon value will never trigger an error basically (neglectful handling)
+  // this epsilon value will never trigger an error basically (neglectful handling)
   grasping_goal.epsilon.inner = 0.5;
   grasping_goal.epsilon.outer = 0.5;
 
@@ -577,6 +577,7 @@ void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoa
     desired_pose.pose.orientation.z = desired_orientation.z();
     desired_pose.pose.orientation.w = desired_orientation.w();
 
+    // TODO: enforce working space here? and throw error if contact not reached within?
     equilibrium_pose_publisher_.publish(desired_pose);
 
     auto last_external_wrench_ptr = ros::topic::waitForMessage<geometry_msgs::WrenchStamped>(
@@ -716,7 +717,6 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
     if (tau < 1.0)
     {
       move_to_ee_feedback_.progression = tau;
-      // TODO: way to make this throttled?
       move_to_ee_server_->publishFeedback(move_to_ee_feedback_);
     }
     else
@@ -829,13 +829,5 @@ bool PrimitiveInterface::moveToTestCallback(std_srvs::SetBoolRequest &req, std_s
 }
 
 void PrimitiveInterface::frankaStateCallback(const franka_msgs::FrankaState::ConstPtr& msg){
-  bool temp = msg->current_errors.joint_position_limits_violation || msg->current_errors.cartesian_position_limits_violation ||
-              msg->current_errors.self_collision_avoidance_violation || msg->current_errors.joint_velocity_violation ||
-              msg->current_errors.cartesian_velocity_violation || msg->current_errors.force_control_safety_violation ||
-              msg->current_errors.joint_reflex || msg->current_errors.cartesian_reflex;
-  if (temp){
-    ROS_INFO("I heard %d", temp);
-  }
-  error_state_.store(temp);
-
+  error_state_.store(msg->robot_mode == 4);
 }
