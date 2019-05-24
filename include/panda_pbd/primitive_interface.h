@@ -57,14 +57,12 @@ private:
   panda_pbd::UserSyncFeedback user_sync_feedback_;
   panda_pbd::UserSyncResult user_sync_result_;
   tf::TransformListener pose_listener_;
-  franka_msgs::Errors current_errors_;
   boost::atomic_bool error_state_;  // TODO: maybe the atomic is an overkill
 
   // ROS SERVICES ====== servers
   ros::ServiceServer kinesthetic_server_;
   ros::ServiceServer move_fingers_server_;
   ros::ServiceServer apply_force_fingers_server_;
-  ros::ServiceServer move_to_ee_test_server_;
 
   // LEGACY SERVICES
   ros::ServiceServer open_gripper_server_;
@@ -98,9 +96,9 @@ private:
 
   // Callbacks ====== services
   bool kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
-  bool moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res);
   bool moveFingersCallback(panda_pbd::MoveFingers::Request &req, panda_pbd::MoveFingers::Response &res);
-  bool applyForceFingersCallback(panda_pbd::ApplyForceFingers::Request &req, panda_pbd::ApplyForceFingers::Response &res);
+  bool applyForceFingersCallback(panda_pbd::ApplyForceFingers::Request &req,
+          panda_pbd::ApplyForceFingers::Response &res);
 
   // Callbacks ====== LEGACY services
   bool closeGripperCallback(panda_pbd::CloseGripper::Request &req, panda_pbd::CloseGripper::Response &res);
@@ -119,8 +117,10 @@ private:
   geometry_msgs::PoseStamped getEEPose();
   bool adjustFTThreshold(double);
   bool adjustImpedanceControllerStiffness(double transl_stiff, double rotat_stiff, double ft_mult);
-  bool adjustImpedanceControllerStiffness(geometry_msgs::PoseStamped desired_pose, double transl_stiff, double rotat_stiff, double ft_mult);
-  bool adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req, panda_pbd::EnableTeaching::Response &res);
+  bool adjustImpedanceControllerStiffness(geometry_msgs::PoseStamped desired_pose, double transl_stiff,
+          double rotat_stiff, double ft_mult);
+  bool adjustImpedanceControllerStiffness(panda_pbd::EnableTeaching::Request &req,
+          panda_pbd::EnableTeaching::Response &res);
 public:
   PrimitiveInterface();
 };

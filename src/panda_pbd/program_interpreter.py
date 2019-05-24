@@ -217,23 +217,33 @@ class PandaProgramInterpreter(object):
         rospy.loginfo('Trying to execute a user sync')
         self.user_sync_client.send_goal(primitive_to_execute.parameter_container)
         success = self.user_sync_client.wait_for_result()
-        rospy.loginfo('Success? :' + str(success))
+        rospy.loginfo('Success? ' + str(success))
         return success
 
     def execute_move_to_contact(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a move to contact')
         self.move_to_contact_client.send_goal(primitive_to_execute.parameter_container)
-        success = self.move_to_contact_client.wait_for_result()
+        success = self.move_to_contact_client.wait_for_result(rospy.Duration(60))  # TODO: questionable choice?
+
         result = self.move_to_contact_client.get_result()
-        rospy.loginfo(result.final_pose)
-        rospy.loginfo('Success? :' + str(success))
+        state = self.move_to_contact_client.get_state()
+
+        if state == actionlib.GoalStatus.ABORTED or not success:
+            success = False
+
+        rospy.loginfo('Success? ' + str(success))
         return success
 
     def execute_move_to_ee(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a move to EE')
         self.move_to_ee_client.send_goal(primitive_to_execute.parameter_container)
-        success = self.move_to_ee_client.wait_for_result()
-        rospy.loginfo('Success? :' + str(success))
+        success = self.move_to_ee_client.wait_for_result(rospy.Duration(60))
+        state = self.move_to_contact_client.get_state()
+
+        if state == actionlib.GoalStatus.ABORTED or not success:
+            success = False
+
+        rospy.loginfo('Success? ' + str(success))
         return success
 
     def execute_move_fingers(self, primitive_to_execute):
@@ -288,7 +298,12 @@ class PandaProgramInterpreter(object):
 
         self.move_to_ee_client.send_goal(goal)
         success = self.move_to_ee_client.wait_for_result()
-        rospy.loginfo('Success? :' + str(success))
+        state = self.move_to_contact_client.get_state()
+
+        if state == actionlib.GoalStatus.ABORTED or not success:
+            success = False
+
+        rospy.loginfo('Success? ' + str(success))
         return success
 
     def revert_move_to_ee(self, primitive_index):
@@ -308,7 +323,12 @@ class PandaProgramInterpreter(object):
 
         self.move_to_ee_client.send_goal(goal)
         success = self.move_to_ee_client.wait_for_result()
-        rospy.loginfo('Success? :' + str(success))
+        state = self.move_to_contact_client.get_state()
+
+        if state == actionlib.GoalStatus.ABORTED or not success:
+            success = False
+
+        rospy.loginfo('Success? ' + str(success))
         return success
 
     def revert_move_fingers(self, primitive_index):

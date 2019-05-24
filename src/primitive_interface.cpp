@@ -11,9 +11,6 @@ PrimitiveInterface::PrimitiveInterface():
   apply_force_fingers_server_ = nh_.advertiseService("apply_force_fingers",
           &PrimitiveInterface::applyForceFingersCallback, this);
 
-  // TODO: test_server to be removed once we have the pbd implemented
-  move_to_ee_test_server_ = nh_.advertiseService("move_to_test", &PrimitiveInterface::moveToTestCallback, this);
-
   // Publishers
   equilibrium_pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/equilibrium_pose", 10);
   // Subscribers
@@ -725,107 +722,17 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
     }
   }
 
-  // TODO: the waiting here is ugly...
-  ros::Duration(1.0).sleep();
   move_to_ee_result_.final_pose = desired_pose;
 
+  ROS_WARN("Setting the robot to default impedance controller");
   if (error_happened){
     move_to_ee_server_->setAborted(move_to_ee_result_);
+    adjustImpedanceControllerStiffness(desired_pose);
   } else {
+    // TODO: if distance is large, it might cause harsh robot movements
     move_to_ee_server_->setSucceeded(move_to_ee_result_);
+    adjustImpedanceControllerStiffness();
   }
-
-  ROS_WARN("Setting the robot to default impedance controller");
-  // TODO: might cause high speed motions! check that we are not far from current pose?
-  adjustImpedanceControllerStiffness(desired_pose);
-}
-
-bool PrimitiveInterface::moveToTestCallback(std_srvs::SetBoolRequest &req, std_srvs::SetBoolResponse &res)
-{
-  ROS_INFO("Test for the move to EE... going in teaching mode");
-
-  // TODO: error handling
-  auto result = adjustImpedanceControllerStiffness(0.0, 0.0, 5.0);
-  ROS_INFO("Move the robot to new position");
-  ros::Duration(20).sleep();
-  geometry_msgs::PoseStamped goal_pose = getEEPose();
-  ROS_INFO("Move it back now!");
-  ros::Duration(20).sleep();
-
-  geometry_msgs::PoseStamped current_pose = getEEPose();
-  ROS_WARN("Move to test: current position [%f, %f, %f] and orientation [%f %f %f %f]",
-           current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z,
-           current_pose.pose.orientation.x, current_pose.pose.orientation.y, current_pose.pose.orientation.z, current_pose.pose.orientation.w);
-
-  // req.data ? move to EE : move to contact
-  if (req.data)
-  {
-    if (!move_to_ee_client_->waitForServer(ros::Duration(1)))
-    {
-      ROS_ERROR("Cannot reach MoveToEE Server");
-      res.success = false;
-      return res.success;
-    }
-
-    panda_pbd::MoveToEEGoal goal;
-    goal.pose = goal_pose;
-    goal.position_speed = 0.04; // in m/s
-    goal.rotation_speed = 1.0; // in rad/s
-
-    ROS_INFO("Sending the goal, to myself...");
-
-    move_to_ee_client_->sendGoalAndWait(goal);
-    if (move_to_ee_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED)
-    {
-      ROS_ERROR("Error in the moveToEE action: %s", move_to_ee_client_->getState().getText().c_str());
-      res.success = false;
-    }
-    else
-    {
-      res.success = true;
-    }
-
-    current_pose = getEEPose();
-    ROS_WARN("Move to EE test: current position [%f, %f, %f] and orientation [%f %f %f %f]",
-             current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z,
-             current_pose.pose.orientation.x, current_pose.pose.orientation.y, current_pose.pose.orientation.z, current_pose.pose.orientation.w);
-
-    ROS_WARN("Was trying to move here: goal position [%f, %f, %f] and orientation [%f %f %f %f]",
-             goal_pose.pose.position.x, goal_pose.pose.position.y, goal_pose.pose.position.z,
-             goal_pose.pose.orientation.x, goal_pose.pose.orientation.y, goal_pose.pose.orientation.z, goal_pose.pose.orientation.w);
-  }
-  else
-  {
-    if (!move_to_contact_client_->waitForServer(ros::Duration(1)))
-    {
-      ROS_ERROR("Cannot reach MoveToContact Server");
-      res.success = false;
-      return res.success;
-    }
-
-    panda_pbd::MoveToContactGoal goal;
-    goal.pose = goal_pose;
-    goal.position_speed = 0.04; // in m/s
-    goal.rotation_speed = 1.0; // in rad/s
-    goal.force_threshold = 5.0; // in N
-    goal.torque_threshold = 5.0; // Nm/rad
-
-    ROS_INFO("Sending the goal, to myself...");
-
-    move_to_contact_client_->sendGoalAndWait(goal);
-    if (move_to_contact_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED)
-    {
-      ROS_ERROR("Error in the moveToContact action: %s", move_to_contact_client_->getState().getText().c_str());
-      res.success = false;
-    }
-    else
-    {
-      res.success = true;
-    }
-
-    ROS_INFO("Moved until force threshold was passed (contact reached?)");
-  }
-  return res.success;
 }
 
 void PrimitiveInterface::frankaStateCallback(const franka_msgs::FrankaState::ConstPtr& msg){

@@ -244,6 +244,7 @@ class PandaPBDInterface(object):
             self.relax()
 
     def insert_close_gripper(self):
+        # LEGACY - USE APPLY FORCE WITH FINGERS INSTEAD
         request = CloseGripperRequest()
         request.width = self.last_gripper_width
         request.force = self.default_parameters['close_gripper_default_force']
@@ -264,6 +265,7 @@ class PandaPBDInterface(object):
             self.relax()
 
     def insert_open_gripper(self):
+        # LEGACY - USE MOVE FINGERS INSTEAD
         request = OpenGripperRequest()
         request.width = self.last_gripper_width
 
