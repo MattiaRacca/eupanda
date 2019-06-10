@@ -12,6 +12,8 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   message_generation
   actionlib_msgs
+  franka_gripper
+  franka_control
 )
 
 find_package(Eigen3 REQUIRED)
@@ -42,7 +44,7 @@ generate_messages(
 catkin_package(
     INCLUDE_DIRS include
 #  LIBRARIES panda_pbd
-    CATKIN_DEPENDS roscpp rospy std_msgs message_runtime geometry_msgs actionlib_msgs
+    CATKIN_DEPENDS roscpp rospy std_msgs message_runtime geometry_msgs actionlib_msgs 
 #    DEPENDS
 )
 
