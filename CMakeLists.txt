@@ -13,7 +13,6 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
   actionlib_msgs
   franka_gripper
-  franka_control
 )
 
 find_package(Eigen3 REQUIRED)
