@@ -1,7 +1,7 @@
 #!/usr/bin/python
 from panda_gui import panda_widgets as pw
 import sys
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSlider, QApplication
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSlider, QApplication, QPushButton
 from PyQt5.QtCore import Qt
 
 class TestGui(QWidget):
@@ -10,25 +10,28 @@ class TestGui(QWidget):
         self.initUI()
 
     def initUI(self):
-        self.setGeometry(0, 0, 200, 120)
-        self.setWindowTitle('Primitive widget')
+        self.setGeometry(0, 0, 1200, 300)
+        self.setWindowTitle('EUP widget')
 
-        vbox = QVBoxLayout()
-        vbox.addStretch(1)
+        self.vbox = QVBoxLayout()
+        self.vbox.addStretch(1)
 
-        sld = QSlider(Qt.Horizontal)
-        sld.setFocusPolicy(Qt.NoFocus)
-        sld.setRange(1, 100)
-        sld.setMaximumSize(100,120)
-        sld.setValue(50)
+        self.button = QPushButton("add primitive")
+        self.sld = QSlider(Qt.Horizontal)
+        self.sld.setFocusPolicy(Qt.NoFocus)
+        self.sld.setRange(1, 100)
+        self.sld.setMaximumSize(100,120)
+        self.sld.setValue(50)
 
-        self.wid = pw.PandaPrimitiveWidget("Very long text Very long text")
-        sld.valueChanged[int].connect(self.wid.set_state)
+        self.panda_program = pw.PandaProgramWidget(self)
+        # self.sld.valueChanged[int].connect(self.wid.set_state)
+        self.button.clicked.connect(self.panda_program.addPrimitive)
 
-        vbox.addWidget(self.wid)
-        vbox.addWidget(sld)
+        self.vbox.addWidget(self.panda_program)
+        self.vbox.addWidget(self.sld)
+        self.vbox.addWidget(self.button)
 
-        self.setLayout(vbox)
+        self.setLayout(self.vbox)
         self.show()
 
 if __name__ == '__main__':
