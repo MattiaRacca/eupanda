@@ -10,7 +10,6 @@ class TestGui(QWidget):
         self.initUI()
 
     def initUI(self):
-        self.setGeometry(0, 0, 1200, 300)
         self.setWindowTitle('EUP widget')
 
         self.vbox = QVBoxLayout()
@@ -23,9 +22,9 @@ class TestGui(QWidget):
         self.sld.setMaximumSize(100,120)
         self.sld.setValue(50)
 
-        self.panda_program = pw.PandaProgramScrollerWidget(self)
+        self.panda_program = pw.PandaProgramWidget(self)
         # self.sld.valueChanged[int].connect(self.wid.set_state)
-        self.button.clicked.connect(self.panda_program.program_widget.addPrimitive)
+        self.button.clicked.connect(self.panda_program.addPrimitive)
 
         self.vbox.addWidget(self.panda_program)
         self.vbox.addWidget(self.sld)
@@ -38,4 +37,5 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
     ex = TestGui()
+    ex.showMaximized()
     sys.exit(app.exec_())
