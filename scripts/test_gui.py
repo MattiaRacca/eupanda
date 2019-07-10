@@ -13,7 +13,7 @@ class TestGui(QWidget):
         self.setWindowTitle('EUP widget')
 
         self.vbox = QVBoxLayout()
-        self.vbox.addStretch(1)
+        self.vbox.setAlignment(Qt.AlignTop)
 
         self.button = QPushButton("add primitive")
         self.sld = QSlider(Qt.Horizontal)
@@ -23,12 +23,12 @@ class TestGui(QWidget):
         self.sld.setValue(50)
 
         self.panda_program = pw.PandaProgramWidget(self)
-        # self.sld.valueChanged[int].connect(self.wid.set_state)
         self.button.clicked.connect(self.panda_program.addPrimitive)
 
         self.vbox.addWidget(self.panda_program)
         self.vbox.addWidget(self.sld)
         self.vbox.addWidget(self.button)
+        self.vbox.addWidget(pw.PandaPrimitiveWidget(self))
 
         self.setLayout(self.vbox)
         self.show()

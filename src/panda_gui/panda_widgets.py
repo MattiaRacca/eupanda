@@ -7,9 +7,16 @@ from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QLayout, QGridLayout, QHBox
 from PyQt5.QtCore import Qt, QObject, pyqtSignal, QSize
 from PyQt5.QtGui import QColor, QPalette, QPixmap
 
+# Size of Primitive Widget
 PRIMITIVE_WIDTH = 100
 PRIMITIVE_HEIGHT = 120
-MIN_PRIMITIVE = 10
+
+# Spacings for the Program Widget
+H_SPACING = 20
+V_SPACING = 20
+
+# Minimum number of visible primitives on screen
+MIN_PRIMITIVE = 5
 
 class PandaProgramWidget(QWidget):
     def __init__(self, parent):
@@ -19,48 +26,48 @@ class PandaProgramWidget(QWidget):
     def initUI(self):
         self.program_size = 0
 
-        self.layout = QHBoxLayout(self)
-        self.scroll_area = QScrollArea(self)
+        # Create layout for program widget and add Scroll Area
+        self.widget_layout = QHBoxLayout(self)
+        self.program_scroll_area = QScrollArea(self)
+        self.widget_layout.addWidget(self.program_scroll_area)
+        self.program_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.program_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        self.layout.addWidget(self.scroll_area)
-        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
+        # Set the policy to expand on horizontal axis
         sizePolicy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
         self.setSizePolicy(sizePolicy)
 
-        self.program_frame = QWidget(self)
-        self.program_frame_layout = QHBoxLayout(self.program_frame)
-        self.program_frame_layout.setAlignment(Qt.AlignLeft)
+        # Create container and layout for PandaPrimitiveWidgets
+        self.program_widget = QWidget(self)
+        self.program_widget_layout = QHBoxLayout(self.program_widget)
+        self.program_widget_layout.setAlignment(Qt.AlignLeft)
+        self.program_widget.setSizePolicy(sizePolicy)
 
-        self.program_frame.setSizePolicy(sizePolicy)
-
+        # Color the Program area
         palette = QPalette()
         palette.setColor(QPalette.Background, QColor("gainsboro"))
         self.setAutoFillBackground(True)
         self.setPalette(palette)
-        
-        self.program_frame.setAutoFillBackground(True)
-        self.program_frame.setPalette(palette)
+        self.program_widget.setAutoFillBackground(True)
+        self.program_widget.setPalette(palette)
 
-        self.scroll_area.setWidget(self.program_frame)
-        self.program_frame.setGeometry(0, 0, (20+PRIMITIVE_WIDTH)*self.program_size, 50 + PRIMITIVE_HEIGHT)
-        # self.program_frame.resize(self.sizeHint())
-        self.scroll_area.resize(self.sizeHint())
+        # Add scrolling area
+        self.program_scroll_area.setWidget(self.program_widget)
+        self.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*self.program_size, V_SPACING + PRIMITIVE_HEIGHT)
+        # self.program_scroll_area.resize(self.sizeHint())
 
     def addPrimitive(self):
         primitive_widget = PandaPrimitiveWidget(self)
         self.program_size += 1
-        if self.program_frame.width() < (20+PRIMITIVE_WIDTH)*self.program_size:
-            self.program_frame.setGeometry(0, 0, (20+PRIMITIVE_WIDTH)*self.program_size, 50 + PRIMITIVE_HEIGHT)
-        self.program_frame_layout.addWidget(primitive_widget)
-        print(self.program_frame.sizeHint())
+        if self.program_widget.width() < (H_SPACING + PRIMITIVE_WIDTH)*self.program_size:
+            self.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*self.program_size, V_SPACING + PRIMITIVE_HEIGHT)
+        self.program_widget_layout.addWidget(primitive_widget)
 
     def sizeHint(self):
-        return QSize((20+PRIMITIVE_WIDTH)*MIN_PRIMITIVE, 80 + PRIMITIVE_HEIGHT)
+        return QSize((H_SPACING+PRIMITIVE_WIDTH)*MIN_PRIMITIVE, V_SPACING*3 + PRIMITIVE_HEIGHT)
 
     def minimumSizeHint(self):
-        return QSize((20+PRIMITIVE_WIDTH)*MIN_PRIMITIVE, 80 + PRIMITIVE_HEIGHT)
+        return QSize((H_SPACING+PRIMITIVE_WIDTH)*MIN_PRIMITIVE, V_SPACING*3 + PRIMITIVE_HEIGHT)
 
 
 class PandaPrimitiveWidget(QFrame):
@@ -69,36 +76,28 @@ class PandaPrimitiveWidget(QFrame):
         self.initUI()
 
     def initUI(self):
+        # Create widget subcomponents
         self.primitive_label = QLabel()
         self.status_label = QLabel(self.tr("Status Y"))
         self.primitive_image = QPixmap(80, 80)
         self.primitive_image.fill(Qt.black)
         self.primitive_label.setPixmap(self.primitive_image)
 
-        grid = QGridLayout()
-        grid.setSpacing(10)
-
-        grid.addWidget(self.primitive_label, 0, 0)
-        grid.addWidget(self.status_label, 1, 0)
-
+        # Add vertical layout
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.primitive_label)
+        layout.addWidget(self.status_label)
         sizePolicy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.setSizePolicy(sizePolicy)
 
-        self.setLayout(grid)
+        # Beautify QFrame and Color
         self.setFrameShape(QFrame.Panel)
         self.setFrameShadow(QFrame.Raised)
         self.setLineWidth(2)
-
         palette = QPalette()
-        palette.setColor(QPalette.Background, QColor("mintcream"))
+        palette.setColor(QPalette.Background, QColor("ghostwhite"))
         self.setAutoFillBackground(True)
         self.setPalette(palette)
 
     def sizeHint(self):
-        return QSize(PRIMITIVE_WIDTH,PRIMITIVE_HEIGHT)
-
-    def set_state(self, value):
-        if value < 50:
-            self.status_label.setText("low")
-        else:
-            self.status_label.setText("high")
+        return QSize(PRIMITIVE_WIDTH, PRIMITIVE_HEIGHT)
