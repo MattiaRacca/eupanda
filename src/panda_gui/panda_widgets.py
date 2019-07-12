@@ -1,11 +1,12 @@
 #!/usr/bin/python
 from __future__ import division
 
-from panda_eup import panda_primitive as pp
-
 from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QScrollArea, QSizePolicy
 from PyQt5.QtCore import Qt, QObject, pyqtSignal, QSize
 from PyQt5.QtGui import QColor, QPalette, QPixmap
+
+import os
+import rospkg
 
 # Size of Primitive Widget
 PRIMITIVE_WIDTH = 100
@@ -24,6 +25,7 @@ class PandaProgramWidget(QWidget):
         self.initUI()
 
     def initUI(self):
+        self.program = None
         self.program_size = 0
 
         # Create layout for program widget and add Scroll Area
@@ -56,12 +58,18 @@ class PandaProgramWidget(QWidget):
         self.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*self.program_size, V_SPACING + PRIMITIVE_HEIGHT)
         # self.program_scroll_area.resize(self.sizeHint())
 
-    def addPrimitive(self):
-        primitive_widget = PandaPrimitiveWidget(self)
-        self.program_size += 1
-        if self.program_widget.width() < (H_SPACING + PRIMITIVE_WIDTH)*self.program_size:
-            self.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*self.program_size, V_SPACING + PRIMITIVE_HEIGHT)
+    def addPrimitiveWidget(self, primitive):
+        primitive_widget = PandaPrimitiveWidget(self.program_widget, primitive) # TODO: before it was self only
         self.program_widget_layout.addWidget(primitive_widget)
+
+        program_length = self.program.get_program_length()
+        if self.program_widget.width() < (H_SPACING + PRIMITIVE_WIDTH)*program_length:
+            self.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*program_length, V_SPACING + PRIMITIVE_HEIGHT)
+
+    def loadPandaProgram(self, program):
+        self.program = program
+        for primitive in self.program.primitives:
+            self.addPrimitiveWidget(primitive)
 
     def sizeHint(self):
         return QSize((H_SPACING+PRIMITIVE_WIDTH)*MIN_PRIMITIVE, V_SPACING*3 + PRIMITIVE_HEIGHT)
@@ -71,17 +79,20 @@ class PandaProgramWidget(QWidget):
 
 
 class PandaPrimitiveWidget(QFrame):
-    def __init__(self, parent):
+    def __init__(self, parent, panda_primitive):
         super(PandaPrimitiveWidget, self).__init__(parent)
-        self.initUI()
+        self.initUI(panda_primitive)
 
-    def initUI(self):
+    def initUI(self, panda_primitive):
         # Create widget subcomponents
         self.primitive_label = QLabel()
         self.status_label = QLabel(self.tr("Status Y"))
-        self.primitive_image = QPixmap(80, 80)
-        self.primitive_image.fill(Qt.black)
-        self.primitive_label.setPixmap(self.primitive_image)
+
+        primitive_icon_path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources',
+                                           panda_primitive.__class__.__name__ + '.png')
+
+        primitive_image = QPixmap(primitive_icon_path)
+        self.primitive_label.setPixmap(primitive_image)
 
         # Add vertical layout
         layout = QVBoxLayout(self)
