@@ -14,7 +14,7 @@ from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest, OpenGrip
 class PandaProgramInterpreter(object):
     def __init__(self):
         self.loaded_program = None
-        self.next_primitive_index = 0  # next primitive to be executed!
+        self.next_primitive_index = -1  # next primitive to be executed!
 
         self.revert_default_position_speed = .04  # m/s
         self.revert_default_rotation_speed = 1.0  # rad/s
@@ -77,7 +77,9 @@ class PandaProgramInterpreter(object):
 
     def load_program(self, program):
         self.loaded_program = program
-        self.next_primitive_index = 0
+        self.next_primitive_index = -1
+        for primitive in program.primitives:
+            primitive.status = pp.PandaPrimitiveStatus.NEUTRAL
 
     def go_to_starting_state(self):
         if self.loaded_program is None:
@@ -114,6 +116,8 @@ class PandaProgramInterpreter(object):
 
         if success_arm and response.success:
             self.next_primitive_index = 0
+            for primitive in self.loaded_program.primitives:
+                primitive.status = pp.PandaPrimitiveStatus.NEUTRAL
 
         return success_arm and response.success
 
@@ -134,13 +138,16 @@ class PandaProgramInterpreter(object):
             rospy.logwarn("I don't know how to execute this primitive; did you define the callback?")
             return False
 
+        primitive_to_execute.status = pp.PandaPrimitiveStatus.EXECUTING
         result = callback(primitive_to_execute)
 
         if result:
             rospy.loginfo('Executed primitive ' + primitive_to_execute.__str__())
+            primitive_to_execute.status = pp.PandaPrimitiveStatus.EXECUTED
             self.next_primitive_index += 1
         else:
             rospy.logerr('Error while executing ' + primitive_to_execute.__str__())
+            primitive_to_execute.status = pp.PandaPrimitiveStatus.ERROR
             return False
 
         return True
@@ -158,6 +165,7 @@ class PandaProgramInterpreter(object):
 
         if not primitive_to_revert.revertible:
             rospy.logwarn('Cannot revert this primitive! the previous primitives was not completely updated...')
+            primitive_to_revert.status = pp.PandaPrimitiveStatus.ERROR
             return False
 
         callback = self.revert_callback_switcher.get(primitive_to_revert.__class__, None)
@@ -166,13 +174,16 @@ class PandaProgramInterpreter(object):
             rospy.logwarn("I don't know how to revert this primitive; did you define the revert callback?")
             return False
 
+        primitive_to_revert.status = pp.PandaPrimitiveStatus.REVERTING
         result = callback(self.next_primitive_index - 1)
 
         if result:
             rospy.loginfo('Reverted primitive ' + primitive_to_revert.__str__())
+            primitive_to_revert.status = pp.PandaPrimitiveStatus.NEUTRAL
             self.next_primitive_index -= 1
         else:
             rospy.logerr('Error while reverting ' + primitive_to_revert.__str__())
+            primitive_to_revert.status = pp.PandaPrimitiveStatus.ERROR
             return False
 
         return True

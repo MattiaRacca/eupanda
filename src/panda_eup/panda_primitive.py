@@ -3,9 +3,18 @@
 from __future__ import division
 import pickle
 import os
+from enum import Enum
 
 from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
 from panda_pbd.srv import CloseGripperRequest, OpenGripperRequest, MoveFingersRequest, ApplyForceFingersRequest
+
+
+class PandaPrimitiveStatus(Enum):
+    NEUTRAL = 0
+    EXECUTED = 1
+    EXECUTING = 2
+    REVERTING = 3
+    ERROR = 4
 
 
 class PandaPrimitive(object):
@@ -17,6 +26,7 @@ class PandaPrimitive(object):
         self.starting_gripper_state_index = None  # gripper state at the beginning of this primitive
         self.parameters_with_effects_on_robot_state = None  # for the subclasses
         self.revertible = True
+        self.status = PandaPrimitiveStatus.NEUTRAL
 
     def __str__(self):
         return self.description + ' (' + str(self.starting_arm_state_index) + ', ' +\
