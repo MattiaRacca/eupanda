@@ -5,41 +5,38 @@ import actionlib
 import panda_primitive as pp
 
 from panda_pbd.msg import UserSyncAction, MoveToContactAction, MoveToEEAction
-from panda_pbd.srv import MoveFingers, ApplyForceFingers, OpenGripper, CloseGripper
+from panda_pbd.srv import MoveFingers, ApplyForceFingers
 
 from panda_pbd.msg import MoveToEEGoal
-from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest, OpenGripperRequest
+from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest
+from panda_pbd.srv import MoveFingersResponse, ApplyForceFingersResponse
 
 
 class PandaProgramInterpreter(object):
-    def __init__(self):
+    def __init__(self, robot_less_debug=False):
         self.loaded_program = None
         self.next_primitive_index = -1  # next primitive to be executed!
+        self.robot_less_debug = robot_less_debug
 
         self.revert_default_position_speed = .04  # m/s
         self.revert_default_rotation_speed = 1.0  # rad/s
 
         # TO THE PRIMITIVE_INTERFACE
-        self.move_to_ee_client = actionlib.SimpleActionClient('/primitive_interface_node/move_to_ee_server',
-                                                              MoveToEEAction)
-        self.move_to_contact_client = actionlib.SimpleActionClient('primitive_interface_node/move_to_contact_server',
-                                                                   MoveToContactAction)
-        self.user_sync_client = actionlib.SimpleActionClient('/primitive_interface_node/user_sync_server',
-                                                             UserSyncAction)
+        if not self.robot_less_debug:
+            self.move_to_ee_client = actionlib.SimpleActionClient('/primitive_interface_node/move_to_ee_server',
+                                                                  MoveToEEAction)
+            self.move_to_contact_client = actionlib.SimpleActionClient('primitive_interface_node/move_to_contact_server',
+                                                                       MoveToContactAction)
+            self.user_sync_client = actionlib.SimpleActionClient('/primitive_interface_node/user_sync_server',
+                                                                 UserSyncAction)
 
-        self.move_to_ee_client.wait_for_server()
-        self.move_to_contact_client.wait_for_server()
-        self.user_sync_client.wait_for_server()
+            self.move_to_ee_client.wait_for_server()
+            self.move_to_contact_client.wait_for_server()
+            self.user_sync_client.wait_for_server()
 
-        self.move_fingers_client = rospy.ServiceProxy('/primitive_interface_node/move_fingers', MoveFingers)
-        self.apply_force_fingers_client = rospy.ServiceProxy('/primitive_interface_node/apply_force_fingers',
-                                                             ApplyForceFingers)
-
-        self.open_gripper_client = rospy.ServiceProxy('/primitive_interface_node/open_gripper', OpenGripper)
-        self.close_gripper_client = rospy.ServiceProxy('/primitive_interface_node/close_gripper', CloseGripper)
-
-        self.open_gripper_client.wait_for_service()
-        self.close_gripper_client.wait_for_service()
+            self.move_fingers_client = rospy.ServiceProxy('/primitive_interface_node/move_fingers', MoveFingers)
+            self.apply_force_fingers_client = rospy.ServiceProxy('/primitive_interface_node/apply_force_fingers',
+                                                                 ApplyForceFingers)
 
         # PRIMITIVE CALLBACKS (FORWARD AND REVERSE)
         self.callback_switcher = {
@@ -47,9 +44,7 @@ class PandaProgramInterpreter(object):
             pp.MoveToContact: self.execute_move_to_contact,
             pp.MoveToEE: self.execute_move_to_ee,
             pp.MoveFingers: self.execute_move_fingers,
-            pp.ApplyForceFingers: self.execute_apply_force_fingers,
-            pp.OpenGripper: self.execute_open_gripper,
-            pp.CloseGripper: self.execute_close_gripper
+            pp.ApplyForceFingers: self.execute_apply_force_fingers
         }
 
         self.revert_callback_switcher = {
@@ -57,9 +52,7 @@ class PandaProgramInterpreter(object):
             pp.MoveToContact: self.revert_move_to_contact,
             pp.MoveToEE: self.revert_move_to_ee,
             pp.MoveFingers: self.revert_move_fingers,
-            pp.ApplyForceFingers: self.revert_apply_force_fingers,
-            pp.OpenGripper: self.revert_open_gripper,
-            pp.CloseGripper: self.revert_close_gripper
+            pp.ApplyForceFingers: self.revert_apply_force_fingers
         }
 
     def __str__(self):
@@ -97,22 +90,27 @@ class PandaProgramInterpreter(object):
         goal.position_speed = self.revert_default_position_speed
         goal.rotation_speed = self.revert_default_rotation_speed
 
-        self.move_to_ee_client.send_goal(goal)
-        success_arm = self.move_to_ee_client.wait_for_result()
-        rospy.loginfo('Success? :' + str(success_arm))
+        if not self.robot_less_debug:
+            self.move_to_ee_client.send_goal(goal)
+            success_arm = self.move_to_ee_client.wait_for_result()
+            rospy.loginfo('Success? :' + str(success_arm))
 
-        if gripper_state.force > 0.0:
-            # need to revert to a apply_force_fingers
-            request = ApplyForceFingersRequest()
-            request.force = gripper_state.force
-            response = self.apply_force_fingers_client.call(request)
+            if gripper_state.force > 0.0:
+                # need to revert to a apply_force_fingers
+                request = ApplyForceFingersRequest()
+                request.force = gripper_state.force
+                response = self.apply_force_fingers_client.call(request)
+            else:
+                # need to revert to a move_fingers
+                request = MoveFingersRequest()
+                request.width = gripper_state.width
+                response = self.move_fingers_client.call(request)
+
+            rospy.loginfo('Success? :' + str(response.success))
         else:
-            # need to revert to a move_fingers
-            request = MoveFingersRequest()
-            request.width = gripper_state.width
-            response = self.move_fingers_client.call(request)
-
-        rospy.loginfo('Success? :' + str(response.success))
+            response = MoveFingersResponse()
+            response.success = True
+            success_arm = True
 
         if success_arm and response.success:
             self.next_primitive_index = 0
@@ -236,61 +234,66 @@ class PandaProgramInterpreter(object):
     # PRIMITIVE CALLBACKS
     def execute_user_sync(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a user sync')
-        self.user_sync_client.send_goal(primitive_to_execute.parameter_container)
-        success = self.user_sync_client.wait_for_result()
+        if not self.robot_less_debug:
+            self.user_sync_client.send_goal(primitive_to_execute.parameter_container)
+            success = self.user_sync_client.wait_for_result()
+        else:
+            success = True
+
         rospy.loginfo('Success? ' + str(success))
         return success
 
     def execute_move_to_contact(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a move to contact')
-        self.move_to_contact_client.send_goal(primitive_to_execute.parameter_container)
-        success = self.move_to_contact_client.wait_for_result(rospy.Duration(60))  # TODO: questionable choice?
 
-        # TODO:
-        result = self.move_to_contact_client.get_result()
-        state = self.move_to_contact_client.get_state()
+        if not self.robot_less_debug:
+            self.move_to_contact_client.send_goal(primitive_to_execute.parameter_container)
+            success = self.move_to_contact_client.wait_for_result(rospy.Duration(60))  # TODO: questionable choice?
 
-        if state == actionlib.GoalStatus.ABORTED or not success:
-            success = False
+            state = self.move_to_contact_client.get_state()
+
+            if state == actionlib.GoalStatus.ABORTED or not success:
+                success = False
+        else:
+            success = True
 
         rospy.loginfo('Success? ' + str(success))
         return success
 
     def execute_move_to_ee(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a move to EE')
-        self.move_to_ee_client.send_goal(primitive_to_execute.parameter_container)
-        success = self.move_to_ee_client.wait_for_result(rospy.Duration(60))
-        state = self.move_to_contact_client.get_state()
 
-        if state == actionlib.GoalStatus.ABORTED or not success:
-            success = False
+        if not self.robot_less_debug:
+            self.move_to_ee_client.send_goal(primitive_to_execute.parameter_container)
+            success = self.move_to_ee_client.wait_for_result(rospy.Duration(60))
+
+            state = self.move_to_contact_client.get_state()
+
+            if state == actionlib.GoalStatus.ABORTED or not success:
+                success = False
+        else:
+            success = True
 
         rospy.loginfo('Success? ' + str(success))
         return success
 
     def execute_move_fingers(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a move fingers')
-        response = self.move_fingers_client.call(primitive_to_execute.parameter_container)
+        if not self.robot_less_debug:
+            response = self.move_fingers_client.call(primitive_to_execute.parameter_container)
+        else:
+            response = MoveFingersResponse()
+            response.success = True
         rospy.loginfo('Success? :' + str(response.success))
         return response.success
 
     def execute_apply_force_fingers(self, primitive_to_execute):
         rospy.loginfo('Trying to execute an apply force with fingers')
-        response = self.apply_force_fingers_client.call(primitive_to_execute.parameter_container)
-        rospy.loginfo('Success? :' + str(response.success))
-        return response.success
-
-    def execute_open_gripper(self, primitive_to_execute):
-        # LEGACY
-        rospy.loginfo('Trying to execute a open gripper')
-        response = self.open_gripper_client.call(primitive_to_execute.parameter_container)
-        rospy.loginfo('Success? :' + str(response.success))
-        return response.success
-
-    def execute_close_gripper(self, primitive_to_execute):
-        # LEGACY
-        rospy.loginfo('Trying to execute a close gripper')
-        response = self.close_gripper_client.call(primitive_to_execute.parameter_container)
+        if not self.robot_less_debug:
+            response = self.apply_force_fingers_client.call(primitive_to_execute.parameter_container)
+        else:
+            response = ApplyForceFingersResponse()
+            response.success = True
         rospy.loginfo('Success? :' + str(response.success))
         return response.success
 
@@ -318,12 +321,15 @@ class PandaProgramInterpreter(object):
         goal.position_speed = self.revert_default_position_speed
         goal.rotation_speed = self.revert_default_rotation_speed
 
-        self.move_to_ee_client.send_goal(goal)
-        success = self.move_to_ee_client.wait_for_result()
-        state = self.move_to_contact_client.get_state()
+        if not self.robot_less_debug:
+            self.move_to_ee_client.send_goal(goal)
+            success = self.move_to_ee_client.wait_for_result()
+            state = self.move_to_contact_client.get_state()
 
-        if state == actionlib.GoalStatus.ABORTED or not success:
-            success = False
+            if state == actionlib.GoalStatus.ABORTED or not success:
+                success = False
+        else:
+            success = True
 
         rospy.loginfo('Success? ' + str(success))
         return success
@@ -343,12 +349,15 @@ class PandaProgramInterpreter(object):
         goal.position_speed = self.revert_default_position_speed
         goal.rotation_speed = self.revert_default_rotation_speed
 
-        self.move_to_ee_client.send_goal(goal)
-        success = self.move_to_ee_client.wait_for_result()
-        state = self.move_to_contact_client.get_state()
+        if not self.robot_less_debug:
+            self.move_to_ee_client.send_goal(goal)
+            success = self.move_to_ee_client.wait_for_result()
+            state = self.move_to_contact_client.get_state()
 
-        if state == actionlib.GoalStatus.ABORTED or not success:
-            success = False
+            if state == actionlib.GoalStatus.ABORTED or not success:
+                success = False
+        else:
+            success = True
 
         rospy.loginfo('Success? ' + str(success))
         return success
@@ -362,16 +371,20 @@ class PandaProgramInterpreter(object):
 
         rospy.loginfo('Trying to revert a move fingers to {}, {}'.format(gripper_state.width, gripper_state.force))
 
-        if gripper_state.force > 0.0:
-            # need to revert to a apply_force_fingers
-            request = ApplyForceFingersRequest()
-            request.force = gripper_state.force
-            response = self.apply_force_fingers_client.call(request)
+        if not self.robot_less_debug:
+            if gripper_state.force > 0.0:
+                # need to revert to a apply_force_fingers
+                request = ApplyForceFingersRequest()
+                request.force = gripper_state.force
+                response = self.apply_force_fingers_client.call(request)
+            else:
+                # need to revert to a move_fingers
+                request = MoveFingersRequest()
+                request.width = gripper_state.width
+                response = self.move_fingers_client.call(request)
         else:
-            # need to revert to a move_fingers
-            request = MoveFingersRequest()
-            request.width = gripper_state.width
-            response = self.move_fingers_client.call(request)
+            response = MoveFingersResponse()
+            response.success = True
 
         rospy.loginfo('Success? :' + str(response.success))
         return response.success
@@ -386,51 +399,20 @@ class PandaProgramInterpreter(object):
         rospy.loginfo('Trying to revert an apply force fingers to {}, {}'.format(gripper_state.width,
                                                                                  gripper_state.force))
 
-        if gripper_state.force > 0.0:
-            # need to revert to a apply_force_fingers
-            request = ApplyForceFingersRequest()
-            request.force = gripper_state.force
-            response = self.apply_force_fingers_client.call(request)
+        if not self.robot_less_debug:
+            if gripper_state.force > 0.0:
+                # need to revert to a apply_force_fingers
+                request = ApplyForceFingersRequest()
+                request.force = gripper_state.force
+                response = self.apply_force_fingers_client.call(request)
+            else:
+                # need to revert to a move_fingers
+                request = MoveFingersRequest()
+                request.width = gripper_state.width
+                response = self.move_fingers_client.call(request)
         else:
-            # need to revert to a move_fingers
-            request = MoveFingersRequest()
-            request.width = gripper_state.width
-            response = self.move_fingers_client.call(request)
+            response = MoveFingersResponse()
+            response.success = True
 
-        rospy.loginfo('Success? :' + str(response.success))
-        return response.success
-
-    def revert_open_gripper(self, primitive_index):
-        # LEGACY
-        try:
-            pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
-        except pp.PandaProgramException:
-            rospy.logerr('Cannot revert: this primitive does not exist')
-            return False
-
-        rospy.loginfo('Trying to revert a open gripper to {}'.format(gripper_state.width))
-
-        request = OpenGripperRequest()
-        request.width = gripper_state.width
-
-        # TODO: this is probably not enough to revert!
-        response = self.open_gripper_client.call(request)
-        rospy.loginfo('Success? :' + str(response.success))
-        return response.success
-
-    def revert_close_gripper(self, primitive_index):
-        # LEGACY
-        try:
-            pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
-        except pp.PandaProgramException:
-            rospy.logerr('Cannot revert: this primitive does not exist')
-            return False
-
-        rospy.loginfo('Trying to revert a close gripper to {}'.format(gripper_state.width))
-
-        request = OpenGripperRequest()
-        request.width = gripper_state.width
-
-        response = self.open_gripper_client.call(request)
         rospy.loginfo('Success? :' + str(response.success))
         return response.success
