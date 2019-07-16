@@ -188,8 +188,13 @@ class PandaProgramInterpreter(object):
 
         return True
 
-    def execute_rest_of_program(self):
+    def execute_rest_of_program(self, one_shot_execution=False):
         partial_success = True
+        if one_shot_execution:
+            # TODO: this is just for the execute now (like relax_fingers and execute_primitive_now).
+            #   Find a better way to do this
+            to_be_restored_index = self.next_primitive_index
+            self.next_primitive_index = 0
         primitive_counter = self.next_primitive_index
 
         while partial_success:
@@ -197,12 +202,17 @@ class PandaProgramInterpreter(object):
             if partial_success:
                 primitive_counter += 1
 
+        result = False
         if primitive_counter == self.loaded_program.get_program_length():
             rospy.loginfo('Executed rest of the program!')
-            return True
+            result = True
         else:
             rospy.logerr('Something went south. Program now at step {}'.format(self.next_primitive_index))
-            return False
+            result = False
+        if one_shot_execution:
+            self.next_primitive_index = to_be_restored_index
+
+        return result
 
     def revert_to_beginning_of_program(self):
         partial_success = True
@@ -236,6 +246,7 @@ class PandaProgramInterpreter(object):
         self.move_to_contact_client.send_goal(primitive_to_execute.parameter_container)
         success = self.move_to_contact_client.wait_for_result(rospy.Duration(60))  # TODO: questionable choice?
 
+        # TODO:
         result = self.move_to_contact_client.get_result()
         state = self.move_to_contact_client.get_state()
 

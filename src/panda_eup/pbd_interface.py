@@ -136,7 +136,7 @@ class PandaPBDInterface(object):
         temp_program.insert_primitive(move_fingers_primitive, [None, pp.GripperState(self.last_gripper_width, 0.0)])
 
         self.interpreter.load_program(temp_program)
-        return self.interpreter.execute_rest_of_program()
+        return self.interpreter.execute_rest_of_program(one_shot_execution=True)
 
     def freeze(self):
         req = EnableTeachingRequest()
@@ -288,4 +288,4 @@ class PandaPBDInterface(object):
         temp_program.insert_primitive(copy.deepcopy(primitive), [None, None])
 
         self.interpreter.load_program(temp_program)
-        return self.interpreter.execute_rest_of_program()
+        return self.interpreter.execute_rest_of_program(one_shot_execution=True)
