@@ -56,6 +56,8 @@ include_directories(
 add_executable(primitive_interface src/primitive_interface_node.cpp
         src/primitive_interface.cpp)
 
+add_dependencies(primitive_interface ${PROJECT_NAME}_generate_messages_cpp)
+
 target_link_libraries(primitive_interface
    ${catkin_LIBRARIES}
 )
