@@ -1,0 +1,3 @@
+<launch>
+    <node name="panda_gui" pkg="rqt_gui" type="rqt_gui" args="-s panda_gui" output="screen"/>
+</launch>

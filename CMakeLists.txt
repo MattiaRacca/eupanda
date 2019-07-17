@@ -64,3 +64,7 @@ target_link_libraries(primitive_interface
 
 install(PROGRAMS scripts/pbd_interface_node.py
         DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+
+install(FILES plugin.xml
+        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+        )

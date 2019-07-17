@@ -3,11 +3,19 @@ from __future__ import division
 
 from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, QSizePolicy,\
     QGroupBox
-from PyQt5.QtCore import Qt, QObject, pyqtSignal, QSize
+from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool
 from PyQt5.QtGui import QColor, QPalette, QPixmap
+from qt_gui.plugin import Plugin
+
+from panda_eup.program_interpreter import PandaProgramInterpreter
+import panda_eup.panda_primitive as pp
 
 import os
 import rospkg
+import rospy
+import threading
+import traceback
+import sys
 
 # Size of Primitive Widget
 PRIMITIVE_WIDTH = 100
@@ -31,13 +39,32 @@ executed_primitive_palette = QPalette()
 executed_primitive_palette.setColor(QPalette.Background, QColor("cornflowerblue"))
 
 
+class EUPPlugin(Plugin):
+    def __init__(self, context):
+        super(EUPPlugin, self).__init__(context)
+        self._widget = EUPWidget()
+
+        # Add widget to the user interface
+        context.add_widget(self._widget)
+
+
 class EUPWidget(QWidget):
     programUpdate = pyqtSignal(int)
+    goToStartStateSignal = pyqtSignal()
+    executeOneStepSignal = pyqtSignal()
+    revertOneStepSignal = pyqtSignal()
 
-    def __init__(self, interpreter, title='EUP Widget', *args, **kwargs):
-        super(EUPWidget, self).__init__(*args, **kwargs)
-        self.interpreter = interpreter
+    def __init__(self, title='EUP Widget'):
+        super(EUPWidget, self).__init__()
         self.setWindowTitle(title)
+
+        self.interpreter = PandaProgramInterpreter(robot_less_debug=True)
+        program_path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
+        self.interpreter.load_program(pp.load_program_from_file(program_path, 'program.pkl'))
+
+        self.threadpool = QThreadPool()
+        print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
+
         self.initUI()
 
     def initUI(self):
@@ -87,13 +114,33 @@ class EUPWidget(QWidget):
         self.programUpdate.emit(self.interpreter.next_primitive_index)
 
     def go_to_starting_state(self):
-        self.interpreter.go_to_starting_state()
+        worker = Worker(self.interpreter.go_to_starting_state) # Any other args, kwargs are passed to the run function
+        worker.signals.result.connect(self.reapWorkerResults)
+        worker.signals.finished.connect(self.announceWorkerDeath)
+        # worker.signals.progress.connect(self.progress_fn)
+
+        self.threadpool.start(worker)
         self.programUpdate.emit(self.interpreter.next_primitive_index)
     def execute_one_step(self):
-        self.interpreter.execute_one_step()
+        worker = Worker(self.interpreter.execute_one_step)
+        worker.signals.result.connect(self.reapWorkerResults)
+        worker.signals.finished.connect(self.announceWorkerDeath)
+
+        self.threadpool.start(worker)
         self.programUpdate.emit(self.interpreter.next_primitive_index)
     def revert_one_step(self):
-        self.interpreter.revert_one_step()
+        worker = Worker(self.interpreter.revert_one_step)
+        worker.signals.result.connect(self.reapWorkerResults)
+        worker.signals.finished.connect(self.announceWorkerDeath)
+
+        self.threadpool.start(worker)
+        self.programUpdate.emit(self.interpreter.next_primitive_index)
+
+    def reapWorkerResults(self, result):
+        rospy.loginfo("WORKER result: " + str(result))
+
+    def announceWorkerDeath(self):
+        rospy.loginfo("RIP WORKER!")
         self.programUpdate.emit(self.interpreter.next_primitive_index)
 
     def sizeHint(self):
@@ -226,3 +273,74 @@ class QExpandingPushButton(QPushButton):
 
     def sizeHint(self):
         return QSize(10, PRIMITIVE_HEIGHT/2)
+
+
+class WorkerSignals(QObject):
+    '''
+    WorkerSignals
+
+    Defines the signals available from a running worker thread.
+
+    Supported signals are:
+
+    finished
+        No data
+
+    error
+        `tuple` (exctype, value, traceback.format_exc() )
+
+    result
+        `object` data returned from processing, anything
+
+    progress
+        `int` indicating % progress
+
+    '''
+    finished = pyqtSignal()
+    error = pyqtSignal(tuple)
+    result = pyqtSignal(object)
+    progress = pyqtSignal(int)
+
+class Worker(QRunnable):
+    '''
+    Worker thread
+
+    Inherits from QRunnable to handler worker thread setup, signals and wrap-up.
+
+    :param callback: The function callback to run on this worker thread. Supplied args and
+                     kwargs will be passed through to the runner.
+    :type callback: function
+    :param args: Arguments to pass to the callback function
+    :param kwargs: Keywords to pass to the callback function
+
+    '''
+    def __init__(self, fn, *args, **kwargs):
+        super(Worker, self).__init__()
+
+        # Store constructor arguments (re-used for processing)
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = WorkerSignals()
+
+        # Add the callback to our kwargs
+        # self.kwargs['progress_callback'] = self.signals.progress
+
+    @pyqtSlot()
+    def run(self):
+        '''
+        Initialise the runner function with passed args, kwargs.
+        '''
+
+        # Retrieve args/kwargs here; and fire processing using them
+        try:
+            result = self.fn(*self.args, **self.kwargs)
+        except:
+            traceback.print_exc()
+            exctype, value = sys.exc_info()[:2]
+            self.signals.error.emit((exctype, value, traceback.format_exc()))
+        else:
+            self.signals.result.emit(result)  # Return the result of the processing
+        finally:
+            self.signals.finished.emit()  # Done
+

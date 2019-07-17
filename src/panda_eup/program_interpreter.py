@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import rospy
+import threading
 import actionlib
 import panda_primitive as pp
 
@@ -273,6 +274,8 @@ class PandaProgramInterpreter(object):
                 success = False
         else:
             success = True
+            rospy.sleep(rospy.Duration(10))
+            rospy.loginfo('INSIDE? \t' + str(threading.current_thread().ident))
 
         rospy.loginfo('Success? ' + str(success))
         return success

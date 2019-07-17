@@ -1,0 +1,12 @@
+<library path="src">
+  <class name="EUP plugin" type="panda_gui.EUPPlugin" base_class_type="rqt_gui_py::Plugin">
+    <description>
+      Python GUI plugin for the EUP Widget.
+    </description>
+    <qtgui>
+      <label>EUP Widget Plugin</label>
+      <icon type="theme">system-help</icon>
+      <statustip>Plugin for the Panda EUP project.</statustip>
+    </qtgui>
+  </class>
+</library>
