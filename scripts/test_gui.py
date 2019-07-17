@@ -22,8 +22,7 @@ if __name__ == '__main__':
     program_path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
     interpreter.load_program(pp.load_program_from_file(program_path, 'program.pkl'))
 
-    ex = EUPWidget()
-    ex.panda_program_widget.loadPandaInterpreter(interpreter)
+    ex = EUPWidget(interpreter)
     ex.show()
     # ex.showMaximized()
     sys.exit(app.exec_())
