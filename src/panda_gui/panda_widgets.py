@@ -15,6 +15,7 @@ import rospkg
 import rospy
 import traceback
 import sys
+from functools import partial
 
 # Size of Primitive Widget
 PRIMITIVE_WIDTH = 100
@@ -91,24 +92,39 @@ class EUPWidget(QWidget):
         self.low_buttons = QWidget()
         self.low_buttons_layout = QHBoxLayout()
         self.low_buttons_layout.setAlignment(Qt.AlignCenter)
-        self.go_start_button = QExpandingPushButton("Go to start pose")
-        self.execute_one_step_button = QExpandingPushButton("Execute one step")
-        self.revert_one_step_button = QExpandingPushButton("Revert one step")
-        self.execute_rest_button = QExpandingPushButton("Execute rest of program")
-        self.revert_to_beginning_button = QExpandingPushButton("Revert to beginning")
-        self.low_buttons_layout.addWidget(self.go_start_button)
+
+        self.interpreter_command_dict = {}
+        self.interpreter_command_dict['go_to_starting_state'] = [QExpandingPushButton("Go to start state", self),
+                                                                 partial(self.execute_interpreter_command,
+                                                                         self.interpreter.go_to_starting_state)]
+        self.interpreter_command_dict['execute_one_step'] = [QExpandingPushButton("Execute one step", self),
+                                                                 partial(self.execute_interpreter_command,
+                                                                         self.interpreter.execute_one_step)]
+        self.interpreter_command_dict['revert_one_step'] = [QExpandingPushButton("Revert one step", self),
+                                                                 partial(self.execute_interpreter_command,
+                                                                         self.interpreter.revert_one_step)]
+        self.interpreter_command_dict['execute_rest_of_program'] = [QExpandingPushButton("Execute rest of program", self),
+                                                                 partial(self.execute_interpreter_command,
+                                                                         self.interpreter.execute_rest_of_program)]
+        self.interpreter_command_dict['revert_to_beginning_of_program'] = [QExpandingPushButton("Revert to beginning", self),
+                                                                 partial(self.execute_interpreter_command,
+                                                                         self.interpreter.revert_to_beginning_of_program
+                                                                         )]
+
+        self.low_buttons_layout.addWidget(self.interpreter_command_dict['go_to_starting_state'][0])
         self.low_buttons_layout.addWidget(QVerticalLine())
-        self.low_buttons_layout.addWidget(self.execute_one_step_button)
-        self.low_buttons_layout.addWidget(self.revert_one_step_button)
+        self.low_buttons_layout.addWidget(self.interpreter_command_dict['execute_one_step'][0])
+        self.low_buttons_layout.addWidget(self.interpreter_command_dict['revert_one_step'][0])
         self.low_buttons_layout.addWidget(QVerticalLine())
-        self.low_buttons_layout.addWidget(self.execute_rest_button)
-        self.low_buttons_layout.addWidget(self.revert_to_beginning_button)
+        self.low_buttons_layout.addWidget(self.interpreter_command_dict['execute_rest_of_program'][0])
+        self.low_buttons_layout.addWidget(self.interpreter_command_dict['revert_to_beginning_of_program'][0])
         self.low_buttons.setLayout(self.low_buttons_layout)
 
         # Click buttons events handling
-        self.go_start_button.clicked.connect(self.go_to_starting_state)
-        self.execute_one_step_button.clicked.connect(self.execute_one_step)
-        self.revert_one_step_button.clicked.connect(self.revert_one_step)
+        for key, value in self.interpreter_command_dict.items():
+            value[0].clicked.connect(value[1])
+            if key is not 'go_to_starting_state':
+                value[0].setEnabled(False)
 
         # Put everything together
         self.vbox.addWidget(self.panda_program_widget)
@@ -119,42 +135,30 @@ class EUPWidget(QWidget):
         self.programUpdate.connect(self.panda_program_widget.updateWidget)
         self.robotStateUpdate.connect(self.robot_state_widget.updateWidget)
 
+        self.updatePandaWidgets()
+
+    def updatePandaWidgets(self):
         self.programUpdate.emit(self.interpreter.next_primitive_index)
         self.robotStateUpdate.emit(self.interpreter.last_panda_status)
 
-    def go_to_starting_state(self):
-        worker = Worker(self.interpreter.go_to_starting_state) # Any other args, kwargs are passed to the run function
-        worker.signals.result.connect(self.reapWorkerResults)
-        worker.signals.finished.connect(self.announceWorkerDeath)
-        worker.signals.progress.connect(self.programUpdate.emit)
+    def execute_interpreter_command(self, command):
         # Disable lower buttons
         self.low_buttons.setDisabled(True)
 
-        self.threadpool.start(worker)
-        self.programUpdate.emit(self.interpreter.next_primitive_index)
-
-    def execute_one_step(self):
-        worker = Worker(self.interpreter.execute_one_step)
+        worker = Worker(command) # Any other args, kwargs are passed to the run function
         worker.signals.result.connect(self.reapWorkerResults)
         worker.signals.finished.connect(self.announceWorkerDeath)
         worker.signals.progress.connect(self.actOnWorkerUpdate)
 
         self.threadpool.start(worker)
-        self.programUpdate.emit(self.interpreter.next_primitive_index)
-
-    def revert_one_step(self):
-        worker = Worker(self.interpreter.revert_one_step)
-        worker.signals.result.connect(self.reapWorkerResults)
-        worker.signals.finished.connect(self.announceWorkerDeath)
-        worker.signals.progress.connect(self.programUpdate.emit)
-
-        self.threadpool.start(worker)
-        self.programUpdate.emit(self.interpreter.next_primitive_index)
 
     def reapWorkerResults(self, result):
         rospy.loginfo("WORKER result: " + str(result))
         if result:
             self.low_buttons.setEnabled(True)
+            for key, value in self.interpreter_command_dict.items():
+                value[0].setEnabled(True)
+
         self.programUpdate.emit(self.interpreter.next_primitive_index)
         self.robotStateUpdate.emit(self.interpreter.last_panda_status)
 
@@ -162,8 +166,7 @@ class EUPWidget(QWidget):
         rospy.logdebug("RIP WORKER!")
 
     def actOnWorkerUpdate(self, progress):
-        self.programUpdate.emit(self.interpreter.next_primitive_index)
-        self.robotStateUpdate.emit(self.interpreter.last_panda_status)
+        self.updatePandaWidgets()
 
     def sizeHint(self):
         return QSize(1280, 720)
@@ -304,11 +307,13 @@ class PandaPrimitiveWidget(QFrame):
             self.setPalette(current_index_palette)
         self.update()
 
+
 class QVerticalLine(QFrame):
     def __init__(self, parent=None):
         super(QVerticalLine, self).__init__(parent)
         self.setFrameShape(QFrame.VLine)
         self.setFrameShadow(QFrame.Sunken)
+
 
 class QExpandingPushButton(QPushButton):
     def __init__(self, text='', parent=None):
@@ -345,6 +350,7 @@ class WorkerSignals(QObject):
     error = pyqtSignal(tuple)
     result = pyqtSignal(object)
     progress = pyqtSignal(int)
+
 
 class Worker(QRunnable):
     '''
@@ -388,4 +394,3 @@ class Worker(QRunnable):
             self.signals.result.emit(result)  # Return the result of the processing
         finally:
             self.signals.finished.emit()  # Done
-

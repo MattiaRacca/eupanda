@@ -208,7 +208,7 @@ class PandaProgramInterpreter(object):
 
         return True
 
-    def execute_rest_of_program(self, one_shot_execution=False):
+    def execute_rest_of_program(self, one_shot_execution=False, progress_callback=None):
         partial_success = True
         if one_shot_execution:
             # TODO: this is just for the execute now (like relax_fingers and execute_primitive_now).
@@ -218,7 +218,7 @@ class PandaProgramInterpreter(object):
         primitive_counter = self.next_primitive_index
 
         while partial_success:
-            partial_success = self.execute_one_step()
+            partial_success = self.execute_one_step(progress_callback)
             if partial_success:
                 primitive_counter += 1
 
@@ -234,12 +234,12 @@ class PandaProgramInterpreter(object):
 
         return result
 
-    def revert_to_beginning_of_program(self):
+    def revert_to_beginning_of_program(self, progress_callback=None):
         partial_success = True
         primitive_counter = self.next_primitive_index
 
         while partial_success:
-            partial_success = self.revert_one_step()
+            partial_success = self.revert_one_step(progress_callback)
             if partial_success:
                 primitive_counter -= 1
 
