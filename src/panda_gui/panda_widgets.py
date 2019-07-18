@@ -117,7 +117,7 @@ class EUPWidget(QWidget):
         worker = Worker(self.interpreter.go_to_starting_state) # Any other args, kwargs are passed to the run function
         worker.signals.result.connect(self.reapWorkerResults)
         worker.signals.finished.connect(self.announceWorkerDeath)
-        # worker.signals.progress.connect(self.progress_fn)
+        worker.signals.progress.connect(self.programUpdate.emit)
 
         self.threadpool.start(worker)
         self.programUpdate.emit(self.interpreter.next_primitive_index)
@@ -125,6 +125,7 @@ class EUPWidget(QWidget):
         worker = Worker(self.interpreter.execute_one_step)
         worker.signals.result.connect(self.reapWorkerResults)
         worker.signals.finished.connect(self.announceWorkerDeath)
+        worker.signals.progress.connect(self.programUpdate.emit)
 
         self.threadpool.start(worker)
         self.programUpdate.emit(self.interpreter.next_primitive_index)
@@ -132,6 +133,7 @@ class EUPWidget(QWidget):
         worker = Worker(self.interpreter.revert_one_step)
         worker.signals.result.connect(self.reapWorkerResults)
         worker.signals.finished.connect(self.announceWorkerDeath)
+        worker.signals.progress.connect(self.programUpdate.emit)
 
         self.threadpool.start(worker)
         self.programUpdate.emit(self.interpreter.next_primitive_index)
@@ -324,7 +326,7 @@ class Worker(QRunnable):
         self.signals = WorkerSignals()
 
         # Add the callback to our kwargs
-        # self.kwargs['progress_callback'] = self.signals.progress
+        self.kwargs['progress_callback'] = self.signals.progress
 
     @pyqtSlot()
     def run(self):

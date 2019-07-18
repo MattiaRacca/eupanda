@@ -18,6 +18,7 @@ class PandaProgramInterpreter(object):
         self.loaded_program = None
         self.next_primitive_index = -1  # next primitive to be executed!
         self.robot_less_debug = robot_less_debug
+        self.fake_wait = 3
 
         self.revert_default_position_speed = .04  # m/s
         self.revert_default_rotation_speed = 1.0  # rad/s
@@ -75,7 +76,7 @@ class PandaProgramInterpreter(object):
         for primitive in program.primitives:
             primitive.status = pp.PandaPrimitiveStatus.NEUTRAL
 
-    def go_to_starting_state(self):
+    def go_to_starting_state(self, progress_callback=None):
         if self.loaded_program is None:
             return False
 
@@ -93,6 +94,9 @@ class PandaProgramInterpreter(object):
 
         if not self.robot_less_debug:
             self.move_to_ee_client.send_goal(goal)
+            if progress_callback is not None:
+                progress_callback.emit(self.next_primitive_index)
+
             success_arm = self.move_to_ee_client.wait_for_result()
             rospy.loginfo('Success? :' + str(success_arm))
 
@@ -109,6 +113,7 @@ class PandaProgramInterpreter(object):
 
             rospy.loginfo('Success? :' + str(response.success))
         else:
+            rospy.sleep(rospy.Duration(self.fake_wait))
             response = MoveFingersResponse()
             response.success = True
             success_arm = True
@@ -120,7 +125,7 @@ class PandaProgramInterpreter(object):
 
         return success_arm and response.success
 
-    def execute_one_step(self):
+    def execute_one_step(self, progress_callback=None):
         if self.loaded_program is None:
             rospy.logwarn('no program loaded')
             return False
@@ -138,6 +143,8 @@ class PandaProgramInterpreter(object):
             return False
 
         primitive_to_execute.status = pp.PandaPrimitiveStatus.EXECUTING
+        if progress_callback is not None:
+            progress_callback.emit(self.next_primitive_index)
         result = callback(primitive_to_execute)
 
         if result:
@@ -151,7 +158,7 @@ class PandaProgramInterpreter(object):
 
         return True
 
-    def revert_one_step(self):
+    def revert_one_step(self, progress_callback=None):
         if self.loaded_program is None:
             rospy.logwarn('no program loaded')
             return False
@@ -174,6 +181,8 @@ class PandaProgramInterpreter(object):
             return False
 
         primitive_to_revert.status = pp.PandaPrimitiveStatus.REVERTING
+        if progress_callback is not None:
+            progress_callback.emit(self.next_primitive_index)
         result = callback(self.next_primitive_index - 1)
 
         if result:
@@ -239,6 +248,7 @@ class PandaProgramInterpreter(object):
             self.user_sync_client.send_goal(primitive_to_execute.parameter_container)
             success = self.user_sync_client.wait_for_result()
         else:
+            rospy.sleep(rospy.Duration(self.fake_wait))
             success = True
 
         rospy.loginfo('Success? ' + str(success))
@@ -256,6 +266,7 @@ class PandaProgramInterpreter(object):
             if state == actionlib.GoalStatus.ABORTED or not success:
                 success = False
         else:
+            rospy.sleep(rospy.Duration(self.fake_wait))
             success = True
 
         rospy.loginfo('Success? ' + str(success))
@@ -273,9 +284,8 @@ class PandaProgramInterpreter(object):
             if state == actionlib.GoalStatus.ABORTED or not success:
                 success = False
         else:
+            rospy.sleep(rospy.Duration(self.fake_wait))
             success = True
-            rospy.sleep(rospy.Duration(10))
-            rospy.loginfo('INSIDE? \t' + str(threading.current_thread().ident))
 
         rospy.loginfo('Success? ' + str(success))
         return success
@@ -285,6 +295,7 @@ class PandaProgramInterpreter(object):
         if not self.robot_less_debug:
             response = self.move_fingers_client.call(primitive_to_execute.parameter_container)
         else:
+            rospy.sleep(rospy.Duration(self.fake_wait))
             response = MoveFingersResponse()
             response.success = True
         rospy.loginfo('Success? :' + str(response.success))
@@ -295,6 +306,7 @@ class PandaProgramInterpreter(object):
         if not self.robot_less_debug:
             response = self.apply_force_fingers_client.call(primitive_to_execute.parameter_container)
         else:
+            rospy.sleep(rospy.Duration(self.fake_wait))
             response = ApplyForceFingersResponse()
             response.success = True
         rospy.loginfo('Success? :' + str(response.success))
@@ -332,6 +344,7 @@ class PandaProgramInterpreter(object):
             if state == actionlib.GoalStatus.ABORTED or not success:
                 success = False
         else:
+            rospy.sleep(rospy.Duration(self.fake_wait))
             success = True
 
         rospy.loginfo('Success? ' + str(success))
@@ -360,6 +373,7 @@ class PandaProgramInterpreter(object):
             if state == actionlib.GoalStatus.ABORTED or not success:
                 success = False
         else:
+            rospy.sleep(rospy.Duration(self.fake_wait))
             success = True
 
         rospy.loginfo('Success? ' + str(success))
@@ -386,6 +400,7 @@ class PandaProgramInterpreter(object):
                 request.width = gripper_state.width
                 response = self.move_fingers_client.call(request)
         else:
+            rospy.sleep(rospy.Duration(self.fake_wait))
             response = MoveFingersResponse()
             response.success = True
 
@@ -414,6 +429,7 @@ class PandaProgramInterpreter(object):
                 request.width = gripper_state.width
                 response = self.move_fingers_client.call(request)
         else:
+            rospy.sleep(rospy.Duration(self.fake_wait))
             response = MoveFingersResponse()
             response.success = True
 
