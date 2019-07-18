@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import rospy
-import threading
 import actionlib
 import panda_primitive as pp
 
@@ -11,22 +10,27 @@ from panda_pbd.srv import MoveFingers, ApplyForceFingers
 from panda_pbd.msg import MoveToEEGoal
 from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest
 from panda_pbd.srv import MoveFingersResponse, ApplyForceFingersResponse
-
+from std_msgs.msg import Int32
 
 class PandaProgramInterpreter(object):
-    def __init__(self, robot_less_debug=False):
+    def __init__(self, robotless_debug=False):
         self.loaded_program = None
         self.next_primitive_index = -1  # next primitive to be executed!
-        self.robot_less_debug = robot_less_debug
+        self.last_panda_status = None
+
+        self.robotless_debug = robotless_debug
         self.fake_wait = 3
 
         self.revert_default_position_speed = .04  # m/s
         self.revert_default_rotation_speed = 1.0  # rad/s
 
-        # TO THE PRIMITIVE_INTERFACE
-        if not self.robot_less_debug:
-            self.move_to_ee_client = actionlib.SimpleActionClient('/primitive_interface_node/move_to_ee_server',
-                                                                  MoveToEEAction)
+        # TO THE PRIMITIVE_INTERFACE, IF ANY
+        if not self.robotless_debug:
+            self.panda_state_client = rospy.Subscriber("/primitive_interface_node/interface_state", Int32,
+                                                       self.panda_state_callback)
+
+            self.move_to_ee_client = actionlib.SimpleActionClient( '/primitive_interface_node/move_to_ee_server',
+                                                                   MoveToEEAction)
             self.move_to_contact_client = actionlib.SimpleActionClient('primitive_interface_node/move_to_contact_server',
                                                                        MoveToContactAction)
             self.user_sync_client = actionlib.SimpleActionClient('/primitive_interface_node/user_sync_server',
@@ -39,6 +43,8 @@ class PandaProgramInterpreter(object):
             self.move_fingers_client = rospy.ServiceProxy('/primitive_interface_node/move_fingers', MoveFingers)
             self.apply_force_fingers_client = rospy.ServiceProxy('/primitive_interface_node/apply_force_fingers',
                                                                  ApplyForceFingers)
+        else:
+            self.last_panda_status = pp.PandaRobotStatus.READY
 
         # PRIMITIVE CALLBACKS (FORWARD AND REVERSE)
         self.callback_switcher = {
@@ -57,15 +63,20 @@ class PandaProgramInterpreter(object):
             pp.ApplyForceFingers: self.revert_apply_force_fingers
         }
 
+    def panda_state_callback(self, msg):
+        new_panda_status = pp.PandaRobotStatus(msg.data)
+        if self.last_panda_status != new_panda_status:
+            self.last_panda_status = new_panda_status
+
     def __str__(self):
         if self.loaded_program is None:
             return 'No program loaded'
         full_description = self.loaded_program.__str__()
         try:
             full_description += 'Currently ready to execute primitive {}: '.format(self.next_primitive_index) + \
-                            self.loaded_program.get_nth_primitive(self.next_primitive_index).__str__()
+                                self.loaded_program.get_nth_primitive(self.next_primitive_index).__str__()
         except pp.PandaProgramException:
-            full_description += 'Interpreter instruction pointer {} out of program range!'.\
+            full_description += 'Interpreter instruction pointer {} out of program range!'. \
                 format(self.next_primitive_index)
 
         return full_description
@@ -86,14 +97,15 @@ class PandaProgramInterpreter(object):
             rospy.logerr('Cannot find starting conditions: did you save the starting state to begin with?')
             return False
 
-        # create new Goal for the primitive
-        goal = MoveToEEGoal()
-        goal.pose = arm_state
-        goal.position_speed = self.revert_default_position_speed
-        goal.rotation_speed = self.revert_default_rotation_speed
+        if not self.robotless_debug:
+            # create new Goal for the primitive
+            goal = MoveToEEGoal()
+            goal.pose = arm_state
+            goal.position_speed = self.revert_default_position_speed
+            goal.rotation_speed = self.revert_default_rotation_speed
 
-        if not self.robot_less_debug:
             self.move_to_ee_client.send_goal(goal)
+
             if progress_callback is not None:
                 progress_callback.emit(self.next_primitive_index)
 
@@ -244,7 +256,7 @@ class PandaProgramInterpreter(object):
     # PRIMITIVE CALLBACKS
     def execute_user_sync(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a user sync')
-        if not self.robot_less_debug:
+        if not self.robotless_debug:
             self.user_sync_client.send_goal(primitive_to_execute.parameter_container)
             success = self.user_sync_client.wait_for_result()
         else:
@@ -257,7 +269,7 @@ class PandaProgramInterpreter(object):
     def execute_move_to_contact(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a move to contact')
 
-        if not self.robot_less_debug:
+        if not self.robotless_debug:
             self.move_to_contact_client.send_goal(primitive_to_execute.parameter_container)
             success = self.move_to_contact_client.wait_for_result(rospy.Duration(60))  # TODO: questionable choice?
 
@@ -275,7 +287,7 @@ class PandaProgramInterpreter(object):
     def execute_move_to_ee(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a move to EE')
 
-        if not self.robot_less_debug:
+        if not self.robotless_debug:
             self.move_to_ee_client.send_goal(primitive_to_execute.parameter_container)
             success = self.move_to_ee_client.wait_for_result(rospy.Duration(60))
 
@@ -292,7 +304,7 @@ class PandaProgramInterpreter(object):
 
     def execute_move_fingers(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a move fingers')
-        if not self.robot_less_debug:
+        if not self.robotless_debug:
             response = self.move_fingers_client.call(primitive_to_execute.parameter_container)
         else:
             rospy.sleep(rospy.Duration(self.fake_wait))
@@ -303,7 +315,7 @@ class PandaProgramInterpreter(object):
 
     def execute_apply_force_fingers(self, primitive_to_execute):
         rospy.loginfo('Trying to execute an apply force with fingers')
-        if not self.robot_less_debug:
+        if not self.robotless_debug:
             response = self.apply_force_fingers_client.call(primitive_to_execute.parameter_container)
         else:
             rospy.sleep(rospy.Duration(self.fake_wait))
@@ -313,7 +325,7 @@ class PandaProgramInterpreter(object):
         return response.success
 
     # REVERT PRIMITIVE CALLBACK
-    def revert_user_sync(self, primitive_to_revert):
+    def revert_user_sync(self, primitive_index):
         rospy.loginfo('Trying to revert a user sync')
         # User Sync does not require robot motions to be reset
         success = True
@@ -336,7 +348,7 @@ class PandaProgramInterpreter(object):
         goal.position_speed = self.revert_default_position_speed
         goal.rotation_speed = self.revert_default_rotation_speed
 
-        if not self.robot_less_debug:
+        if not self.robotless_debug:
             self.move_to_ee_client.send_goal(goal)
             success = self.move_to_ee_client.wait_for_result()
             state = self.move_to_contact_client.get_state()
@@ -365,7 +377,7 @@ class PandaProgramInterpreter(object):
         goal.position_speed = self.revert_default_position_speed
         goal.rotation_speed = self.revert_default_rotation_speed
 
-        if not self.robot_less_debug:
+        if not self.robotless_debug:
             self.move_to_ee_client.send_goal(goal)
             success = self.move_to_ee_client.wait_for_result()
             state = self.move_to_contact_client.get_state()
@@ -388,7 +400,7 @@ class PandaProgramInterpreter(object):
 
         rospy.loginfo('Trying to revert a move fingers to {}, {}'.format(gripper_state.width, gripper_state.force))
 
-        if not self.robot_less_debug:
+        if not self.robotless_debug:
             if gripper_state.force > 0.0:
                 # need to revert to a apply_force_fingers
                 request = ApplyForceFingersRequest()
@@ -417,7 +429,7 @@ class PandaProgramInterpreter(object):
         rospy.loginfo('Trying to revert an apply force fingers to {}, {}'.format(gripper_state.width,
                                                                                  gripper_state.force))
 
-        if not self.robot_less_debug:
+        if not self.robotless_debug:
             if gripper_state.force > 0.0:
                 # need to revert to a apply_force_fingers
                 request = ApplyForceFingersRequest()

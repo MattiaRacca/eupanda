@@ -17,6 +17,12 @@ class PandaPrimitiveStatus(Enum):
     ERROR = 4
 
 
+class PandaRobotStatus(Enum):
+    ERROR = 0
+    READY = 1
+    BUSY = 2
+
+
 class PandaPrimitive(object):
     def __init__(self, description="An abstract Panda primitive"):
         self.description = description

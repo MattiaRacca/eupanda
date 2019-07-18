@@ -13,7 +13,6 @@ import panda_eup.panda_primitive as pp
 import os
 import rospkg
 import rospy
-import threading
 import traceback
 import sys
 
@@ -50,6 +49,7 @@ class EUPPlugin(Plugin):
 
 class EUPWidget(QWidget):
     programUpdate = pyqtSignal(int)
+    robotStateUpdate = pyqtSignal(pp.PandaRobotStatus)
     goToStartStateSignal = pyqtSignal()
     executeOneStepSignal = pyqtSignal()
     revertOneStepSignal = pyqtSignal()
@@ -58,12 +58,12 @@ class EUPWidget(QWidget):
         super(EUPWidget, self).__init__()
         self.setWindowTitle(title)
 
-        self.interpreter = PandaProgramInterpreter(robot_less_debug=True)
+        self.interpreter = PandaProgramInterpreter(robotless_debug=True)
         program_path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
         self.interpreter.load_program(pp.load_program_from_file(program_path, 'program.pkl'))
 
         self.threadpool = QThreadPool()
-        print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
+        rospy.logdebug("Multi-threading with maximum %d threads" % self.threadpool.maxThreadCount())
 
         self.initUI()
 
@@ -72,14 +72,20 @@ class EUPWidget(QWidget):
         self.vbox = QVBoxLayout(self)
         self.vbox.setAlignment(Qt.AlignTop)
 
-        # Panda Widget on top
+        # Panda Program Widget on top
         self.panda_program_widget = PandaProgramWidget(self)
 
-        # Parameter tuning frame in the middle
+        # Parameter tuning frame & Robot State Widget in the middle
+        self.middle_area = QWidget(self)
+        self.middle_area_layout = QHBoxLayout()
+        self.robot_state_widget = PandaStateWidget(self)
         self.adjust_parameters_frame = QGroupBox(self)
-        self.adjust_parameters_frame.setTitle('Primitive parameters:')
+        self.adjust_parameters_frame.setTitle('Primitive parameters')
         size_policy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
         self.adjust_parameters_frame.setSizePolicy(size_policy)
+        self.middle_area_layout.addWidget(self.robot_state_widget)
+        self.middle_area_layout.addWidget(self.adjust_parameters_frame)
+        self.middle_area.setLayout(self.middle_area_layout)
 
         # Action button at the bottom
         self.low_buttons = QWidget()
@@ -106,29 +112,36 @@ class EUPWidget(QWidget):
 
         # Put everything together
         self.vbox.addWidget(self.panda_program_widget)
-        self.vbox.addWidget(self.adjust_parameters_frame)
+        self.vbox.addWidget(self.middle_area)
         self.vbox.addWidget(self.low_buttons)
 
         # Connect update signals
         self.programUpdate.connect(self.panda_program_widget.updateWidget)
+        self.robotStateUpdate.connect(self.robot_state_widget.updateWidget)
+
         self.programUpdate.emit(self.interpreter.next_primitive_index)
+        self.robotStateUpdate.emit(self.interpreter.last_panda_status)
 
     def go_to_starting_state(self):
         worker = Worker(self.interpreter.go_to_starting_state) # Any other args, kwargs are passed to the run function
         worker.signals.result.connect(self.reapWorkerResults)
         worker.signals.finished.connect(self.announceWorkerDeath)
         worker.signals.progress.connect(self.programUpdate.emit)
+        # Disable lower buttons
+        self.low_buttons.setDisabled(True)
 
         self.threadpool.start(worker)
         self.programUpdate.emit(self.interpreter.next_primitive_index)
+
     def execute_one_step(self):
         worker = Worker(self.interpreter.execute_one_step)
         worker.signals.result.connect(self.reapWorkerResults)
         worker.signals.finished.connect(self.announceWorkerDeath)
-        worker.signals.progress.connect(self.programUpdate.emit)
+        worker.signals.progress.connect(self.actOnWorkerUpdate)
 
         self.threadpool.start(worker)
         self.programUpdate.emit(self.interpreter.next_primitive_index)
+
     def revert_one_step(self):
         worker = Worker(self.interpreter.revert_one_step)
         worker.signals.result.connect(self.reapWorkerResults)
@@ -140,10 +153,17 @@ class EUPWidget(QWidget):
 
     def reapWorkerResults(self, result):
         rospy.loginfo("WORKER result: " + str(result))
+        if result:
+            self.low_buttons.setEnabled(True)
+        self.programUpdate.emit(self.interpreter.next_primitive_index)
+        self.robotStateUpdate.emit(self.interpreter.last_panda_status)
 
     def announceWorkerDeath(self):
-        rospy.loginfo("RIP WORKER!")
+        rospy.logdebug("RIP WORKER!")
+
+    def actOnWorkerUpdate(self, progress):
         self.programUpdate.emit(self.interpreter.next_primitive_index)
+        self.robotStateUpdate.emit(self.interpreter.last_panda_status)
 
     def sizeHint(self):
         return QSize(1280, 720)
@@ -213,6 +233,29 @@ class PandaProgramWidget(QGroupBox):
 
     def minimumSizeHint(self):
         return QSize((H_SPACING+PRIMITIVE_WIDTH)*MIN_PRIMITIVE, V_SPACING*3 + PRIMITIVE_HEIGHT)
+
+
+class PandaStateWidget(QGroupBox):
+    def __init__(self, parent):
+        super(PandaStateWidget, self).__init__('Robot State', parent)
+        self.initUI()
+
+    def initUI(self):
+        self.status_label = QLabel('Undefined')
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.status_label)
+        sizePolicy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.MinimumExpanding)
+        self.setSizePolicy(sizePolicy)
+
+        self.setLayout(layout)
+
+    def sizeHint(self):
+        return QSize(PRIMITIVE_WIDTH, PRIMITIVE_HEIGHT)
+
+    def updateWidget(self, status):
+        self.status_label.setText(status.name)
+        self.update()
 
 
 class PandaPrimitiveWidget(QFrame):
