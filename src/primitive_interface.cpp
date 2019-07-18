@@ -13,11 +13,13 @@ PrimitiveInterface::PrimitiveInterface():
 
   // Publishers
   equilibrium_pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/equilibrium_pose", 10);
+  interface_state_publisher_ = nh_.advertise<std_msgs::Int32>("interface_state",10);
+
   // Subscribers
   franka_state_subscriber_ = nh_.subscribe("/franka_state_controller/franka_states", 10,
           &PrimitiveInterface::frankaStateCallback, this);
 
-  error_state_ = false;
+  interface_state_.store(1); // TODO: not sure this is right
 
   // Action servers
   move_to_contact_server_ = new actionlib::SimpleActionServer<panda_pbd::MoveToContactAction>(
@@ -111,6 +113,21 @@ PrimitiveInterface::PrimitiveInterface():
   }
 
   ROS_INFO("======= Primitive Interface: initialization completed =======");
+}
+
+bool PrimitiveInterface::isInterfaceReady()
+{
+  int state = interface_state_.load();
+  if(state != 1){
+    ROS_ERROR("Robot is not ready...");
+    if(state == 0)
+      ROS_ERROR("Robot is in an error state - please recover from error first!");
+    if(state == 2)
+      ROS_ERROR("Interface is busy - wait for the other requests to be processed!");
+    return false;
+  } else {
+    return true;
+  }
 }
 
 geometry_msgs::PoseStamped PrimitiveInterface::getPose(const std::string ref_frame, const std::string child_frame)
@@ -283,14 +300,15 @@ bool PrimitiveInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTea
 bool PrimitiveInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req,
     panda_pbd::EnableTeaching::Response &res)
 {
-  if(error_state_.load()){
-    ROS_ERROR("Robot is in an error state - please recover from error first!");
+  if(isInterfaceReady()){
+    interface_state_.store(2);
+    res.success = adjustImpedanceControllerStiffness(req, res);
+    interface_state_.store(1);
+    return res.success;
+  } else {
     res.success = false;
     return res.success;
   }
-
-  res.success = adjustImpedanceControllerStiffness(req, res);
-  return res.success;
 }
 
 bool PrimitiveInterface::moveFingersCallback(panda_pbd::MoveFingers::Request &req,
@@ -307,23 +325,25 @@ bool PrimitiveInterface::moveFingersCallback(panda_pbd::MoveFingers::Request &re
     return res.success;
   }
 
-  if(error_state_.load()){
-    ROS_ERROR("Robot is in an error state - please recover from error first!");
+  if(isInterfaceReady()){
+    interface_state_.store(2);
+    gripper_move_client_->sendGoalAndWait(move_goal);
+    if (gripper_move_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED)
+    {
+      ROS_ERROR("Move fingers primitive failed: %s", gripper_move_client_->getState().getText().c_str());
+      res.success = false;
+    }
+    else
+    {
+      res.success = true;
+    }
+    interface_state_.store(1);
+    return res.success;
+  } else {
     res.success = false;
     return res.success;
   }
 
-  gripper_move_client_->sendGoalAndWait(move_goal);
-  if (gripper_move_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED)
-  {
-    ROS_ERROR("Move fingers primitive failed: %s", gripper_move_client_->getState().getText().c_str());
-    res.success = false;
-  }
-  else
-  {
-    res.success = true;
-  }
-  return res.success;;
 }
 
 bool PrimitiveInterface::applyForceFingersCallback(panda_pbd::ApplyForceFingers::Request &req,
@@ -346,23 +366,21 @@ bool PrimitiveInterface::applyForceFingersCallback(panda_pbd::ApplyForceFingers:
     return res.success;
   }
 
-  if(error_state_.load()){
-    ROS_ERROR("Robot is in an error state - please recover from error first!");
+  if(isInterfaceReady()) {
+    interface_state_.store(2);
+    gripper_grasp_client_->sendGoalAndWait(grasping_goal);
+    if (gripper_grasp_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED) {
+      ROS_ERROR("Apply Force with Fingers primitived failed: %s", gripper_grasp_client_->getState().getText().c_str());
+      res.success = false;
+    } else {
+      res.success = true;
+    }
+    interface_state_.store(1);
+    return res.success;
+  } else {
     res.success = false;
     return res.success;
   }
-
-  gripper_grasp_client_->sendGoalAndWait(grasping_goal);
-  if (gripper_grasp_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED)
-  {
-    ROS_ERROR("Apply Force with Fingers primitived failed: %s", gripper_grasp_client_->getState().getText().c_str());
-    res.success = false;
-  }
-  else
-  {
-    res.success = true;
-  }
-  return res.success;
 }
 
 bool PrimitiveInterface::openGripperCallback(panda_pbd::OpenGripper::Request &req,
@@ -379,23 +397,21 @@ bool PrimitiveInterface::openGripperCallback(panda_pbd::OpenGripper::Request &re
     return res.success;
   }
 
-  if(error_state_.load()){
-    ROS_ERROR("Robot is in an error state - please recover from error first!");
+  if(isInterfaceReady()) {
+    interface_state_.store(2);
+    gripper_move_client_->sendGoalAndWait(move_goal);
+    if (gripper_move_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED) {
+      ROS_ERROR("Error in the grasp goal: %s", gripper_move_client_->getState().getText().c_str());
+      res.success = false;
+    } else {
+      res.success = true;
+    }
+    interface_state_.store(1);
+    return res.success;
+  } else {
     res.success = false;
     return res.success;
   }
-
-  gripper_move_client_->sendGoalAndWait(move_goal);
-  if (gripper_move_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED)
-  {
-    ROS_ERROR("Error in the grasp goal: %s", gripper_move_client_->getState().getText().c_str());
-    res.success = false;
-  }
-  else
-  {
-    res.success = true;
-  }
-  return res.success;;
 }
 
 bool PrimitiveInterface::closeGripperCallback(panda_pbd::CloseGripper::Request &req,
@@ -419,23 +435,21 @@ bool PrimitiveInterface::closeGripperCallback(panda_pbd::CloseGripper::Request &
     return res.success;
   }
 
-  if(error_state_.load()){
-    ROS_ERROR("Robot is in an error state - please recover from error first!");
+  if(isInterfaceReady()) {
+    interface_state_.store(2);
+    gripper_grasp_client_->sendGoalAndWait(grasping_goal);
+    if (gripper_grasp_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED) {
+      ROS_ERROR("Error in the grasp goal: %s", gripper_grasp_client_->getState().getText().c_str());
+      res.success = false;
+    } else {
+      res.success = true;
+    }
+    interface_state_.store(1);
+    return res.success;
+  } else {
     res.success = false;
     return res.success;
   }
-
-  gripper_grasp_client_->sendGoalAndWait(grasping_goal);
-  if (gripper_grasp_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED)
-  {
-    ROS_ERROR("Error in the grasp goal: %s", gripper_grasp_client_->getState().getText().c_str());
-    res.success = false;
-  }
-  else
-  {
-    res.success = true;
-  }
-  return res.success;
 }
 
 void PrimitiveInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr &goal)
@@ -447,51 +461,53 @@ void PrimitiveInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr 
   adjustImpedanceControllerStiffness(1000.0, 200.0, 10.0);
   ROS_WARN("Setting the robot to be stiff (to be pushable)");
 
-  double force_threshold = goal.get()->force_threshold;
+  if(isInterfaceReady()) {
+    interface_state_.store(2);
+    double force_threshold = goal.get()->force_threshold;
 
-  while (!user_sync_result_.unlock)
-  {
-    if(error_state_.load()){
-      ROS_ERROR("Robot is in an error state - please recover from error first!");
-      user_sync_result_.unlock = false;
-      error_happened = true;
-      break;
-    }
-
-    /* The external wrench is in the EE frame
-     * Positive value when the force is applied AGAINST the axis
-     */
-    last_external_wrench_ptr = ros::topic::waitForMessage<geometry_msgs::WrenchStamped>(
-                                 "/franka_state_controller/F_ext");
-
-    if (last_external_wrench_ptr != nullptr)
-    {
-      last_wrench_ = *last_external_wrench_ptr;
-      if (std::abs(last_wrench_.wrench.force.x) > force_threshold ||
-          std::abs(last_wrench_.wrench.force.y) > force_threshold ||
-          std::abs(last_wrench_.wrench.force.z) > force_threshold)
-      {
-        ROS_DEBUG("Robot unlocked!");
-        ROS_DEBUG("[%f %f %f] sensed",
-                  last_wrench_.wrench.force.x,
-                  last_wrench_.wrench.force.y,
-                  last_wrench_.wrench.force.z);
-        user_sync_result_.unlock = true;
+    while (!user_sync_result_.unlock) {
+      if (interface_state_.load() == 0) {
+        ROS_ERROR("Robot is in an error state - please recover from error first!");
+        user_sync_result_.unlock = false;
+        error_happened = true;
+        break;
       }
-      else
-      {
-        ROS_DEBUG_THROTTLE(10, "Not enough force ([%f %f %f] sensed)",
-                           last_wrench_.wrench.force.x,
-                           last_wrench_.wrench.force.y,
-                           last_wrench_.wrench.force.z);
-        user_sync_feedback_.contact_forces.x = last_wrench_.wrench.force.x;
-        user_sync_feedback_.contact_forces.y = last_wrench_.wrench.force.y;
-        user_sync_feedback_.contact_forces.z = last_wrench_.wrench.force.z;
-        user_sync_server_->publishFeedback(user_sync_feedback_);
+
+      /* The external wrench is in the EE frame
+       * Positive value when the force is applied AGAINST the axis
+       */
+      last_external_wrench_ptr = ros::topic::waitForMessage<geometry_msgs::WrenchStamped>(
+              "/franka_state_controller/F_ext");
+
+      if (last_external_wrench_ptr != nullptr) {
+        last_wrench_ = *last_external_wrench_ptr;
+        if (std::abs(last_wrench_.wrench.force.x) > force_threshold ||
+            std::abs(last_wrench_.wrench.force.y) > force_threshold ||
+            std::abs(last_wrench_.wrench.force.z) > force_threshold) {
+          ROS_DEBUG("Robot unlocked!");
+          ROS_DEBUG("[%f %f %f] sensed",
+                    last_wrench_.wrench.force.x,
+                    last_wrench_.wrench.force.y,
+                    last_wrench_.wrench.force.z);
+          user_sync_result_.unlock = true;
+        } else {
+          ROS_DEBUG_THROTTLE(10, "Not enough force ([%f %f %f] sensed)",
+                             last_wrench_.wrench.force.x,
+                             last_wrench_.wrench.force.y,
+                             last_wrench_.wrench.force.z);
+          user_sync_feedback_.contact_forces.x = last_wrench_.wrench.force.x;
+          user_sync_feedback_.contact_forces.y = last_wrench_.wrench.force.y;
+          user_sync_feedback_.contact_forces.z = last_wrench_.wrench.force.z;
+          user_sync_server_->publishFeedback(user_sync_feedback_);
+        }
       }
     }
+    if(!error_happened)
+      interface_state_.store(1);
+  } else {
+    error_happened = true;
   }
-  if (error_happened){
+  if (error_happened) {
     user_sync_server_->setAborted(user_sync_result_);
   } else {
     user_sync_server_->setSucceeded(user_sync_result_);
@@ -545,74 +561,77 @@ void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoa
 
   ros::Time starting_time = ros::Time::now();
 
-  while (!in_contact)
-  {
-    if(error_state_.load()){
-      ROS_ERROR("Robot went in an error state while executing move_to_contact - please recover from error first!");
-      error_happened = true;
-      break;
-    }
-
-    ros::Time current_time = ros::Time::now();
-    progression = (current_time - starting_time).toSec();
-
-    double tau = progression / expected_time;
-    // Position
-    Eigen::Vector3d desired_position = current_position * (1 - tau) + target_position * tau;
-    // Orientation
-    Eigen::Quaterniond desired_orientation = current_orientation.slerp(tau, target_orientation);
-
-    // command to Impedance controller
-    geometry_msgs::PoseStamped desired_pose;
-
-    desired_pose.pose.position.x = desired_position[0];
-    desired_pose.pose.position.y = desired_position[1];
-    desired_pose.pose.position.z = desired_position[2];
-
-    desired_pose.pose.orientation.x = desired_orientation.x();
-    desired_pose.pose.orientation.y = desired_orientation.y();
-    desired_pose.pose.orientation.z = desired_orientation.z();
-    desired_pose.pose.orientation.w = desired_orientation.w();
-
-    // TODO: enforce working space here? and throw error if contact not reached within?
-    equilibrium_pose_publisher_.publish(desired_pose);
-
-    auto last_external_wrench_ptr = ros::topic::waitForMessage<geometry_msgs::WrenchStamped>(
-                                      "/franka_state_controller/F_ext");
-
-    if (last_external_wrench_ptr != nullptr)
-    {
-      last_wrench_ = *last_external_wrench_ptr;
-      if (std::abs(last_wrench_.wrench.force.x) > goal->force_threshold ||
-          std::abs(last_wrench_.wrench.force.y) > goal->force_threshold ||
-          std::abs(last_wrench_.wrench.force.z) > goal->force_threshold ||
-          std::abs(last_wrench_.wrench.torque.x) > goal->torque_threshold ||
-          std::abs(last_wrench_.wrench.torque.y) > goal->torque_threshold ||
-          std::abs(last_wrench_.wrench.torque.z) > goal->torque_threshold)
-      {
-        ROS_DEBUG("Robot touched something!");
-        ROS_DEBUG("[%f %f %f] sensed",
-                  last_wrench_.wrench.force.x,
-                  last_wrench_.wrench.force.y,
-                  last_wrench_.wrench.force.z);
-        in_contact = true;
+  if(isInterfaceReady()) {
+    interface_state_.store(2);
+    while (!in_contact) {
+      if (interface_state_.load() == 0) {
+        ROS_ERROR("Robot went in an error state while executing move_to_contact - please recover from error first!");
+        error_happened = true;
+        break;
       }
-      else
-      {
-        ROS_DEBUG_THROTTLE(10, "Not enough force ([%f %f %f] sensed)",
-                           last_wrench_.wrench.force.x,
-                           last_wrench_.wrench.force.y,
-                           last_wrench_.wrench.force.z);
-        move_to_contact_feedback_.contact_forces.x = last_wrench_.wrench.force.x;
-        move_to_contact_feedback_.contact_forces.y = last_wrench_.wrench.force.y;
-        move_to_contact_feedback_.contact_forces.z = last_wrench_.wrench.force.z;
-        move_to_contact_feedback_.contact_torques.x = last_wrench_.wrench.torque.x;
-        move_to_contact_feedback_.contact_torques.y = last_wrench_.wrench.torque.y;
-        move_to_contact_feedback_.contact_torques.z = last_wrench_.wrench.torque.z;
-        move_to_contact_server_->publishFeedback(move_to_contact_feedback_);
+
+      ros::Time current_time = ros::Time::now();
+      progression = (current_time - starting_time).toSec();
+
+      double tau = progression / expected_time;
+      // Position
+      Eigen::Vector3d desired_position = current_position * (1 - tau) + target_position * tau;
+      // Orientation
+      Eigen::Quaterniond desired_orientation = current_orientation.slerp(tau, target_orientation);
+
+      // command to Impedance controller
+      geometry_msgs::PoseStamped desired_pose;
+
+      desired_pose.pose.position.x = desired_position[0];
+      desired_pose.pose.position.y = desired_position[1];
+      desired_pose.pose.position.z = desired_position[2];
+
+      desired_pose.pose.orientation.x = desired_orientation.x();
+      desired_pose.pose.orientation.y = desired_orientation.y();
+      desired_pose.pose.orientation.z = desired_orientation.z();
+      desired_pose.pose.orientation.w = desired_orientation.w();
+
+      // TODO: enforce working space here? and throw error if contact not reached within?
+      equilibrium_pose_publisher_.publish(desired_pose);
+
+      auto last_external_wrench_ptr = ros::topic::waitForMessage<geometry_msgs::WrenchStamped>(
+              "/franka_state_controller/F_ext");
+
+      if (last_external_wrench_ptr != nullptr) {
+        last_wrench_ = *last_external_wrench_ptr;
+        if (std::abs(last_wrench_.wrench.force.x) > goal->force_threshold ||
+            std::abs(last_wrench_.wrench.force.y) > goal->force_threshold ||
+            std::abs(last_wrench_.wrench.force.z) > goal->force_threshold ||
+            std::abs(last_wrench_.wrench.torque.x) > goal->torque_threshold ||
+            std::abs(last_wrench_.wrench.torque.y) > goal->torque_threshold ||
+            std::abs(last_wrench_.wrench.torque.z) > goal->torque_threshold) {
+          ROS_DEBUG("Robot touched something!");
+          ROS_DEBUG("[%f %f %f] sensed",
+                    last_wrench_.wrench.force.x,
+                    last_wrench_.wrench.force.y,
+                    last_wrench_.wrench.force.z);
+          in_contact = true;
+        } else {
+          ROS_DEBUG_THROTTLE(10, "Not enough force ([%f %f %f] sensed)",
+                             last_wrench_.wrench.force.x,
+                             last_wrench_.wrench.force.y,
+                             last_wrench_.wrench.force.z);
+          move_to_contact_feedback_.contact_forces.x = last_wrench_.wrench.force.x;
+          move_to_contact_feedback_.contact_forces.y = last_wrench_.wrench.force.y;
+          move_to_contact_feedback_.contact_forces.z = last_wrench_.wrench.force.z;
+          move_to_contact_feedback_.contact_torques.x = last_wrench_.wrench.torque.x;
+          move_to_contact_feedback_.contact_torques.y = last_wrench_.wrench.torque.y;
+          move_to_contact_feedback_.contact_torques.z = last_wrench_.wrench.torque.z;
+          move_to_contact_server_->publishFeedback(move_to_contact_feedback_);
+        }
       }
     }
+    if(!error_happened)
+      interface_state_.store(1);
+  } else {
+    error_happened = true;
   }
+
   // TODO: is this enough to give the EE_pose time to update?
   ros::Duration(1.0).sleep();
   move_to_contact_result_.final_pose = getEEPose();
@@ -622,7 +641,6 @@ void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoa
   move_to_contact_result_.contact_torques.x = last_wrench_.wrench.torque.x;
   move_to_contact_result_.contact_torques.y = last_wrench_.wrench.torque.y;
   move_to_contact_result_.contact_torques.z = last_wrench_.wrench.torque.z;
-
 
   if (error_happened){
     move_to_contact_server_->setAborted(move_to_contact_result_);
@@ -683,58 +701,66 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
   // command to Impedance controller
   geometry_msgs::PoseStamped desired_pose;
 
-  while (!motion_done)
-  {
-    if(error_state_.load()){
-      ROS_ERROR("Robot went in an error state while executing move_to_ee - please recover from error first!");
-      error_happened = true;
-      break;
+  if(isInterfaceReady()) {
+    interface_state_.store(2);
+    while (!motion_done) {
+      if (interface_state_.load() == 0) {
+        ROS_ERROR("Robot went in an error state while executing move_to_ee - please recover from error first!");
+        error_happened = true;
+        break;
+      }
+
+      ros::Time current_time = ros::Time::now();
+      progression = (current_time - starting_time).toSec();
+
+      double tau = std::min(progression / desired_time, 1.0);
+      // Position
+      Eigen::Vector3d desired_position = current_position * (1 - tau) + target_position * tau;
+      // Orientation
+      Eigen::Quaterniond desired_orientation = current_orientation.slerp(tau, target_orientation);
+
+      desired_pose.pose.position.x = desired_position[0];
+      desired_pose.pose.position.y = desired_position[1];
+      desired_pose.pose.position.z = desired_position[2];
+
+      desired_pose.pose.orientation.x = desired_orientation.x();
+      desired_pose.pose.orientation.y = desired_orientation.y();
+      desired_pose.pose.orientation.z = desired_orientation.z();
+      desired_pose.pose.orientation.w = desired_orientation.w();
+
+      equilibrium_pose_publisher_.publish(desired_pose);
+
+      if (tau < 1.0) {
+        move_to_ee_feedback_.progression = tau;
+        move_to_ee_server_->publishFeedback(move_to_ee_feedback_);
+      } else {
+        motion_done = true;
+      }
     }
-
-    ros::Time current_time = ros::Time::now();
-    progression = (current_time - starting_time).toSec();
-
-    double tau = std::min(progression / desired_time, 1.0);
-    // Position
-    Eigen::Vector3d desired_position = current_position * (1 - tau) + target_position * tau;
-    // Orientation
-    Eigen::Quaterniond desired_orientation = current_orientation.slerp(tau, target_orientation);
-
-    desired_pose.pose.position.x = desired_position[0];
-    desired_pose.pose.position.y = desired_position[1];
-    desired_pose.pose.position.z = desired_position[2];
-
-    desired_pose.pose.orientation.x = desired_orientation.x();
-    desired_pose.pose.orientation.y = desired_orientation.y();
-    desired_pose.pose.orientation.z = desired_orientation.z();
-    desired_pose.pose.orientation.w = desired_orientation.w();
-
-    equilibrium_pose_publisher_.publish(desired_pose);
-
-    if (tau < 1.0)
-    {
-      move_to_ee_feedback_.progression = tau;
-      move_to_ee_server_->publishFeedback(move_to_ee_feedback_);
-    }
-    else
-    {
-      motion_done = true;
-    }
+    if(!error_happened)
+      interface_state_.store(1);
+  } else {
+    error_happened = true;
   }
 
   move_to_ee_result_.final_pose = desired_pose;
 
-  ROS_WARN("Setting the robot to default impedance controller");
   if (error_happened){
     move_to_ee_server_->setAborted(move_to_ee_result_);
-    adjustImpedanceControllerStiffness(desired_pose);
   } else {
-    // TODO: if distance is large, it might cause harsh robot movements
     move_to_ee_server_->setSucceeded(move_to_ee_result_);
-    adjustImpedanceControllerStiffness();
   }
+
+  // TODO: double check this on the robot!
+  ROS_WARN("Setting the robot to default Impedance controller");
+  adjustImpedanceControllerStiffness();
 }
 
 void PrimitiveInterface::frankaStateCallback(const franka_msgs::FrankaState::ConstPtr& msg){
-  error_state_.store(msg->robot_mode == 4);
+  if (msg->robot_mode == 4){
+    interface_state_.store(0);
+  }
+  std_msgs::Int32 relayed_msg;
+  relayed_msg.data = interface_state_.load();
+  interface_state_publisher_.publish(relayed_msg);
 }

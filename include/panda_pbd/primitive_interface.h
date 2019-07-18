@@ -14,6 +14,7 @@
 #include <dynamic_reconfigure/Reconfigure.h>
 #include <tf/transform_listener.h>
 #include <std_srvs/SetBool.h>
+#include <std_msgs/Int32.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/WrenchStamped.h>
 #include <controller_manager_msgs/SwitchController.h>
@@ -57,7 +58,7 @@ private:
   panda_pbd::UserSyncFeedback user_sync_feedback_;
   panda_pbd::UserSyncResult user_sync_result_;
   tf::TransformListener pose_listener_;
-  boost::atomic_bool error_state_;  // TODO: maybe the atomic is an overkill
+  boost::atomic_int interface_state_;  // 0: error, 1: ready, 2:busy
 
   // ROS SERVICES ====== servers
   ros::ServiceServer kinesthetic_server_;
@@ -76,7 +77,8 @@ private:
 
   // ROS TOPICS ====== publishers
   ros::Publisher equilibrium_pose_publisher_;
-  // ROS TOPICS ====== publishers
+  ros::Publisher interface_state_publisher_;
+  // ROS TOPICS ====== subscribers
   ros::Subscriber franka_state_subscriber_;
 
   // TODO: current implementation of move_to_contact presents problem if we enable frames other than panda_link0
@@ -115,6 +117,7 @@ private:
   // Helper functions
   geometry_msgs::PoseStamped getPose(std::string origin, std::string destination);
   geometry_msgs::PoseStamped getEEPose();
+  bool isInterfaceReady();
   bool adjustFTThreshold(double);
   bool adjustImpedanceControllerStiffness(double transl_stiff, double rotat_stiff, double ft_mult);
   bool adjustImpedanceControllerStiffness(geometry_msgs::PoseStamped desired_pose, double transl_stiff,
