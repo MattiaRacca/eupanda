@@ -40,8 +40,9 @@ executed_primitive_palette = QPalette()
 executed_primitive_palette.setColor(QPalette.Background, QColor("cornflowerblue"))
 
 
-class EUPWorkFlow(Enum):
+class EUPStateMachine(Enum):
     STARTUP = 0
+    OPERATIONAL = 1
 
 
 class EUPPlugin(Plugin):
@@ -79,7 +80,7 @@ class EUPWidget(QWidget):
         self.interpreter.load_program(pp.load_program_from_file(program_path, 'program.pkl'))
 
         # Setting up the state machine
-        self.workflow = EUPWorkFlow(0)
+        self.state_machine = EUPStateMachine(0)
 
         # Thread-pool for the interpreter commands
         self.threadpool = QThreadPool()
@@ -139,8 +140,7 @@ class EUPWidget(QWidget):
         # Click buttons events handling
         for key, value in self.interpreter_command_dict.items():
             value[0].clicked.connect(value[1])
-            if key is not 'go_to_starting_state':
-                value[0].setEnabled(False)
+            value[0].setEnabled(key is 'go_to_starting_state')
 
         # Put everything together
         self.vbox.addWidget(self.panda_program_widget)
@@ -157,6 +157,18 @@ class EUPWidget(QWidget):
         self.programGUIUpdate.emit(self.interpreter.next_primitive_index)
         self.robotStateUpdate.emit(self.interpreter.last_panda_status)
 
+        if self.interpreter.last_panda_status == pp.PandaRobotStatus.ERROR or \
+                self.interpreter.last_panda_status == pp.PandaRobotStatus.BUSY:
+            for key, value in self.interpreter_command_dict.items():
+                value[0].setEnabled(False)
+        else:
+            if self.state_machine == EUPStateMachine.STARTUP:
+                for key, value in self.interpreter_command_dict.items():
+                    value[0].setEnabled(key is 'go_to_starting_state')
+            elif self.state_machine == EUPStateMachine.OPERATIONAL:
+                for key, value in self.interpreter_command_dict.items():
+                    value[0].setEnabled(key is not 'go_to_starting_state')
+
     def execute_interpreter_command(self, command):
         # Disable lower buttons
         for key, value in self.interpreter_command_dict.items():
@@ -171,12 +183,9 @@ class EUPWidget(QWidget):
 
     def reapWorkerResults(self, result):
         rospy.loginfo("WORKER result: " + str(result))
-        if result:
-            for key, value in self.interpreter_command_dict.items():
-                value[0].setEnabled(True)
-
-        self.programGUIUpdate.emit(self.interpreter.next_primitive_index)
-        self.robotStateUpdate.emit(self.interpreter.last_panda_status)
+        if self.state_machine == EUPStateMachine.STARTUP and result:
+            self.state_machine = EUPStateMachine.OPERATIONAL
+        self.updatePandaWidgets()
 
     def announceWorkerDeath(self):
         rospy.logdebug("RIP WORKER!")
