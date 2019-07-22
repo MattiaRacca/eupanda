@@ -44,7 +44,9 @@ executed_primitive_palette.setColor(QPalette.Background, QColor("cornflowerblue"
 
 class EUPStateMachine(Enum):
     STARTUP = 0
-    OPERATIONAL = 1
+    STARTUP_BUSY = 1
+    OPERATIONAL = 2
+    BUSY = 3
 
 
 class EUPPlugin(Plugin):
@@ -180,12 +182,20 @@ class EUPWidget(QWidget):
             elif self.state_machine == EUPStateMachine.OPERATIONAL:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(key is not 'go_to_starting_state')
+            elif self.state_machine == EUPStateMachine.STARTUP_BUSY or self.state_machine == EUPStateMachine.BUSY:
+                for key, value in self.interpreter_command_dict.items():
+                    value[0].setEnabled(False)
 
     def execute_interpreter_command(self, command):
         # Disable lower buttons
         for key, value in self.interpreter_command_dict.items():
             value[0].setDisabled(True)
 
+        if self.state_machine == EUPStateMachine.STARTUP:
+            self.state_machine = EUPStateMachine.STARTUP_BUSY
+
+        if self.state_machine == EUPStateMachine.OPERATIONAL:
+            self.state_machine = EUPStateMachine.BUSY
 
         worker = Worker(command) # Any other args, kwargs are passed to the run function
         worker.signals.result.connect(self.reapWorkerResults)
@@ -196,7 +206,9 @@ class EUPWidget(QWidget):
 
     def reapWorkerResults(self, result):
         rospy.loginfo("WORKER result: " + str(result))
-        if self.state_machine == EUPStateMachine.STARTUP and result:
+        if self.state_machine == EUPStateMachine.STARTUP_BUSY and result:
+            self.state_machine = EUPStateMachine.OPERATIONAL
+        if self.state_machine == EUPStateMachine.BUSY and result:
             self.state_machine = EUPStateMachine.OPERATIONAL
         self.updatePandaWidgets()
 
