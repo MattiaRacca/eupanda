@@ -270,11 +270,18 @@ class PandaStateWidget(QGroupBox):
 
     def initUI(self):
         self.status_label = QLabel('Undefined')
+        self.status_color = {
+            pp.PandaRobotStatus.READY: 'lightseagreen',
+            pp.PandaRobotStatus.BUSY: 'gold',
+            pp.PandaRobotStatus.ERROR: 'firebrick'
+        }
+        self.status_label.setAlignment(Qt.AlignCenter)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.status_label)
         sizePolicy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.setSizePolicy(sizePolicy)
+        self.setAlignment(Qt.AlignCenter)
 
         self.setLayout(layout)
 
@@ -283,6 +290,10 @@ class PandaStateWidget(QGroupBox):
 
     def updateWidget(self, status):
         self.status_label.setText(status.name)
+        try:
+            self.status_label.setStyleSheet('background-color: ' + self.status_color[status])
+        except KeyError:
+            pass
         self.update()
 
 
