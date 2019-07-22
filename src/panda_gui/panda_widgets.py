@@ -7,12 +7,14 @@ from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QT
 from PyQt5.QtGui import QColor, QPalette, QPixmap
 from qt_gui.plugin import Plugin
 
+import rospkg
+import rospy
+from std_msgs.msg import Int32
+
 from panda_eup.program_interpreter import PandaProgramInterpreter
 import panda_eup.panda_primitive as pp
 
 import os
-import rospkg
-import rospy
 import traceback
 import sys
 from functools import partial
@@ -64,10 +66,9 @@ class EUPWidget(QWidget):
         self.setWindowTitle(title)
 
         # Creating the interpreter and loading the program
+        robotless_debug = False
         if rospy.has_param('/robotless_debug'):
             robotless_debug = rospy.get_param('/robotless_debug')
-        else:
-            robotless_debug = False
 
         self.interpreter = PandaProgramInterpreter(robotless_debug=robotless_debug)
 
@@ -87,6 +88,17 @@ class EUPWidget(QWidget):
         rospy.logdebug("Multi-threading with maximum %d threads" % self.threadpool.maxThreadCount())
 
         self.initUI()
+
+        # Subscriber for the interface status
+        self.last_interface_state = None
+        self.interface_state_subscriber = rospy.Subscriber("/primitive_interface_node/interface_state", Int32,
+                                                           self.interface_state_callback)
+
+    def interface_state_callback(self, msg):
+        new_interface_status = pp.PandaRobotStatus(msg.data)
+        if self.last_interface_state != new_interface_status:
+            self.last_interface_state = new_interface_status
+            self.updatePandaWidgets()
 
     def initUI(self):
         # Create overall layout
@@ -173,6 +185,7 @@ class EUPWidget(QWidget):
         # Disable lower buttons
         for key, value in self.interpreter_command_dict.items():
             value[0].setDisabled(True)
+
 
         worker = Worker(command) # Any other args, kwargs are passed to the run function
         worker.signals.result.connect(self.reapWorkerResults)

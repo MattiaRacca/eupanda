@@ -760,6 +760,9 @@ void PrimitiveInterface::frankaStateCallback(const franka_msgs::FrankaState::Con
   if (msg->robot_mode == 4){
     interface_state_.store(0);
   }
+  if (msg->robot_mode != 4 && interface_state_.load() == 0){
+    interface_state_.store(1);
+  }
   std_msgs::Int32 relayed_msg;
   relayed_msg.data = interface_state_.load();
   interface_state_publisher_.publish(relayed_msg);

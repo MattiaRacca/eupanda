@@ -1,4 +1,3 @@
-<?xml version="1.0" ?>
 <launch>
   <arg name="robot_ip" default="172.16.0.2"/>
   <arg name="load_gripper" default="true" />
@@ -9,10 +8,10 @@
 
   <rosparam command="load" file="$(find franka_example_controllers)/config/franka_example_controllers.yaml" />
   <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" args="--stopped cartesian_impedance_example_controller"/>
-  <node name="controller_gui" pkg="rqt_controller_manager" type="rqt_controller_manager" required="false"/>
+  <!-- <node name="controller_gui" pkg="rqt_controller_manager" type="rqt_controller_manager" required="false"/> -->
 
   <node name="primitive_interface_node" pkg="panda_pbd" type="primitive_interface" output="screen"/>
 
-  <node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" required="false"/>
-  <node name="rqt_service_caller" pkg="rqt_service_caller" type="rqt_service_caller"  required="false"/>
+  <!-- <node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" required="false"/> -->
+  <!-- <node name="rqt_service_caller" pkg="rqt_service_caller" type="rqt_service_caller"  required="false"/> -->
 </launch>

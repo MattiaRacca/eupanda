@@ -12,6 +12,7 @@ from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest
 from panda_pbd.srv import MoveFingersResponse, ApplyForceFingersResponse
 from std_msgs.msg import Int32
 
+
 class PandaProgramInterpreter(object):
     def __init__(self, robotless_debug=False):
         self.loaded_program = None
@@ -26,13 +27,13 @@ class PandaProgramInterpreter(object):
 
         # TO THE PRIMITIVE_INTERFACE, IF ANY
         if not self.robotless_debug:
-            self.panda_state_client = rospy.Subscriber("/primitive_interface_node/interface_state", Int32,
-                                                       self.panda_state_callback)
+            self.interface_state_subscriber = rospy.Subscriber("/primitive_interface_node/interface_state", Int32,
+                                                               self.interface_state_callback)
 
-            self.move_to_ee_client = actionlib.SimpleActionClient( '/primitive_interface_node/move_to_ee_server',
-                                                                   MoveToEEAction)
-            self.move_to_contact_client = actionlib.SimpleActionClient('primitive_interface_node/move_to_contact_server',
-                                                                       MoveToContactAction)
+            self.move_to_ee_client = actionlib.SimpleActionClient('/primitive_interface_node/move_to_ee_server',
+                                                                  MoveToEEAction)
+            self.move_to_contact_client = actionlib.SimpleActionClient(
+                'primitive_interface_node/move_to_contact_server', MoveToContactAction)
             self.user_sync_client = actionlib.SimpleActionClient('/primitive_interface_node/user_sync_server',
                                                                  UserSyncAction)
 
@@ -63,7 +64,7 @@ class PandaProgramInterpreter(object):
             pp.ApplyForceFingers: self.revert_apply_force_fingers
         }
 
-    def panda_state_callback(self, msg):
+    def interface_state_callback(self, msg):
         new_panda_status = pp.PandaRobotStatus(msg.data)
         if self.last_panda_status != new_panda_status:
             self.last_panda_status = new_panda_status
@@ -160,15 +161,14 @@ class PandaProgramInterpreter(object):
         result = callback(primitive_to_execute)
 
         if result:
-            rospy.loginfo('Executed primitive ' + primitive_to_execute.__str__())
             primitive_to_execute.status = pp.PandaPrimitiveStatus.EXECUTED
+            rospy.loginfo('Executed primitive ' + primitive_to_execute.__str__())
             self.next_primitive_index += 1
         else:
-            rospy.logerr('Error while executing ' + primitive_to_execute.__str__())
             primitive_to_execute.status = pp.PandaPrimitiveStatus.ERROR
-            return False
+            rospy.logerr('Error while executing ' + primitive_to_execute.__str__())
 
-        return True
+        return result
 
     def revert_one_step(self, progress_callback=None):
         if self.loaded_program is None:
@@ -198,23 +198,24 @@ class PandaProgramInterpreter(object):
         result = callback(self.next_primitive_index - 1)
 
         if result:
-            rospy.loginfo('Reverted primitive ' + primitive_to_revert.__str__())
             primitive_to_revert.status = pp.PandaPrimitiveStatus.NEUTRAL
+            rospy.loginfo('Reverted primitive ' + primitive_to_revert.__str__())
             self.next_primitive_index -= 1
         else:
-            rospy.logerr('Error while reverting ' + primitive_to_revert.__str__())
             primitive_to_revert.status = pp.PandaPrimitiveStatus.ERROR
-            return False
+            rospy.logerr('Error while reverting ' + primitive_to_revert.__str__())
 
-        return True
+        return result
 
     def execute_rest_of_program(self, one_shot_execution=False, progress_callback=None):
         partial_success = True
+        to_be_restored_index = self.next_primitive_index
+
         if one_shot_execution:
             # TODO: this is just for the execute now (like relax_fingers and execute_primitive_now).
             #   Find a better way to do this
-            to_be_restored_index = self.next_primitive_index
             self.next_primitive_index = 0
+
         primitive_counter = self.next_primitive_index
 
         while partial_success:
@@ -222,13 +223,12 @@ class PandaProgramInterpreter(object):
             if partial_success:
                 primitive_counter += 1
 
-        result = False
+        result = (primitive_counter == self.loaded_program.get_program_length())
         if primitive_counter == self.loaded_program.get_program_length():
             rospy.loginfo('Executed rest of the program!')
-            result = True
         else:
             rospy.logerr('Something went south. Program now at step {}'.format(self.next_primitive_index))
-            result = False
+
         if one_shot_execution:
             self.next_primitive_index = to_be_restored_index
 
@@ -244,7 +244,6 @@ class PandaProgramInterpreter(object):
                 primitive_counter -= 1
 
         if primitive_counter == 0:
-            # TODO: maybe this should be handled by revert_one_step?
             self.go_to_starting_state()
             rospy.loginfo('Reverted to beginning of the program!')
             return True
@@ -257,49 +256,44 @@ class PandaProgramInterpreter(object):
     def execute_user_sync(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a user sync')
         if not self.robotless_debug:
-            self.user_sync_client.send_goal(primitive_to_execute.parameter_container)
-            success = self.user_sync_client.wait_for_result()
+            state = self.user_sync_client.send_goal_and_wait(primitive_to_execute.parameter_container)
+            success = (state == actionlib.GoalStatus.SUCCEEDED)
         else:
             rospy.sleep(rospy.Duration(self.fake_wait))
+            state = actionlib.GoalStatus.SUCCEEDED
             success = True
 
-        rospy.loginfo('Success? ' + str(success))
+        rospy.loginfo('Success? {} [{}]'.format(str(success), str(state)))
         return success
 
     def execute_move_to_contact(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a move to contact')
 
         if not self.robotless_debug:
-            self.move_to_contact_client.send_goal(primitive_to_execute.parameter_container)
-            success = self.move_to_contact_client.wait_for_result(rospy.Duration(60))  # TODO: questionable choice?
-
-            state = self.move_to_contact_client.get_state()
-
-            if state == actionlib.GoalStatus.ABORTED or not success:
-                success = False
+            state = self.move_to_contact_client.send_goal_and_wait(primitive_to_execute.parameter_container,
+                                                                   rospy.Duration(60))
+            success = (state == actionlib.GoalStatus.SUCCEEDED)
         else:
             rospy.sleep(rospy.Duration(self.fake_wait))
+            state = actionlib.GoalStatus.SUCCEEDED
             success = True
 
-        rospy.loginfo('Success? ' + str(success))
+        rospy.loginfo('Success? {} [{}]'.format(str(success), str(state)))
         return success
 
     def execute_move_to_ee(self, primitive_to_execute):
         rospy.loginfo('Trying to execute a move to EE')
 
         if not self.robotless_debug:
-            self.move_to_ee_client.send_goal(primitive_to_execute.parameter_container)
-            success = self.move_to_ee_client.wait_for_result(rospy.Duration(60))
-
-            state = self.move_to_contact_client.get_state()
-
-            if state == actionlib.GoalStatus.ABORTED or not success:
-                success = False
+            state = self.move_to_ee_client.send_goal_and_wait(primitive_to_execute.parameter_container,
+                                                              rospy.Duration(60))
+            success = (state == actionlib.GoalStatus.SUCCEEDED)
         else:
             rospy.sleep(rospy.Duration(self.fake_wait))
+            state = actionlib.GoalStatus.SUCCEEDED
             success = True
 
-        rospy.loginfo('Success? ' + str(success))
+        rospy.loginfo('Success? {} [{}]'.format(str(success), str(state)))
         return success
 
     def execute_move_fingers(self, primitive_to_execute):
@@ -349,17 +343,14 @@ class PandaProgramInterpreter(object):
         goal.rotation_speed = self.revert_default_rotation_speed
 
         if not self.robotless_debug:
-            self.move_to_ee_client.send_goal(goal)
-            success = self.move_to_ee_client.wait_for_result()
-            state = self.move_to_contact_client.get_state()
-
-            if state == actionlib.GoalStatus.ABORTED or not success:
-                success = False
+            state = self.move_to_ee_client.send_goal_and_wait(goal, rospy.Duration(60))
+            success = (state == actionlib.GoalStatus.SUCCEEDED)
         else:
             rospy.sleep(rospy.Duration(self.fake_wait))
+            state = actionlib.GoalStatus.SUCCEEDED
             success = True
 
-        rospy.loginfo('Success? ' + str(success))
+        rospy.loginfo('Success? {} [{}]'.format(str(success), str(state)))
         return success
 
     def revert_move_to_ee(self, primitive_index):
@@ -378,17 +369,14 @@ class PandaProgramInterpreter(object):
         goal.rotation_speed = self.revert_default_rotation_speed
 
         if not self.robotless_debug:
-            self.move_to_ee_client.send_goal(goal)
-            success = self.move_to_ee_client.wait_for_result()
-            state = self.move_to_contact_client.get_state()
-
-            if state == actionlib.GoalStatus.ABORTED or not success:
-                success = False
+            state = self.move_to_ee_client.send_goal_and_wait(goal, rospy.Duration(60))
+            success = (state == actionlib.GoalStatus.SUCCEEDED)
         else:
             rospy.sleep(rospy.Duration(self.fake_wait))
+            state = actionlib.GoalStatus.SUCCEEDED
             success = True
 
-        rospy.loginfo('Success? ' + str(success))
+        rospy.loginfo('Success? {} [{}]'.format(str(success), str(state)))
         return success
 
     def revert_move_fingers(self, primitive_index):
