@@ -2,8 +2,8 @@
 from __future__ import division
 
 from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, QSizePolicy,\
-    QGroupBox, QApplication, qApp
-from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool, QCoreApplication
+    QGroupBox, QApplication
+from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool, pyqtProperty, QPropertyAnimation
 from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor
 from qt_gui.plugin import Plugin
 
@@ -389,8 +389,26 @@ class PandaPrimitiveWidget(QFrame):
         self.setFrameShadow(QFrame.Raised)
         self.setLineWidth(2)
 
+        # Animation
+        self.animation = QPropertyAnimation(self, 'background_color')
+        self.animation.setDuration(2000) # in ms
+        self.animation.setLoopCount(-1)
+        self.animation.setStartValue(QColor('lightskyblue'))
+        self.animation.setEndValue(QColor('lightskyblue'))
+        self.animation.setKeyValueAt(0.5, QColor('ghostwhite'))
+
         self.setAutoFillBackground(True)
         self.setPalette(white_palette)
+
+    def get_background_color(self):
+        return self.palette().color(QPalette.Background)
+
+    def set_background_color(self, color):
+        palette = QPalette()
+        palette.setColor(QPalette.Background, color)
+        self.setPalette(palette)
+
+    background_color = pyqtProperty(QColor, get_background_color, set_background_color)
 
     def sizeHint(self):
         return QSize(PRIMITIVE_WIDTH, PRIMITIVE_HEIGHT)
@@ -398,10 +416,14 @@ class PandaPrimitiveWidget(QFrame):
     def updateWidget(self, own_index, program_current_index):
         self.status_label.setText(str(self.primitive.status.name))
         if  own_index < program_current_index:
+            rospy.loginfo('stop animation?')
+            self.animation.stop()
             self.setPalette(executed_primitive_palette)
         elif own_index > program_current_index:
             self.setPalette(gray_palette)
         else:
+            self.animation.start()
+            rospy.loginfo('start animation?')
             self.setPalette(current_index_palette)
         self.update()
 
