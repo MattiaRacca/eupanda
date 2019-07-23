@@ -224,7 +224,7 @@ class PandaProgramInterpreter(object):
                 primitive_counter += 1
 
         result = (primitive_counter == self.loaded_program.get_program_length())
-        if primitive_counter == self.loaded_program.get_program_length():
+        if result:
             rospy.loginfo('Executed rest of the program!')
         else:
             rospy.logerr('Something went south. Program now at step {}'.format(self.next_primitive_index))

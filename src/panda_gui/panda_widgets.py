@@ -2,9 +2,9 @@
 from __future__ import division
 
 from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, QSizePolicy,\
-    QGroupBox
-from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool
-from PyQt5.QtGui import QColor, QPalette, QPixmap
+    QGroupBox, QApplication, qApp
+from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool, QCoreApplication
+from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor
 from qt_gui.plugin import Plugin
 
 import rospkg
@@ -47,6 +47,8 @@ class EUPStateMachine(Enum):
     STARTUP_BUSY = 1
     OPERATIONAL = 2
     BUSY = 3
+    STARTUP_ERROR = 4
+    EXECUTION_ERROR = 5
 
 
 class EUPPlugin(Plugin):
@@ -170,6 +172,7 @@ class EUPWidget(QWidget):
     def updatePandaWidgets(self):
         self.programGUIUpdate.emit(self.interpreter.next_primitive_index)
         self.robotStateUpdate.emit(self.interpreter.last_panda_status)
+        QApplication.restoreOverrideCursor()
 
         if self.interpreter.last_panda_status == pp.PandaRobotStatus.ERROR or \
                 self.interpreter.last_panda_status == pp.PandaRobotStatus.BUSY:
@@ -182,9 +185,26 @@ class EUPWidget(QWidget):
             elif self.state_machine == EUPStateMachine.OPERATIONAL:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(key is not 'go_to_starting_state')
+
+                # last primitive executed, disable execute buttons
+                if self.interpreter.next_primitive_index == self.interpreter.loaded_program.get_program_length():
+                    self.interpreter_command_dict['execute_one_step'][0].setEnabled(False)
+                    self.interpreter_command_dict['execute_rest_of_program'][0].setEnabled(False)
+
+                # we are at start, disable revert buttons
+                if self.interpreter.next_primitive_index <= 0:
+                    self.interpreter_command_dict['revert_one_step'][0].setEnabled(False)
+                    self.interpreter_command_dict['revert_to_beginning_of_program'][0].setEnabled(False)
+
             elif self.state_machine == EUPStateMachine.STARTUP_BUSY or self.state_machine == EUPStateMachine.BUSY:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(False)
+            elif self.state_machine == EUPStateMachine.STARTUP_ERROR:
+                for key, value in self.interpreter_command_dict.items():
+                    value[0].setEnabled(key is 'go_to_starting_state')
+            elif self.state_machine == EUPStateMachine.EXECUTION_ERROR:
+                for key, value in self.interpreter_command_dict.items():
+                    value[0].setEnabled(key is 'revert_one_step')
 
     def execute_interpreter_command(self, command):
         # Disable lower buttons
@@ -202,14 +222,16 @@ class EUPWidget(QWidget):
         worker.signals.finished.connect(self.announceWorkerDeath)
         worker.signals.progress.connect(self.actOnWorkerUpdate)
 
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor)) # TODO: Weird bug makes it work only once...
+
         self.threadpool.start(worker)
 
     def reapWorkerResults(self, result):
         rospy.loginfo("WORKER result: " + str(result))
-        if self.state_machine == EUPStateMachine.STARTUP_BUSY and result:
-            self.state_machine = EUPStateMachine.OPERATIONAL
+        if self.state_machine == EUPStateMachine.STARTUP_BUSY:
+            self.state_machine = EUPStateMachine.OPERATIONAL if result else EUPStateMachine.STARTUP_ERROR
         if self.state_machine == EUPStateMachine.BUSY and result:
-            self.state_machine = EUPStateMachine.OPERATIONAL
+            self.state_machine = EUPStateMachine.OPERATIONAL if result else EUPStateMachine.EXECUTION_ERROR
         self.updatePandaWidgets()
 
     def announceWorkerDeath(self):
