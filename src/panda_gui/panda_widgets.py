@@ -10,6 +10,7 @@ from qt_gui.plugin import Plugin
 import rospkg
 import rospy
 from std_msgs.msg import Int32
+from franka_control.msg import ErrorRecoveryActionGoal
 
 from panda_eup.program_interpreter import PandaProgramInterpreter
 import panda_eup.panda_primitive as pp
@@ -227,7 +228,7 @@ class EUPWidget(QWidget):
         self.threadpool.start(worker)
 
     def reapWorkerResults(self, result):
-        rospy.loginfo("WORKER result: " + str(result))
+        rospy.logdebug("Worker result: " + str(result))
         if self.state_machine == EUPStateMachine.STARTUP_BUSY:
             self.state_machine = EUPStateMachine.OPERATIONAL if result else EUPStateMachine.STARTUP_ERROR
         if self.state_machine == EUPStateMachine.BUSY and result:
@@ -235,7 +236,7 @@ class EUPWidget(QWidget):
         self.updatePandaWidgets()
 
     def announceWorkerDeath(self):
-        rospy.logdebug("RIP WORKER!")
+        rospy.logdebug("RIP Worker!")
 
     def actOnWorkerUpdate(self, progress):
         self.updatePandaWidgets()
@@ -313,6 +314,8 @@ class PandaProgramWidget(QGroupBox):
 class PandaStateWidget(QGroupBox):
     def __init__(self, parent):
         super(PandaStateWidget, self).__init__('Robot State', parent)
+        self.error_recover_publisher = rospy.Publisher("/franka_control/error_recovery/goal", ErrorRecoveryActionGoal,
+                                                       queue_size=10)
         self.initUI()
 
     def initUI(self):
@@ -324,8 +327,13 @@ class PandaStateWidget(QGroupBox):
         }
         self.status_label.setAlignment(Qt.AlignCenter)
 
+        self.recover_button = QPushButton('Recover \nfrom Error')
+        self.recover_button.setEnabled(False)
+        self.recover_button.clicked.connect(self.sendErrorRecover)
+
         layout = QVBoxLayout(self)
         layout.addWidget(self.status_label)
+        layout.addWidget(self.recover_button)
         sizePolicy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.setSizePolicy(sizePolicy)
         self.setAlignment(Qt.AlignCenter)
@@ -333,7 +341,11 @@ class PandaStateWidget(QGroupBox):
         self.setLayout(layout)
 
     def sizeHint(self):
-        return QSize(10, PRIMITIVE_HEIGHT/2)
+        return QSize(10, PRIMITIVE_HEIGHT)
+
+    def sendErrorRecover(self):
+        msg = ErrorRecoveryActionGoal()
+        self.error_recover_publisher.publish(msg)
 
     def updateWidget(self, status):
         self.status_label.setText(status.name)
@@ -341,6 +353,9 @@ class PandaStateWidget(QGroupBox):
             self.status_label.setStyleSheet('background-color: ' + self.status_color[status])
         except KeyError:
             pass
+
+        self.recover_button.setEnabled(status == pp.PandaRobotStatus.ERROR)
+
         self.update()
 
 
@@ -405,7 +420,7 @@ class QExpandingPushButton(QPushButton):
         self.setSizePolicy(sizePolicy)
 
     def sizeHint(self):
-        return QSize(10, PRIMITIVE_HEIGHT/2)
+        return QSize(10, PRIMITIVE_HEIGHT)
 
 
 class WorkerSignals(QObject):
