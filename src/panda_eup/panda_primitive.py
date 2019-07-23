@@ -15,6 +15,7 @@ class PandaPrimitiveStatus(Enum):
     EXECUTING = 2
     REVERTING = 3
     ERROR = 4
+    READY = 5
 
 
 class PandaRobotStatus(Enum):

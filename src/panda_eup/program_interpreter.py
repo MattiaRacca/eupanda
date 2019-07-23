@@ -135,6 +135,7 @@ class PandaProgramInterpreter(object):
             self.next_primitive_index = 0
             for primitive in self.loaded_program.primitives:
                 primitive.status = pp.PandaPrimitiveStatus.NEUTRAL
+            self.loaded_program.primitives[0].status = pp.PandaPrimitiveStatus.READY
 
         return success_arm and response.success
 
@@ -164,6 +165,10 @@ class PandaProgramInterpreter(object):
             primitive_to_execute.status = pp.PandaPrimitiveStatus.EXECUTED
             rospy.loginfo('Executed primitive ' + primitive_to_execute.__str__())
             self.next_primitive_index += 1
+            try:
+                self.loaded_program.get_nth_primitive(self.next_primitive_index).status = pp.PandaPrimitiveStatus.READY
+            except pp.PandaProgramException:
+                pass
         else:
             primitive_to_execute.status = pp.PandaPrimitiveStatus.ERROR
             rospy.logerr('Error while executing ' + primitive_to_execute.__str__())
@@ -186,6 +191,12 @@ class PandaProgramInterpreter(object):
             primitive_to_revert.status = pp.PandaPrimitiveStatus.ERROR
             return False
 
+        try:
+            self.loaded_program.get_nth_primitive(self.next_primitive_index).status = \
+                pp.PandaPrimitiveStatus.NEUTRAL
+        except pp.PandaProgramException:
+            pass
+
         callback = self.revert_callback_switcher.get(primitive_to_revert.__class__, None)
 
         if callback is None:
@@ -198,9 +209,10 @@ class PandaProgramInterpreter(object):
         result = callback(self.next_primitive_index - 1)
 
         if result:
-            primitive_to_revert.status = pp.PandaPrimitiveStatus.NEUTRAL
+            primitive_to_revert.status = pp.PandaPrimitiveStatus.READY
             rospy.loginfo('Reverted primitive ' + primitive_to_revert.__str__())
             self.next_primitive_index -= 1
+
         else:
             primitive_to_revert.status = pp.PandaPrimitiveStatus.ERROR
             rospy.logerr('Error while reverting ' + primitive_to_revert.__str__())

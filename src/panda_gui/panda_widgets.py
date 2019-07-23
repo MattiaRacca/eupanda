@@ -4,7 +4,7 @@ from __future__ import division
 from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, QSizePolicy,\
     QGroupBox, QApplication
 from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool, pyqtProperty, QPropertyAnimation
-from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor
+from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor, QFont
 from qt_gui.plugin import Plugin
 
 import rospkg
@@ -37,10 +37,10 @@ gray_palette = QPalette()
 gray_palette.setColor(QPalette.Background, QColor("gainsboro"))
 white_palette = QPalette()
 white_palette.setColor(QPalette.Background, QColor("ghostwhite"))
-current_index_palette = QPalette()
-current_index_palette.setColor(QPalette.Background, QColor("lightskyblue"))
 executed_primitive_palette = QPalette()
 executed_primitive_palette.setColor(QPalette.Background, QColor("cornflowerblue"))
+error_palette = QPalette()
+error_palette.setColor(QPalette.Background, QColor("firebrick"))
 
 
 class EUPStateMachine(Enum):
@@ -60,7 +60,13 @@ class EUPPlugin(Plugin):
 
 
 class EUPWidget(QWidget):
-    programGUIUpdate = pyqtSignal(int)
+    # static variables
+    font=QFont()
+    font.setBold(True)
+    font.setPointSize(12)
+    size_policy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
+
+    programGUIUpdate = pyqtSignal()
     robotStateUpdate = pyqtSignal(pp.PandaRobotStatus)
     goToStartStateSignal = pyqtSignal()
     executeOneStepSignal = pyqtSignal()
@@ -116,10 +122,9 @@ class EUPWidget(QWidget):
         # Parameter tuning frame
         self.adjust_parameters_frame = QGroupBox(self)
         self.adjust_parameters_frame.setTitle('Primitive parameters')
-        size_policy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
-        self.adjust_parameters_frame.setSizePolicy(size_policy)
+        self.adjust_parameters_frame.setSizePolicy(EUPWidget.size_policy)
 
-        # Action button at the bottom & Robot State Widget in the middle
+        # Action button & Robot State Widget at the bottom
         self.low_buttons = QWidget()
         self.low_buttons_layout = QHBoxLayout()
         self.low_buttons_layout.setAlignment(Qt.AlignCenter)
@@ -127,19 +132,19 @@ class EUPWidget(QWidget):
         self.robot_state_widget = PandaStateWidget(self)
 
         self.interpreter_command_dict = {}
-        self.interpreter_command_dict['go_to_starting_state'] = [QExpandingPushButton("Go to start state", self),
+        self.interpreter_command_dict['go_to_starting_state'] = [QExpandingPushButton("Go to\n start state", self),
                                                                  partial(self.execute_interpreter_command,
                                                                          self.interpreter.go_to_starting_state)]
-        self.interpreter_command_dict['execute_one_step'] = [QExpandingPushButton("Execute one step", self),
+        self.interpreter_command_dict['execute_one_step'] = [QExpandingPushButton("Execute\n one step", self),
                                                                  partial(self.execute_interpreter_command,
                                                                          self.interpreter.execute_one_step)]
-        self.interpreter_command_dict['revert_one_step'] = [QExpandingPushButton("Revert one step", self),
+        self.interpreter_command_dict['revert_one_step'] = [QExpandingPushButton("Revert\n one step", self),
                                                                  partial(self.execute_interpreter_command,
                                                                          self.interpreter.revert_one_step)]
-        self.interpreter_command_dict['execute_rest_of_program'] = [QExpandingPushButton("Execute rest of program", self),
+        self.interpreter_command_dict['execute_rest_of_program'] = [QExpandingPushButton("Execute rest\n of program", self),
                                                                  partial(self.execute_interpreter_command,
                                                                          self.interpreter.execute_rest_of_program)]
-        self.interpreter_command_dict['revert_to_beginning_of_program'] = [QExpandingPushButton("Revert to beginning", self),
+        self.interpreter_command_dict['revert_to_beginning_of_program'] = [QExpandingPushButton("Revert to\n beginning", self),
                                                                  partial(self.execute_interpreter_command,
                                                                          self.interpreter.revert_to_beginning_of_program
                                                                          )]
@@ -158,6 +163,7 @@ class EUPWidget(QWidget):
         for key, value in self.interpreter_command_dict.items():
             value[0].clicked.connect(value[1])
             value[0].setEnabled(key is 'go_to_starting_state')
+            value[0].setFont(EUPWidget.font)
 
         # Put everything together
         self.vbox.addWidget(self.panda_program_widget)
@@ -171,7 +177,7 @@ class EUPWidget(QWidget):
         self.updatePandaWidgets()
 
     def updatePandaWidgets(self):
-        self.programGUIUpdate.emit(self.interpreter.next_primitive_index)
+        self.programGUIUpdate.emit()
         self.robotStateUpdate.emit(self.interpreter.last_panda_status)
         QApplication.restoreOverrideCursor()
 
@@ -249,6 +255,8 @@ class EUPWidget(QWidget):
 
 
 class PandaProgramWidget(QGroupBox):
+    sizePolicy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
+
     def __init__(self, parent):
         super(PandaProgramWidget, self).__init__(parent.interpreter.loaded_program.name, parent)
         self.initUI()
@@ -264,14 +272,13 @@ class PandaProgramWidget(QGroupBox):
         self.program_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         # Set the policy to expand on horizontal axis
-        sizePolicy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
-        self.setSizePolicy(sizePolicy)
+        self.setSizePolicy(PandaProgramWidget.sizePolicy)
 
         # Create container and layout for PandaPrimitiveWidgets
         self.program_widget = QWidget(self)
         self.program_widget_layout = QHBoxLayout(self.program_widget)
         self.program_widget_layout.setAlignment(Qt.AlignLeft)
-        self.program_widget.setSizePolicy(sizePolicy)
+        self.program_widget.setSizePolicy(PandaProgramWidget.sizePolicy)
 
         # Color the Program area
         self.setAutoFillBackground(True)
@@ -299,9 +306,9 @@ class PandaProgramWidget(QGroupBox):
             self.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*program_length, V_SPACING +
                                             PRIMITIVE_HEIGHT)
 
-    def updateWidget(self, index):
+    def updateWidget(self):
         for i, primitive_widget in enumerate(self.primitive_widget_list):
-            primitive_widget.updateWidget(i, index)
+            primitive_widget.updateWidget()
         self.update()
 
     def sizeHint(self):
@@ -312,6 +319,19 @@ class PandaProgramWidget(QGroupBox):
 
 
 class PandaStateWidget(QGroupBox):
+    # static variables
+    sizePolicy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+    status_color = {
+        pp.PandaRobotStatus.READY: 'lightseagreen',
+        pp.PandaRobotStatus.BUSY: 'gold',
+        pp.PandaRobotStatus.ERROR: 'firebrick'
+    }
+
+    font=QFont()
+    font.setBold(True)
+    font.setPointSize(10)
+
     def __init__(self, parent):
         super(PandaStateWidget, self).__init__('Robot State', parent)
         self.error_recover_publisher = rospy.Publisher("/franka_control/error_recovery/goal", ErrorRecoveryActionGoal,
@@ -320,12 +340,9 @@ class PandaStateWidget(QGroupBox):
 
     def initUI(self):
         self.status_label = QLabel('Undefined')
-        self.status_color = {
-            pp.PandaRobotStatus.READY: 'lightseagreen',
-            pp.PandaRobotStatus.BUSY: 'gold',
-            pp.PandaRobotStatus.ERROR: 'firebrick'
-        }
+
         self.status_label.setAlignment(Qt.AlignCenter)
+        self.status_label.setFont(PandaStateWidget.font)
 
         self.recover_button = QPushButton('Recover \nfrom Error')
         self.recover_button.setEnabled(False)
@@ -334,8 +351,8 @@ class PandaStateWidget(QGroupBox):
         layout = QVBoxLayout(self)
         layout.addWidget(self.status_label)
         layout.addWidget(self.recover_button)
-        sizePolicy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.setSizePolicy(sizePolicy)
+
+        self.setSizePolicy(PandaStateWidget.sizePolicy)
         self.setAlignment(Qt.AlignCenter)
 
         self.setLayout(layout)
@@ -350,7 +367,7 @@ class PandaStateWidget(QGroupBox):
     def updateWidget(self, status):
         self.status_label.setText(status.name)
         try:
-            self.status_label.setStyleSheet('background-color: ' + self.status_color[status])
+            self.status_label.setStyleSheet('background-color: ' + PandaStateWidget.status_color[status])
         except KeyError:
             pass
 
@@ -360,6 +377,22 @@ class PandaStateWidget(QGroupBox):
 
 
 class PandaPrimitiveWidget(QFrame):
+    # static variables
+    status_label_dict = {
+        pp.PandaPrimitiveStatus.NEUTRAL:'',
+        pp.PandaPrimitiveStatus.READY:pp.PandaPrimitiveStatus.READY.name,
+        pp.PandaPrimitiveStatus.ERROR:pp.PandaPrimitiveStatus.ERROR.name,
+        pp.PandaPrimitiveStatus.EXECUTING:pp.PandaPrimitiveStatus.EXECUTING.name,
+        pp.PandaPrimitiveStatus.REVERTING:pp.PandaPrimitiveStatus.REVERTING.name,
+        pp.PandaPrimitiveStatus.EXECUTED:''
+    }
+
+    font=QFont()
+    font.setBold(True)
+    font.setPointSize(10)
+
+    sizePolicy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
     def __init__(self, parent, panda_primitive):
         super(PandaPrimitiveWidget, self).__init__(parent)
         self.initUI(panda_primitive)
@@ -368,7 +401,9 @@ class PandaPrimitiveWidget(QFrame):
         # Create widget subcomponents
         self.primitive = panda_primitive
         self.primitive_label = QLabel()
-        self.status_label = QLabel(str(panda_primitive.status.name))
+
+        self.status_label = QLabel(str(PandaPrimitiveWidget.status_label_dict[panda_primitive.status]))
+        self.status_label.setAlignment(Qt.AlignCenter)
 
         # Fetch fitting icon for primitive
         primitive_icon_path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources',
@@ -381,24 +416,26 @@ class PandaPrimitiveWidget(QFrame):
         layout = QVBoxLayout(self)
         layout.addWidget(self.primitive_label)
         layout.addWidget(self.status_label)
-        sizePolicy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.setSizePolicy(sizePolicy)
+
+        self.setSizePolicy(PandaPrimitiveWidget.sizePolicy)
 
         # Beautify QFrame and Color
         self.setFrameShape(QFrame.Panel)
         self.setFrameShadow(QFrame.Raised)
         self.setLineWidth(2)
 
+        self.status_label.setFont(PandaPrimitiveWidget.font)
+
         # Animation
         self.animation = QPropertyAnimation(self, 'background_color')
         self.animation.setDuration(2000) # in ms
         self.animation.setLoopCount(-1)
-        self.animation.setStartValue(QColor('lightskyblue'))
-        self.animation.setEndValue(QColor('lightskyblue'))
-        self.animation.setKeyValueAt(0.5, QColor('ghostwhite'))
+        self.animation.setStartValue(QColor('ghostwhite'))
+        self.animation.setEndValue(QColor('ghostwhite'))
+        self.animation.setKeyValueAt(0.5, QColor('cornflowerblue'))
 
         self.setAutoFillBackground(True)
-        self.setPalette(white_palette)
+        self.setPalette(gray_palette)
 
     def get_background_color(self):
         return self.palette().color(QPalette.Background)
@@ -413,18 +450,22 @@ class PandaPrimitiveWidget(QFrame):
     def sizeHint(self):
         return QSize(PRIMITIVE_WIDTH, PRIMITIVE_HEIGHT)
 
-    def updateWidget(self, own_index, program_current_index):
-        self.status_label.setText(str(self.primitive.status.name))
-        if  own_index < program_current_index:
-            rospy.loginfo('stop animation?')
-            self.animation.stop()
-            self.setPalette(executed_primitive_palette)
-        elif own_index > program_current_index:
-            self.setPalette(gray_palette)
-        else:
+    def updateWidget(self):
+        if self.primitive.status == pp.PandaPrimitiveStatus.EXECUTING or \
+                self.primitive.status == pp.PandaPrimitiveStatus.REVERTING:
             self.animation.start()
-            rospy.loginfo('start animation?')
-            self.setPalette(current_index_palette)
+        elif self.primitive.status == pp.PandaPrimitiveStatus.ERROR:
+            self.setPalette(error_palette)
+        else:
+            self.animation.stop()
+            if self.primitive.status == pp.PandaPrimitiveStatus.EXECUTED:
+                self.setPalette(executed_primitive_palette)
+            elif self.primitive.status == pp.PandaPrimitiveStatus.READY:
+                self.setPalette(white_palette)
+            else:
+                self.setPalette(gray_palette)
+
+        self.status_label.setText(str(PandaPrimitiveWidget.status_label_dict[self.primitive.status]))
         self.update()
 
 
