@@ -2,7 +2,7 @@
 from __future__ import division
 
 from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, QSizePolicy,\
-    QGroupBox, QApplication
+    QGroupBox, QApplication,QStackedWidget, QFormLayout, QSlider
 from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool, pyqtProperty, QPropertyAnimation
 from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor, QFont
 from qt_gui.plugin import Plugin
@@ -68,6 +68,7 @@ class EUPWidget(QWidget):
 
     programGUIUpdate = pyqtSignal()
     robotStateUpdate = pyqtSignal(pp.PandaRobotStatus)
+    tuningGUIUpdate = pyqtSignal(object)
     goToStartStateSignal = pyqtSignal()
     executeOneStepSignal = pyqtSignal()
     revertOneStepSignal = pyqtSignal()
@@ -120,9 +121,7 @@ class EUPWidget(QWidget):
         self.panda_program_widget = PandaProgramWidget(self)
 
         # Parameter tuning frame
-        self.adjust_parameters_frame = QGroupBox(self)
-        self.adjust_parameters_frame.setTitle('Primitive parameters')
-        self.adjust_parameters_frame.setSizePolicy(EUPWidget.size_policy)
+        self.panda_tuning_widget = PandaTuningWidget(self)
 
         # Action button & Robot State Widget at the bottom
         self.low_buttons = QWidget()
@@ -167,36 +166,50 @@ class EUPWidget(QWidget):
 
         # Put everything together
         self.vbox.addWidget(self.panda_program_widget)
-        self.vbox.addWidget(self.adjust_parameters_frame)
+        self.vbox.addWidget(self.panda_tuning_widget)
         self.vbox.addWidget(self.low_buttons)
 
         # Connect update signals
         self.programGUIUpdate.connect(self.panda_program_widget.updateWidget)
         self.robotStateUpdate.connect(self.robot_state_widget.updateWidget)
+        self.tuningGUIUpdate.connect(self.panda_tuning_widget.updateWidget)
 
         self.updatePandaWidgets()
 
     def updatePandaWidgets(self):
         self.programGUIUpdate.emit()
         self.robotStateUpdate.emit(self.interpreter.last_panda_status)
+
+        ready_primitive = None
+        try:
+            ready_primitive = self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index)
+            rospy.loginfo('{} is ready'.format(str(ready_primitive)))
+        except pp.PandaProgramException:
+            pass
+
+        self.tuningGUIUpdate.emit(ready_primitive)
         QApplication.restoreOverrideCursor()
 
         if self.interpreter.last_panda_status == pp.PandaRobotStatus.ERROR or \
                 self.interpreter.last_panda_status == pp.PandaRobotStatus.BUSY:
             for key, value in self.interpreter_command_dict.items():
                 value[0].setEnabled(False)
+            self.panda_tuning_widget.setEnabled(False)
         else:
             if self.state_machine == EUPStateMachine.STARTUP:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(key is 'go_to_starting_state')
+                self.panda_tuning_widget.setEnabled(False)
             elif self.state_machine == EUPStateMachine.OPERATIONAL:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(key is not 'go_to_starting_state')
+                self.panda_tuning_widget.setEnabled(True)
 
                 # last primitive executed, disable execute buttons
                 if self.interpreter.next_primitive_index == self.interpreter.loaded_program.get_program_length():
                     self.interpreter_command_dict['execute_one_step'][0].setEnabled(False)
                     self.interpreter_command_dict['execute_rest_of_program'][0].setEnabled(False)
+                    self.panda_tuning_widget.setEnabled(False)
 
                 # we are at start, disable revert buttons
                 if self.interpreter.next_primitive_index <= 0:
@@ -206,12 +219,15 @@ class EUPWidget(QWidget):
             elif self.state_machine == EUPStateMachine.STARTUP_BUSY or self.state_machine == EUPStateMachine.BUSY:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(False)
+                self.panda_tuning_widget.setEnabled(False)
             elif self.state_machine == EUPStateMachine.STARTUP_ERROR:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(key is 'go_to_starting_state')
+                self.panda_tuning_widget.setEnabled(False)
             elif self.state_machine == EUPStateMachine.EXECUTION_ERROR:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(key is 'revert_one_step')
+                self.panda_tuning_widget.setEnabled(False)
 
     def execute_interpreter_command(self, command):
         # Disable lower buttons
@@ -316,6 +332,49 @@ class PandaProgramWidget(QGroupBox):
 
     def minimumSizeHint(self):
         return QSize((H_SPACING+PRIMITIVE_WIDTH)*MIN_PRIMITIVE, V_SPACING*3 + PRIMITIVE_HEIGHT)
+
+
+class PandaTuningWidget(QStackedWidget):
+    # static variables
+    sizePolicy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
+    tunable_primitives = [pp.MoveToEE, pp.MoveToContact, pp.MoveFingers, pp.ApplyForceFingers, pp.UserSync]
+
+    def __init__(self, parent):
+        super(PandaTuningWidget, self).__init__(parent)
+        self.initUI()
+
+    def initUI(self):
+        self.stacks = {}
+        self.stacks[None] = PandaTuningPage(self, None)
+        self.addWidget(self.stacks[None])
+
+        for primitive_type in PandaTuningWidget.tunable_primitives:
+            self.stacks[primitive_type] = PandaTuningPage(self, primitive_type)
+            self.addWidget(self.stacks[primitive_type])
+
+        self.setCurrentIndex(0)
+        self.setSizePolicy(PandaTuningWidget.sizePolicy)
+
+    def updateWidget(self, primitive):
+        rospy.loginfo('received {}'.format(str(primitive)))
+        if primitive is None:
+            self.setCurrentIndex(0)
+        else:
+            self.setCurrentIndex(PandaTuningWidget.tunable_primitives.index(primitive.__class__) + 1)
+        self.update()
+
+class PandaTuningPage(QFrame):
+    def __init__(self, parent, type):
+        super(PandaTuningPage, self).__init__(parent)
+        self.initUI(type)
+
+    def initUI(self, type):
+        layout = QFormLayout(self)
+        self.sliders = {}
+        if type is not None:
+            for param in type.gui_tunable_parameters:
+                self.sliders[param] = QSlider(Qt.Horizontal)
+                layout.addRow(QLabel(str(param)),self.sliders[param])
 
 
 class PandaStateWidget(QGroupBox):

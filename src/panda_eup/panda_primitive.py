@@ -25,6 +25,8 @@ class PandaRobotStatus(Enum):
 
 
 class PandaPrimitive(object):
+    gui_tunable_parameters = None  # for the subclasses
+
     def __init__(self, description="An abstract Panda primitive"):
         self.description = description
         self.parameter_container = None  # either a Goal or a Request message, depending on the primitive
@@ -32,6 +34,7 @@ class PandaPrimitive(object):
         self.starting_arm_state_index = None  # pose of the robot at the beginning of this primitive
         self.starting_gripper_state_index = None  # gripper state at the beginning of this primitive
         self.parameters_with_effects_on_robot_state = None  # for the subclasses
+        gui_tunable_parameters = None  # for the subclasses
         self.revertible = True
         self.status = PandaPrimitiveStatus.NEUTRAL
 
@@ -49,8 +52,15 @@ class PandaPrimitive(object):
         self.starting_arm_state_index = starting_arm_state_index
         self.starting_gripper_state_index = starting_gripper_state_index
 
+    def tune_parameter(self, parameter_type, parameter_value):
+        tuned = hasattr(self.parameter_container, parameter_type)
+        if tuned:
+            setattr(self.parameter_container, parameter_type, parameter_value)
+        return tuned
+
 
 class UserSync(PandaPrimitive):
+    gui_tunable_parameters = ['force_threshold']
     def __init__(self, description="A User Synchronization primitive"):
         super(UserSync, self).__init__(description)
         self.expected_container = UserSyncGoal
@@ -58,6 +68,7 @@ class UserSync(PandaPrimitive):
 
 
 class MoveToEE(PandaPrimitive):
+    gui_tunable_parameters = ['position_speed']
     def __init__(self, description="A Move to End-Effector primitive"):
         super(MoveToEE, self).__init__(description)
         self.expected_container = MoveToEEGoal
@@ -65,6 +76,7 @@ class MoveToEE(PandaPrimitive):
 
 
 class MoveToContact(PandaPrimitive):
+    gui_tunable_parameters = ['position_speed', 'force_threshold']
     def __init__(self, description="A Move to Contact primitive"):
         super(MoveToContact, self).__init__(description)
         self.expected_container = MoveToContactGoal
@@ -72,6 +84,7 @@ class MoveToContact(PandaPrimitive):
 
 
 class MoveFingers(PandaPrimitive):
+    gui_tunable_parameters = ['width']
     def __init__(self, description="A Move Fingers primitive"):
         super(MoveFingers, self).__init__(description)
         self.expected_container = MoveFingersRequest
@@ -79,6 +92,7 @@ class MoveFingers(PandaPrimitive):
 
 
 class ApplyForceFingers(PandaPrimitive):
+    gui_tunable_parameters = ['force']
     def __init__(self, description="A Apply Force (with) Fingers primitive"):
         super(ApplyForceFingers, self).__init__(description)
         self.expected_container = ApplyForceFingersRequest
