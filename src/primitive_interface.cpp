@@ -648,6 +648,7 @@ void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoa
     move_to_contact_server_->setSucceeded(move_to_contact_result_);
   }
 
+  ros::Duration(1.0).sleep(); // to allow the impedance controller to complete the motion
   ROS_WARN("Setting the robot to default Impedance controller");
   adjustImpedanceControllerStiffness();
 }
@@ -751,7 +752,7 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
     move_to_ee_server_->setSucceeded(move_to_ee_result_);
   }
 
-  // TODO: double check this on the robot!
+  ros::Duration(1.0).sleep(); // to allow the impedance controller to complete the motion
   ROS_WARN("Setting the robot to default Impedance controller");
   adjustImpedanceControllerStiffness();
 }
