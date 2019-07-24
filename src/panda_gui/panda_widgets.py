@@ -93,8 +93,9 @@ class EUPWidget(QWidget):
 
         self.interpreter.load_program(pp.load_program_from_file(program_path, 'program.pkl'))
 
-        # Setting up the state machine
+        # Setting up the state machines
         self.state_machine = EUPStateMachine(0)
+        self.last_interface_state = None
 
         # Thread-pool for the interpreter commands
         self.threadpool = QThreadPool()
@@ -103,7 +104,6 @@ class EUPWidget(QWidget):
         self.initUI()
 
         # Subscriber for the interface status
-        self.last_interface_state = None
         self.interface_state_subscriber = rospy.Subscriber("/primitive_interface_node/interface_state", Int32,
                                                            self.interface_state_callback)
 
@@ -203,8 +203,12 @@ class EUPWidget(QWidget):
             rospy.logerr('Tuning when you should not?')
 
     def updatePandaWidgets(self):
+        rospy.logwarn('Current EUP state is {}'.format(self.state_machine))
+        rospy.logwarn('Current Interface state is {}'.format(self.last_interface_state))
+
         self.programGUIUpdate.emit()
-        self.robotStateUpdate.emit(self.interpreter.last_panda_status)
+        if self.last_interface_state is not None:
+            self.robotStateUpdate.emit(self.last_interface_state)
 
         ready_primitive = None
         try:
@@ -215,8 +219,8 @@ class EUPWidget(QWidget):
         self.tuningGUIUpdate.emit(ready_primitive)
         QApplication.restoreOverrideCursor()
 
-        if self.interpreter.last_panda_status == pp.PandaRobotStatus.ERROR or \
-                self.interpreter.last_panda_status == pp.PandaRobotStatus.BUSY:
+        if self.last_interface_state == pp.PandaRobotStatus.ERROR or \
+                self.last_interface_state == pp.PandaRobotStatus.BUSY:
             for key, value in self.interpreter_command_dict.items():
                 value[0].setEnabled(False)
             self.panda_tuning_widget.setEnabled(False)
@@ -250,8 +254,11 @@ class EUPWidget(QWidget):
                     value[0].setEnabled(key is 'go_to_starting_state')
                 self.panda_tuning_widget.setEnabled(False)
             elif self.state_machine == EUPStateMachine.EXECUTION_ERROR:
+                to_enable = 'revert_one_step'
+                if self.interpreter.next_primitive_index == 0:
+                    to_enable = 'go_to_starting_state'
                 for key, value in self.interpreter_command_dict.items():
-                    value[0].setEnabled(key is 'revert_one_step')
+                    value[0].setEnabled(key is to_enable)
                 self.panda_tuning_widget.setEnabled(False)
 
     def execute_interpreter_command(self, command):
@@ -278,8 +285,12 @@ class EUPWidget(QWidget):
         rospy.logdebug("Worker result: " + str(result))
         if self.state_machine == EUPStateMachine.STARTUP_BUSY:
             self.state_machine = EUPStateMachine.OPERATIONAL if result else EUPStateMachine.STARTUP_ERROR
-        if self.state_machine == EUPStateMachine.BUSY and result:
+        if self.state_machine == EUPStateMachine.BUSY:
             self.state_machine = EUPStateMachine.OPERATIONAL if result else EUPStateMachine.EXECUTION_ERROR
+        if self.state_machine == EUPStateMachine.STARTUP_ERROR and result:
+            self.state_machine = EUPStateMachine.OPERATIONAL
+        if self.state_machine == EUPStateMachine.EXECUTION_ERROR and result:
+            self.state_machine = EUPStateMachine.OPERATIONAL
         self.updatePandaWidgets()
 
     def announceWorkerDeath(self):
@@ -496,6 +507,7 @@ class PandaPrimitiveWidget(QFrame):
                 self.primitive.status == pp.PandaPrimitiveStatus.REVERTING:
             self.animation.start()
         elif self.primitive.status == pp.PandaPrimitiveStatus.ERROR:
+            self.animation.stop()
             self.setPalette(error_palette)
         else:
             self.animation.stop()

@@ -284,6 +284,11 @@ class PandaProgram(object):
             revertible = True
             updated = False
 
+        # TODO: NOT ENOUGH TO MAKE ONLY NEXT NOT REVERTIBLE
+        #  1. check what the update could impact (pose and/or gripper state)
+        #  2. for the one that apply, check the postcondition indexes
+        #       for all primitive in the rest of the program that have those as precondition indexes make them irrevertible
+
         try:
             next_primitive = self.get_nth_primitive(n + 1)
         except PandaProgramException:
@@ -309,6 +314,11 @@ class PandaProgram(object):
             self.arm_state_list[arm_index] = new_post_conditions[0]
         if effect[1]:
             self.gripper_state_list[gripper_index] = new_post_conditions[1]
+
+        # TODO: NOT ENOUGH TO MAKE ONLY NEXT REVERTIBLE
+        #  1. check what effect the primitive has (pose and/or gripper state)
+        #  2. for the one that apply, check the postcondition indexes
+        #       for all primitive in the rest of the program that have those as precondition indexes make them revertible
 
         try:
             next_primitive = self.get_nth_primitive(n + 1)

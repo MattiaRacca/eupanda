@@ -303,9 +303,8 @@ class PandaProgramInterpreter(object):
             state = self.move_to_contact_client.send_goal_and_wait(primitive_to_execute.parameter_container,
                                                                    rospy.Duration(60))
             success = (state == actionlib.GoalStatus.SUCCEEDED)
-
             result = self.move_to_contact_client.get_result()
-            rospy.loginfo(str(result))
+
             if success:
                 self.last_pose = result.final_pose
         else:
@@ -324,7 +323,7 @@ class PandaProgramInterpreter(object):
                                                               rospy.Duration(60))
             success = (state == actionlib.GoalStatus.SUCCEEDED)
             result = self.move_to_ee_client.get_result()
-            rospy.loginfo(str(result))
+
             if success:
                 self.last_pose = result.final_pose
         else:
