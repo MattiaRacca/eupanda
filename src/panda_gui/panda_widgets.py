@@ -2,7 +2,7 @@
 from __future__ import division
 
 from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, QSizePolicy,\
-    QGroupBox, QApplication,QStackedWidget, QFormLayout, QSlider
+    QGroupBox, QApplication,QStackedWidget, QFormLayout, QSlider, QGridLayout
 from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool, pyqtProperty, QPropertyAnimation
 from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor, QFont
 from qt_gui.plugin import Plugin
@@ -69,6 +69,7 @@ class EUPWidget(QWidget):
     programGUIUpdate = pyqtSignal()
     robotStateUpdate = pyqtSignal(pp.PandaRobotStatus)
     tuningGUIUpdate = pyqtSignal(object)
+    tuningAccepted = pyqtSignal(bool)
     goToStartStateSignal = pyqtSignal()
     executeOneStepSignal = pyqtSignal()
     revertOneStepSignal = pyqtSignal()
@@ -174,7 +175,32 @@ class EUPWidget(QWidget):
         self.robotStateUpdate.connect(self.robot_state_widget.updateWidget)
         self.tuningGUIUpdate.connect(self.panda_tuning_widget.updateWidget)
 
+        for key, page in self.panda_tuning_widget.stacks.items():
+            if page.primitive_type is not None:
+                page.primitiveTuned.connect(self.updateCurrentPrimitive)
+
         self.updatePandaWidgets()
+
+    def updateCurrentPrimitive(self, dict):
+        if self.state_machine == EUPStateMachine.OPERATIONAL:
+            ready_primitive = None
+            try:
+                ready_primitive = self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index)
+                rospy.loginfo('Attempting to tune {}'.format(str(ready_primitive)))
+            except pp.PandaProgramException:
+                pass
+
+            if ready_primitive is not None:
+                for key, value in dict.items():
+                    rospy.loginfo('before {} = {}'.format(key, getattr(ready_primitive.parameter_container, key)))
+                    tuned = self.interpreter.loaded_program.update_nth_primitive_parameter(
+                        self.interpreter.next_primitive_index, key, value)
+                    rospy.loginfo('Tuning: {}'.format(str(tuned)))
+                    rospy.loginfo('after {} = {}'.format(key, getattr(ready_primitive.parameter_container, key)))
+                    self.tuningAccepted.emit(tuned)
+
+        else:
+            rospy.logerr('Tuning when you should not?')
 
     def updatePandaWidgets(self):
         self.programGUIUpdate.emit()
@@ -183,7 +209,6 @@ class EUPWidget(QWidget):
         ready_primitive = None
         try:
             ready_primitive = self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index)
-            rospy.loginfo('{} is ready'.format(str(ready_primitive)))
         except pp.PandaProgramException:
             pass
 
@@ -332,49 +357,6 @@ class PandaProgramWidget(QGroupBox):
 
     def minimumSizeHint(self):
         return QSize((H_SPACING+PRIMITIVE_WIDTH)*MIN_PRIMITIVE, V_SPACING*3 + PRIMITIVE_HEIGHT)
-
-
-class PandaTuningWidget(QStackedWidget):
-    # static variables
-    sizePolicy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
-    tunable_primitives = [pp.MoveToEE, pp.MoveToContact, pp.MoveFingers, pp.ApplyForceFingers, pp.UserSync]
-
-    def __init__(self, parent):
-        super(PandaTuningWidget, self).__init__(parent)
-        self.initUI()
-
-    def initUI(self):
-        self.stacks = {}
-        self.stacks[None] = PandaTuningPage(self, None)
-        self.addWidget(self.stacks[None])
-
-        for primitive_type in PandaTuningWidget.tunable_primitives:
-            self.stacks[primitive_type] = PandaTuningPage(self, primitive_type)
-            self.addWidget(self.stacks[primitive_type])
-
-        self.setCurrentIndex(0)
-        self.setSizePolicy(PandaTuningWidget.sizePolicy)
-
-    def updateWidget(self, primitive):
-        rospy.loginfo('received {}'.format(str(primitive)))
-        if primitive is None:
-            self.setCurrentIndex(0)
-        else:
-            self.setCurrentIndex(PandaTuningWidget.tunable_primitives.index(primitive.__class__) + 1)
-        self.update()
-
-class PandaTuningPage(QFrame):
-    def __init__(self, parent, type):
-        super(PandaTuningPage, self).__init__(parent)
-        self.initUI(type)
-
-    def initUI(self, type):
-        layout = QFormLayout(self)
-        self.sliders = {}
-        if type is not None:
-            for param in type.gui_tunable_parameters:
-                self.sliders[param] = QSlider(Qt.Horizontal)
-                layout.addRow(QLabel(str(param)),self.sliders[param])
 
 
 class PandaStateWidget(QGroupBox):
@@ -528,6 +510,127 @@ class PandaPrimitiveWidget(QFrame):
         self.update()
 
 
+class PandaTuningWidget(QStackedWidget):
+    # static variables
+    sizePolicy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
+    tunable_primitives = [pp.MoveToEE, pp.MoveToContact, pp.MoveFingers, pp.ApplyForceFingers, pp.UserSync]
+
+    def __init__(self, parent):
+        super(PandaTuningWidget, self).__init__(parent)
+        self.initUI()
+
+    def initUI(self):
+        self.stacks = {}
+        self.stacks[None] = PandaTuningPage(self, None)
+        self.addWidget(self.stacks[None])
+
+        for primitive_type in PandaTuningWidget.tunable_primitives:
+            self.stacks[primitive_type] = PandaTuningPage(self, primitive_type)
+            self.addWidget(self.stacks[primitive_type])
+            self.parent().tuningAccepted.connect(self.stacks[primitive_type].updateAfterTuningAccepted)
+
+        self.setCurrentIndex(0)
+        self.setSizePolicy(PandaTuningWidget.sizePolicy)
+
+
+    def updateWidget(self, primitive):
+        if primitive is None:
+            self.setCurrentIndex(0)
+        else:
+            self.setCurrentIndex(PandaTuningWidget.tunable_primitives.index(primitive.__class__) + 1)
+            self.stacks[primitive.__class__].updatePageFromPritimive(primitive)
+        self.update()
+
+
+class PandaTuningPage(QFrame):
+    primitiveTuned = pyqtSignal(dict)
+
+    def __init__(self, parent, primitive_type):
+        super(PandaTuningPage, self).__init__(parent)
+        self.primitive_type = primitive_type
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout(self)
+        self.sliders = {}
+        if self.primitive_type is not None:
+            for param in self.primitive_type.gui_tunable_parameters:
+                self.sliders[param] = CurrentValueShowingSlider(self, param,
+                                                                self.primitive_type.gui_tunable_parameter_units[param],
+                                                                self.primitive_type.gui_tunable_parameter_ranges[param])
+                self.sliders[param].valueSubmitted.connect(partial(self.signalPrimitiveTuning, param))
+                layout.addWidget(self.sliders[param])
+
+    def updatePageFromPritimive(self, primitive):
+        if primitive.__class__ is not None:
+            for param in primitive.__class__.gui_tunable_parameters:
+                self.sliders[param].updateValue(getattr(primitive.parameter_container, param))
+
+    def signalPrimitiveTuning(self, parameter_name, parameter_value):
+        self.primitiveTuned.emit({parameter_name: parameter_value})
+
+    def updateAfterTuningAccepted(self, tuned):
+        for param in self.primitive_type.gui_tunable_parameters:
+                self.sliders[param].receiveValueConfirmation(tuned)
+
+
+class CurrentValueShowingSlider(QWidget):
+    valueSubmitted = pyqtSignal(float)
+
+    def __init__(self, parent, name, measure_unit='', range=[0, 1]):
+        super(CurrentValueShowingSlider, self).__init__(parent)
+        self.measure_unit = measure_unit
+        self.range = range
+        self.name = name
+        self.initUI()
+
+    def initUI(self):
+        self.widget_layout = QGridLayout(self)
+
+        self.slider = DoubleSlider(2, Qt.Horizontal)
+        self.slider.setMinimum(self.range[0])
+        self.slider.setMaximum(self.range[1])
+
+        self.current_value_label = QLabel('???')
+        self.stored_value_label = QLabel('???')
+        self._current_label = QLabel('Current\n Value')
+        self._stored_label = QLabel('Stored\n Value')
+        self.name_label = QLabel(self.name)
+
+        self.submit_parameter_value = QPushButton('Submit new value')
+
+        # TODO: better spacing and sizepolicy here
+        self.widget_layout.addWidget(self.name_label, 1, 1)
+        self.widget_layout.addWidget(self.slider, 2, 1)
+        self.widget_layout.addWidget(self.current_value_label, 2, 2)
+        self.widget_layout.addWidget(self._current_label, 1, 2)
+        self.widget_layout.addWidget(self.stored_value_label, 2, 3)
+        self.widget_layout.addWidget(self._stored_label, 1, 3)
+        self.widget_layout.addWidget(self.submit_parameter_value, 2, 4)
+
+        self.slider.doubleValueChanged.connect(self.updateLabel)
+        self.submit_parameter_value.clicked.connect(self.submitValue)
+
+    def updateValue(self, value):
+        self.slider.setValue(value)
+        # TODO: better formatting here
+        self.current_value_label.setText('{} {}'.format(value, self.measure_unit))
+        self.stored_value_label.setText('{} {}'.format(value, self.measure_unit))
+
+    def updateLabel(self, value):
+        # TODO: better formatting here
+        self.current_value_label.setText('{} {}'.format(value, self.measure_unit))
+
+    def submitValue(self):
+        value = self.slider.value()
+        self.valueSubmitted.emit(value)
+
+    def receiveValueConfirmation(self, tuned):
+        if tuned:
+            value = self.slider.value()
+            self.stored_value_label.setText('{} {}'.format(value, self.measure_unit))
+
+
 class QVerticalLine(QFrame):
     def __init__(self, parent=None):
         super(QVerticalLine, self).__init__(parent)
@@ -543,6 +646,41 @@ class QExpandingPushButton(QPushButton):
 
     def sizeHint(self):
         return QSize(10, PRIMITIVE_HEIGHT)
+
+
+class DoubleSlider(QSlider):
+
+    # create our our signal that we can connect to if necessary
+    doubleValueChanged = pyqtSignal(float)
+
+    def __init__(self, decimals=3, *args, **kargs):
+        super(DoubleSlider, self).__init__( *args, **kargs)
+        self._multi = 10 ** decimals
+
+        self.valueChanged.connect(self.emitDoubleValueChanged)
+        self.setTickPosition(QSlider.TicksBelow)
+
+    def emitDoubleValueChanged(self):
+        value = float(super(DoubleSlider, self).value())/self._multi
+        self.doubleValueChanged.emit(value)
+
+    def value(self):
+        return float(super(DoubleSlider, self).value()) / self._multi
+
+    def setMinimum(self, value):
+        return super(DoubleSlider, self).setMinimum(value * self._multi)
+
+    def setMaximum(self, value):
+        return super(DoubleSlider, self).setMaximum(value * self._multi)
+
+    def setSingleStep(self, value):
+        return super(DoubleSlider, self).setSingleStep(value * self._multi)
+
+    def singleStep(self):
+        return float(super(DoubleSlider, self).singleStep()) / self._multi
+
+    def setValue(self, value):
+        super(DoubleSlider, self).setValue(int(value * self._multi))
 
 
 class WorkerSignals(QObject):
