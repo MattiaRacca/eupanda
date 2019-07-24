@@ -132,7 +132,7 @@ class MoveFingers(PandaPrimitive):
 class ApplyForceFingers(PandaPrimitive):
     gui_tunable_parameters = ['force']
     gui_tunable_parameter_ranges = {
-        gui_tunable_parameters[0]: [0.0, 10.0]
+        gui_tunable_parameters[0]: [20.0, 100.0]
     }
     gui_tunable_parameter_units = {
         gui_tunable_parameters[0]: 'N'

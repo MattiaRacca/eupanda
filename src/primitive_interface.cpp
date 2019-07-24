@@ -350,7 +350,7 @@ bool PrimitiveInterface::applyForceFingersCallback(panda_pbd::ApplyForceFingers:
                                                    panda_pbd::ApplyForceFingers::Response &res){
   franka_gripper::GraspGoal grasping_goal;
 
-  // TODO: Do we want to enforce a force range?
+  // range of forces is from 20 N to 100 N
   grasping_goal.width = 0.0;
   grasping_goal.force = req.force;
   grasping_goal.speed = 0.03; // in m/s
