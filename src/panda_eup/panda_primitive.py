@@ -26,6 +26,8 @@ class PandaRobotStatus(Enum):
 
 class PandaPrimitive(object):
     gui_tunable_parameters = None  # for the subclasses
+    gui_tunable_parameter_ranges = None  # for the subclasses
+    gui_tunable_parameter_units = None  # for the subclasses
 
     def __init__(self, description="An abstract Panda primitive"):
         self.description = description
@@ -34,7 +36,6 @@ class PandaPrimitive(object):
         self.starting_arm_state_index = None  # pose of the robot at the beginning of this primitive
         self.starting_gripper_state_index = None  # gripper state at the beginning of this primitive
         self.parameters_with_effects_on_robot_state = None  # for the subclasses
-        gui_tunable_parameters = None  # for the subclasses
         self.revertible = True
         self.status = PandaPrimitiveStatus.NEUTRAL
 
@@ -52,15 +53,29 @@ class PandaPrimitive(object):
         self.starting_arm_state_index = starting_arm_state_index
         self.starting_gripper_state_index = starting_gripper_state_index
 
-    def tune_parameter(self, parameter_type, parameter_value):
-        tuned = hasattr(self.parameter_container, parameter_type)
-        if tuned:
-            setattr(self.parameter_container, parameter_type, parameter_value)
-        return tuned
+    def update_parameter(self, parameter_type, parameter_value):
+        if hasattr(self.expected_container, parameter_type) is False:
+            raise PandaProgramException(1)
+
+        try:
+            self.parameters_with_effects_on_robot_state.index(parameter_type)
+            revertible = False
+        except ValueError:
+            revertible = True
+
+        setattr(self.parameter_container, parameter_type, parameter_value)
+        return revertible
 
 
 class UserSync(PandaPrimitive):
     gui_tunable_parameters = ['force_threshold']
+    gui_tunable_parameter_ranges = {
+        gui_tunable_parameters[0]: [0.0, 10.0]
+    }
+    gui_tunable_parameter_units = {
+        gui_tunable_parameters[0]: 'N'
+    }
+
     def __init__(self, description="A User Synchronization primitive"):
         super(UserSync, self).__init__(description)
         self.expected_container = UserSyncGoal
@@ -69,6 +84,13 @@ class UserSync(PandaPrimitive):
 
 class MoveToEE(PandaPrimitive):
     gui_tunable_parameters = ['position_speed']
+    gui_tunable_parameter_ranges = {
+        gui_tunable_parameters[0]: [0.001, 0.5]
+    }
+    gui_tunable_parameter_units = {
+        gui_tunable_parameters[0]: 'm/s'
+    }
+
     def __init__(self, description="A Move to End-Effector primitive"):
         super(MoveToEE, self).__init__(description)
         self.expected_container = MoveToEEGoal
@@ -77,6 +99,15 @@ class MoveToEE(PandaPrimitive):
 
 class MoveToContact(PandaPrimitive):
     gui_tunable_parameters = ['position_speed', 'force_threshold']
+    gui_tunable_parameter_ranges = {
+        gui_tunable_parameters[0]: [0.001, 0.5],
+        gui_tunable_parameters[1]: [0.0, 10.0]
+    }
+    gui_tunable_parameter_units = {
+        gui_tunable_parameters[0]: 'm/s',
+        gui_tunable_parameters[1]: 'N'
+    }
+
     def __init__(self, description="A Move to Contact primitive"):
         super(MoveToContact, self).__init__(description)
         self.expected_container = MoveToContactGoal
@@ -85,6 +116,13 @@ class MoveToContact(PandaPrimitive):
 
 class MoveFingers(PandaPrimitive):
     gui_tunable_parameters = ['width']
+    gui_tunable_parameter_ranges = {
+        gui_tunable_parameters[0]: [0.0, 0.08]
+    }
+    gui_tunable_parameter_units = {
+        gui_tunable_parameters[0]: 'm'
+    }
+
     def __init__(self, description="A Move Fingers primitive"):
         super(MoveFingers, self).__init__(description)
         self.expected_container = MoveFingersRequest
@@ -93,6 +131,13 @@ class MoveFingers(PandaPrimitive):
 
 class ApplyForceFingers(PandaPrimitive):
     gui_tunable_parameters = ['force']
+    gui_tunable_parameter_ranges = {
+        gui_tunable_parameters[0]: [0.0, 10.0]
+    }
+    gui_tunable_parameter_units = {
+        gui_tunable_parameters[0]: 'N'
+    }
+
     def __init__(self, description="A Apply Force (with) Fingers primitive"):
         super(ApplyForceFingers, self).__init__(description)
         self.expected_container = ApplyForceFingersRequest
@@ -226,22 +271,18 @@ class PandaProgram(object):
         del self.primitives[n]
         return True
 
-    def update_nth_primitive_parameters(self, n, parameter_name, parameter_value):
+    def update_nth_primitive_parameter(self, n, parameter_name, parameter_value):
         try:
             primitive = self.get_nth_primitive(n)
         except PandaProgramException:
             raise
 
-        if hasattr(primitive.expected_container, parameter_name) is False:
-            raise PandaProgramException(1)
-
         try:
-            primitive.parameters_with_effects_on_robot_state.index(parameter_name)
-            revertible = False
-        except ValueError:
+            revertible = primitive.update_parameter(parameter_name, parameter_value)
+            tuned = True
+        except PandaProgramException:
             revertible = True
-
-        setattr(primitive.parameter_container, parameter_name, parameter_value)
+            tuned = False
 
         try:
             next_primitive = self.get_nth_primitive(n + 1)
@@ -250,7 +291,7 @@ class PandaProgram(object):
         else:
             next_primitive.revertible = revertible
 
-        return True
+        return tuned
 
     def update_nth_primitive_postconditions(self, n, new_post_conditions):
         try:
