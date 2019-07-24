@@ -71,8 +71,9 @@ class PandaPBDInterface(object):
         if was_relaxed:
             self.relax()
 
-    def gripper_state_callback(self, data):
-        self.last_gripper_width = data.position[0] + data.position[1]
+    def gripper_state_callback(self, msg):
+        last_gripper_width = msg.position[0] + msg.position[1]
+        self.last_gripper_width = last_gripper_width if last_gripper_width <= 0.08 else 0.08
 
     def relax(self):
         req = EnableTeachingRequest()
@@ -127,10 +128,10 @@ class PandaPBDInterface(object):
 
     def relax_finger(self):
         temp_program = pp.PandaProgram()
-        request = OpenGripperRequest()
+        request = MoveFingersRequest()
         request.width = self.last_gripper_width
 
-        move_fingers_primitive = pp.OpenGripper()
+        move_fingers_primitive = pp.MoveFingers()
         move_fingers_primitive.set_parameter_container(request)
 
         temp_program.insert_primitive(move_fingers_primitive, [None, pp.GripperState(self.last_gripper_width, 0.0)])

@@ -11,6 +11,7 @@ from panda_pbd.msg import MoveToEEGoal
 from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest
 from panda_pbd.srv import MoveFingersResponse, ApplyForceFingersResponse
 from std_msgs.msg import Int32
+from sensor_msgs.msg import JointState
 
 
 class PandaProgramInterpreter(object):
@@ -18,6 +19,9 @@ class PandaProgramInterpreter(object):
         self.loaded_program = None
         self.next_primitive_index = -1  # next primitive to be executed!
         self.last_panda_status = None
+        self.last_pose = None
+        self.last_gripper_width = None
+        self.last_gripper_force = None
 
         self.robotless_debug = robotless_debug
         self.fake_wait = 3
@@ -29,6 +33,9 @@ class PandaProgramInterpreter(object):
         if not self.robotless_debug:
             self.interface_state_subscriber = rospy.Subscriber("/primitive_interface_node/interface_state", Int32,
                                                                self.interface_state_callback)
+
+            self.gripper_state_subscriber = rospy.Subscriber("/franka_gripper/joint_states", JointState,
+                                                             self.gripper_state_callback)
 
             self.move_to_ee_client = actionlib.SimpleActionClient('/primitive_interface_node/move_to_ee_server',
                                                                   MoveToEEAction)
@@ -63,6 +70,10 @@ class PandaProgramInterpreter(object):
             pp.MoveFingers: self.revert_move_fingers,
             pp.ApplyForceFingers: self.revert_apply_force_fingers
         }
+
+    def gripper_state_callback(self, msg):
+        last_gripper_width = msg.position[0] + msg.position[1]
+        self.last_gripper_width = last_gripper_width if last_gripper_width <= 0.08 else 0.08
 
     def interface_state_callback(self, msg):
         new_panda_status = pp.PandaRobotStatus(msg.data)
@@ -166,7 +177,14 @@ class PandaProgramInterpreter(object):
             rospy.loginfo('Executed primitive ' + primitive_to_execute.__str__())
             self.next_primitive_index += 1
             try:
-                self.loaded_program.get_nth_primitive(self.next_primitive_index).status = pp.PandaPrimitiveStatus.READY
+                next_primitive = self.loaded_program.get_nth_primitive(self.next_primitive_index)
+                next_primitive.status = pp.PandaPrimitiveStatus.READY
+                # TODO: maybe we should do this all the time, not only if the next primitive is not revertible,
+                #  that is the current primitive was tuned at some point
+                if not next_primitive.revertible:
+                    self.loaded_program.update_nth_primitive_postconditions(
+                        self.next_primitive_index - 1,[self.last_pose, pp.GripperState(self.last_gripper_width, self.last_gripper_force)])
+
             except pp.PandaProgramException:
                 pass
         else:
@@ -285,6 +303,11 @@ class PandaProgramInterpreter(object):
             state = self.move_to_contact_client.send_goal_and_wait(primitive_to_execute.parameter_container,
                                                                    rospy.Duration(60))
             success = (state == actionlib.GoalStatus.SUCCEEDED)
+
+            result = self.move_to_contact_client.get_result()
+            rospy.loginfo(str(result))
+            if success:
+                self.last_pose = result.final_pose
         else:
             rospy.sleep(rospy.Duration(self.fake_wait))
             state = actionlib.GoalStatus.SUCCEEDED
@@ -300,6 +323,10 @@ class PandaProgramInterpreter(object):
             state = self.move_to_ee_client.send_goal_and_wait(primitive_to_execute.parameter_container,
                                                               rospy.Duration(60))
             success = (state == actionlib.GoalStatus.SUCCEEDED)
+            result = self.move_to_ee_client.get_result()
+            rospy.loginfo(str(result))
+            if success:
+                self.last_pose = result.final_pose
         else:
             rospy.sleep(rospy.Duration(self.fake_wait))
             state = actionlib.GoalStatus.SUCCEEDED
@@ -312,6 +339,9 @@ class PandaProgramInterpreter(object):
         rospy.loginfo('Trying to execute a move fingers')
         if not self.robotless_debug:
             response = self.move_fingers_client.call(primitive_to_execute.parameter_container)
+
+            if response.success:
+                self.last_gripper_force = 0.0
         else:
             rospy.sleep(rospy.Duration(self.fake_wait))
             response = MoveFingersResponse()
@@ -323,6 +353,9 @@ class PandaProgramInterpreter(object):
         rospy.loginfo('Trying to execute an apply force with fingers')
         if not self.robotless_debug:
             response = self.apply_force_fingers_client.call(primitive_to_execute.parameter_container)
+
+            if response.success:
+                self.last_gripper_force = primitive_to_execute.parameter_container.force
         else:
             rospy.sleep(rospy.Duration(self.fake_wait))
             response = ApplyForceFingersResponse()

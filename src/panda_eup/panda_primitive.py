@@ -279,10 +279,10 @@ class PandaProgram(object):
 
         try:
             revertible = primitive.update_parameter(parameter_name, parameter_value)
-            tuned = True
+            updated = True
         except PandaProgramException:
             revertible = True
-            tuned = False
+            updated = False
 
         try:
             next_primitive = self.get_nth_primitive(n + 1)
@@ -291,7 +291,7 @@ class PandaProgram(object):
         else:
             next_primitive.revertible = revertible
 
-        return tuned
+        return updated
 
     def update_nth_primitive_postconditions(self, n, new_post_conditions):
         try:
