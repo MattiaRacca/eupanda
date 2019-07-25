@@ -141,6 +141,9 @@ class EUPWidget(QWidget):
         self.interpreter_command_dict['revert_one_step'] = [QExpandingPushButton("Revert\n one step", self),
                                                                  partial(self.execute_interpreter_command,
                                                                          self.interpreter.revert_one_step)]
+        self.interpreter_command_dict['go_to_current_primitive_preconditions'] = \
+            [QExpandingPushButton("Revert current\n primitive", self),
+             partial(self.execute_interpreter_command, self.interpreter.go_to_current_primitive_preconditions)]
         self.interpreter_command_dict['execute_rest_of_program'] = [QExpandingPushButton("Execute rest\n of program", self),
                                                                  partial(self.execute_interpreter_command,
                                                                          self.interpreter.execute_rest_of_program)]
@@ -154,6 +157,7 @@ class EUPWidget(QWidget):
         self.low_buttons_layout.addWidget(QVerticalLine())
         self.low_buttons_layout.addWidget(self.interpreter_command_dict['execute_one_step'][0])
         self.low_buttons_layout.addWidget(self.interpreter_command_dict['revert_one_step'][0])
+        self.low_buttons_layout.addWidget(self.interpreter_command_dict['go_to_current_primitive_preconditions'][0])
         self.low_buttons_layout.addWidget(QVerticalLine())
         self.low_buttons_layout.addWidget(self.interpreter_command_dict['execute_rest_of_program'][0])
         self.low_buttons_layout.addWidget(self.interpreter_command_dict['revert_to_beginning_of_program'][0])
@@ -163,6 +167,7 @@ class EUPWidget(QWidget):
         for key, value in self.interpreter_command_dict.items():
             value[0].clicked.connect(value[1])
             value[0].setEnabled(key is 'go_to_starting_state')
+            value[0].setVisible(key is not 'go_to_current_primitive_preconditions')
             value[0].setFont(EUPWidget.font)
 
         # Put everything together
@@ -198,7 +203,6 @@ class EUPWidget(QWidget):
                     rospy.loginfo('Tuning: {}'.format(str(tuned)))
                     rospy.loginfo('after {} = {}'.format(key, getattr(ready_primitive.parameter_container, key)))
                     self.tuningAccepted.emit(tuned)
-
         else:
             rospy.logerr('Tuning when you should not?')
 
@@ -232,6 +236,7 @@ class EUPWidget(QWidget):
             elif self.state_machine == EUPStateMachine.OPERATIONAL:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(key is not 'go_to_starting_state')
+                    value[0].setVisible(key is not 'go_to_current_primitive_preconditions')
                 self.panda_tuning_widget.setEnabled(True)
 
                 # last primitive executed, disable execute buttons
@@ -254,11 +259,11 @@ class EUPWidget(QWidget):
                     value[0].setEnabled(key is 'go_to_starting_state')
                 self.panda_tuning_widget.setEnabled(False)
             elif self.state_machine == EUPStateMachine.EXECUTION_ERROR:
-                to_enable = 'revert_one_step'
-                if self.interpreter.next_primitive_index == 0:
-                    to_enable = 'go_to_starting_state'
                 for key, value in self.interpreter_command_dict.items():
-                    value[0].setEnabled(key is to_enable)
+                    value[0].setEnabled(key is 'go_to_current_primitive_preconditions')
+                    value[0].setVisible(key is not 'revert_one_step')
+                    if key == 'go_to_current_primitive_preconditions':
+                        value[0].setVisible(True)
                 self.panda_tuning_widget.setEnabled(False)
 
     def execute_interpreter_command(self, command):
@@ -518,7 +523,8 @@ class PandaPrimitiveWidget(QFrame):
             else:
                 self.setPalette(gray_palette)
 
-        self.status_label.setText(str(PandaPrimitiveWidget.status_label_dict[self.primitive.status]))
+        self.status_label.setText(str(PandaPrimitiveWidget.status_label_dict[self.primitive.status]) +
+                                  '\nR:' + str(self.primitive.revertible))
         self.update()
 
 
