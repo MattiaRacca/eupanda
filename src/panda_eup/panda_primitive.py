@@ -218,7 +218,7 @@ class PandaProgram(object):
     def get_nth_primitive_postconditions(self, n):
         try:
             arm_state_index, gripper_state_index = self.get_nth_primitive_postcondition_indexes(n)
-        except:
+        except PandaProgramException:
             raise
 
         arm_state = self.arm_state_list[arm_state_index]

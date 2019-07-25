@@ -138,14 +138,13 @@ class PandaProgramInterpreter(object):
                 progress_callback.emit(self.next_primitive_index)
 
             state = self.move_to_ee_client.send_goal_and_wait(goal, rospy.Duration(60))
-            success = (state == actionlib.GoalStatus.SUCCEEDED)
+            success_arm = (state == actionlib.GoalStatus.SUCCEEDED)
             result = self.move_to_ee_client.get_result()
 
-            if success:
+            if success_arm:
                 self.last_pose = result.final_pose
 
-            success_arm = self.move_to_ee_client.wait_for_result()
-            rospy.loginfo('Success? :' + str(success_arm))
+            rospy.loginfo('Success arm? :' + str(success_arm))
 
             # HACK:
             # Problem: requesting ApplyForceFingers when robot is already applying force locks the service caller
@@ -155,8 +154,13 @@ class PandaProgramInterpreter(object):
                     # need to revert to a apply_force_fingers
                     request = ApplyForceFingersRequest()
                     request.force = gripper_state.force
-                    response = self.apply_force_fingers_client.call(request)
-                    if response:
+                    try:
+                        response = self.apply_force_fingers_client.call(request)
+                    except rospy.ServiceException as e:
+                        rospy.logerr('Error while contacting the apply_force_fingers server: {}'.format(e))
+                        response = ApplyForceFingersResponse()
+                        response.success = False
+                    if response.success:
                         self.last_gripper_force = request.force
                 else:
                     response = ApplyForceFingersResponse()
@@ -165,9 +169,14 @@ class PandaProgramInterpreter(object):
                 # need to revert to a move_fingers
                 request = MoveFingersRequest()
                 request.width = gripper_state.width
-                response = self.move_fingers_client.call(request)
+                try:
+                    response = self.move_fingers_client.call(request)
+                except rospy.ServiceException as e:
+                    rospy.logerr('Error while contacting the move_fingers server: {}'.format(e))
+                    response = MoveFingersResponse()
+                    response.success = False
 
-            rospy.loginfo('Success? :' + str(response.success))
+            rospy.loginfo('Success gripper? :' + str(response.success))
         else:
             primitive_to_precon.status = pp.PandaPrimitiveStatus.REVERTING
             if progress_callback is not None:
@@ -180,9 +189,11 @@ class PandaProgramInterpreter(object):
         if success_arm and response.success:
             primitive_to_precon.status = pp.PandaPrimitiveStatus.READY
             try:
-                if self.loaded_program.get_nth_primitive(self.next_primitive_index - 1).status == pp.PandaPrimitiveStatus.ERROR:
-                    rospy.loginfo('Was reverting a Reversion error - set previous one to EXECUTED')
-                    self.loaded_program.get_nth_primitive(self.next_primitive_index - 1).status = pp.PandaPrimitiveStatus.EXECUTED
+                if self.loaded_program.get_nth_primitive(self.next_primitive_index - 1).status == \
+                        pp.PandaPrimitiveStatus.ERROR:
+                    rospy.loginfo('Was resetting a Reversion error - set previous one to EXECUTED')
+                    self.loaded_program.get_nth_primitive(self.next_primitive_index - 1).status = \
+                        pp.PandaPrimitiveStatus.EXECUTED
                 if progress_callback is not None:
                     progress_callback.emit(self.next_primitive_index)
             except pp.PandaProgramException:
@@ -226,7 +237,8 @@ class PandaProgramInterpreter(object):
 
                 if not next_primitive.revertible:
                     self.loaded_program.update_nth_primitive_postconditions(
-                        self.next_primitive_index - 1,[self.last_pose, pp.GripperState(self.last_gripper_width, self.last_gripper_force)])
+                        self.next_primitive_index - 1, [self.last_pose, pp.GripperState(self.last_gripper_width,
+                                                                                        self.last_gripper_force)])
 
             except pp.PandaProgramException:
                 pass
@@ -480,8 +492,13 @@ class PandaProgramInterpreter(object):
                     # need to revert to a apply_force_fingers
                     request = ApplyForceFingersRequest()
                     request.force = gripper_state.force
-                    response = self.apply_force_fingers_client.call(request)
-                    if response:
+                    try:
+                        response = self.apply_force_fingers_client.call(request)
+                    except rospy.ServiceException as e:
+                        rospy.logerr('Error while contacting the apply_force_fingers server: {}'.format(e))
+                        response = ApplyForceFingersResponse()
+                        response.success = False
+                    if response.success:
                         self.last_gripper_force = request.force
                 else:
                     response = ApplyForceFingersResponse()
@@ -490,7 +507,12 @@ class PandaProgramInterpreter(object):
                 # need to revert to a move_fingers
                 request = MoveFingersRequest()
                 request.width = gripper_state.width
-                response = self.move_fingers_client.call(request)
+                try:
+                    response = self.move_fingers_client.call(request)
+                except rospy.ServiceException as e:
+                    rospy.logerr('Error while contacting the move_fingers server: {}'.format(e))
+                    response = MoveFingersResponse()
+                    response.success = False
         else:
             rospy.sleep(rospy.Duration(self.fake_wait))
             response = MoveFingersResponse()
@@ -515,8 +537,13 @@ class PandaProgramInterpreter(object):
                     # need to revert to a apply_force_fingers
                     request = ApplyForceFingersRequest()
                     request.force = gripper_state.force
-                    response = self.apply_force_fingers_client.call(request)
-                    if response:
+                    try:
+                        response = self.apply_force_fingers_client.call(request)
+                    except rospy.ServiceException as e:
+                        rospy.logerr('Error while contacting the apply_force_fingers server: {}'.format(e))
+                        response = ApplyForceFingersResponse()
+                        response.success = False
+                    if response.success:
                         self.last_gripper_force = request.force
                 else:
                     response = ApplyForceFingersResponse()
@@ -525,7 +552,12 @@ class PandaProgramInterpreter(object):
                 # need to revert to a move_fingers
                 request = MoveFingersRequest()
                 request.width = gripper_state.width
-                response = self.move_fingers_client.call(request)
+                try:
+                    response = self.move_fingers_client.call(request)
+                except rospy.ServiceException as e:
+                    rospy.logerr('Error while contacting the move_fingers server: {}'.format(e))
+                    response = MoveFingersResponse()
+                    response.success = False
         else:
             rospy.sleep(rospy.Duration(self.fake_wait))
             response = MoveFingersResponse()
