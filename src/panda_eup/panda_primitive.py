@@ -41,7 +41,7 @@ class PandaPrimitive(object):
 
     def __str__(self):
         return self.description + ' (' + str(self.starting_arm_state_index) + ', ' +\
-               str(self.starting_gripper_state_index) + ' R: ' + str(self.revertible) + ' S: ' + self.status.name + ')'
+               str(self.starting_gripper_state_index) + ' R: ' + str(self.revertible) + ' S: ' + str(self.status) + ')'
 
     def set_parameter_container(self, container):
         container_filled = isinstance(container, self.expected_container)
@@ -284,18 +284,15 @@ class PandaProgram(object):
             revertible = True
             updated = False
 
-        # TODO: NOT ENOUGH TO MAKE ONLY NEXT NOT REVERTIBLE
-        #  1. check what the update could impact (pose and/or gripper state)
-        #  2. for the one that apply, check the postcondition indexes
-        #       for all primitive in the rest of the program that have those as precondition indexes make them irrevertible
+        if not revertible:
+            effect = self.effect_of_primitive.get(primitive.__class__, [False, False])
+            arm_index, gripper_index = self.get_nth_primitive_postcondition_indexes(n)
 
-        try:
-            next_primitive = self.get_nth_primitive(n + 1)
-        except PandaProgramException:
-            pass
-        else:
-            next_primitive.revertible = revertible
-
+            for p in self.primitives[n+1:len(self.primitives)]:
+                if effect[0] and p.starting_arm_state_index == arm_index:
+                    p.revertible = False
+                if effect[1] and p.starting_gripper_state_index == gripper_index:
+                    p.revertible = False
         return updated
 
     def update_nth_primitive_postconditions(self, n, new_post_conditions):
@@ -315,10 +312,24 @@ class PandaProgram(object):
         if effect[1]:
             self.gripper_state_list[gripper_index] = new_post_conditions[1]
 
-        # TODO: NOT ENOUGH TO MAKE ONLY NEXT REVERTIBLE
-        #  1. check what effect the primitive has (pose and/or gripper state)
-        #  2. for the one that apply, check the postcondition indexes
-        #       for all primitive in the rest of the program that have those as precondition indexes make them revertible
+        """
+        TODO: doing the following is technically not enough to correctly restore revertibility.
+         
+         Counter-example: if two primitives were tuned, one acting on arm state and the other on gripper state,
+        a subsequent primitive would be made "not revertible" by both of them. With the current code, if I just
+        update the postcond of one of those, the following primitive is made revertible again, DISREGARDING the other
+        one (that has no postcond updated yet).
+         
+         That said, the counter-example does not happen when using the interpreter and I will fix it when I have time.
+        Possible solution: restructure the entire reverting/post-condition architecture, either make it simpler (each
+        primitive impacts a single state) or more complex (revertible is computed by AND(revert_hand, revert_arm))
+        """
+
+        for p in self.primitives[n+1:len(self.primitives)]:
+            if effect[0] and p.starting_arm_state_index == arm_index:
+                p.revertible = True
+            if effect[1] and p.starting_gripper_state_index == gripper_index:
+                p.revertible = True
 
         try:
             next_primitive = self.get_nth_primitive(n + 1)

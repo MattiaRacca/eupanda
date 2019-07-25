@@ -100,14 +100,23 @@ class PandaProgramInterpreter(object):
             primitive.status = pp.PandaPrimitiveStatus.NEUTRAL
 
     def go_to_starting_state(self, progress_callback=None):
+        self.next_primitive_index = 0
+        success = self.go_to_current_primitive_preconditions(progress_callback)
+        self.next_primitive_index = 0 if success else -1
+        return success
+
+    def go_to_current_primitive_preconditions(self, progress_callback=None):
         if self.loaded_program is None:
+            rospy.logwarn('no program loaded')
             return False
 
         try:
-            arm_state, gripper_state = self.loaded_program.get_nth_primitive_preconditions(0)
+            arm_state, gripper_state = self.loaded_program.get_nth_primitive_preconditions(self.next_primitive_index)
         except pp.PandaProgramException:
-            rospy.logerr('Cannot find starting conditions: did you save the starting state to begin with?')
+            rospy.logerr('Cannot find preconditions for the primitive: did you save them to begin with?')
             return False
+
+        primitive_to_precon = self.loaded_program.get_nth_primitive(self.next_primitive_index)
 
         if not self.robotless_debug:
             # create new Goal for the primitive
@@ -116,10 +125,17 @@ class PandaProgramInterpreter(object):
             goal.position_speed = self.revert_default_position_speed
             goal.rotation_speed = self.revert_default_rotation_speed
 
-            self.move_to_ee_client.send_goal(goal)
+            primitive_to_precon.status = pp.PandaPrimitiveStatus.REVERTING
 
             if progress_callback is not None:
                 progress_callback.emit(self.next_primitive_index)
+
+            state = self.move_to_ee_client.send_goal_and_wait(goal, rospy.Duration(60))
+            success = (state == actionlib.GoalStatus.SUCCEEDED)
+            result = self.move_to_ee_client.get_result()
+
+            if success:
+                self.last_pose = result.final_pose
 
             success_arm = self.move_to_ee_client.wait_for_result()
             rospy.loginfo('Success? :' + str(success_arm))
@@ -137,16 +153,18 @@ class PandaProgramInterpreter(object):
 
             rospy.loginfo('Success? :' + str(response.success))
         else:
+            primitive_to_precon.status = pp.PandaPrimitiveStatus.REVERTING
+            if progress_callback is not None:
+                progress_callback.emit(self.next_primitive_index)
             rospy.sleep(rospy.Duration(self.fake_wait))
             response = MoveFingersResponse()
             response.success = True
             success_arm = True
 
         if success_arm and response.success:
-            self.next_primitive_index = 0
-            for primitive in self.loaded_program.primitives:
-                primitive.status = pp.PandaPrimitiveStatus.NEUTRAL
-            self.loaded_program.primitives[0].status = pp.PandaPrimitiveStatus.READY
+            primitive_to_precon.status = pp.PandaPrimitiveStatus.READY
+        else:
+            primitive_to_precon.status = pp.PandaPrimitiveStatus.ERROR
 
         return success_arm and response.success
 
@@ -179,8 +197,10 @@ class PandaProgramInterpreter(object):
             try:
                 next_primitive = self.loaded_program.get_nth_primitive(self.next_primitive_index)
                 next_primitive.status = pp.PandaPrimitiveStatus.READY
+
                 # TODO: maybe we should do this all the time, not only if the next primitive is not revertible,
                 #  that is the current primitive was tuned at some point
+
                 if not next_primitive.revertible:
                     self.loaded_program.update_nth_primitive_postconditions(
                         self.next_primitive_index - 1,[self.last_pose, pp.GripperState(self.last_gripper_width, self.last_gripper_force)])
