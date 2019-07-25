@@ -50,6 +50,7 @@ class EUPStateMachine(Enum):
     BUSY = 3
     STARTUP_ERROR = 4
     EXECUTION_ERROR = 5
+    REVERTING_ERROR = 6
 
 
 class EUPPlugin(Plugin):
@@ -66,13 +67,11 @@ class EUPWidget(QWidget):
     font.setPointSize(12)
     size_policy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
 
+    updateGUI = pyqtSignal()
     programGUIUpdate = pyqtSignal()
     robotStateUpdate = pyqtSignal(pp.PandaRobotStatus)
     tuningGUIUpdate = pyqtSignal(object)
     tuningAccepted = pyqtSignal(bool)
-    goToStartStateSignal = pyqtSignal()
-    executeOneStepSignal = pyqtSignal()
-    revertOneStepSignal = pyqtSignal()
 
     def __init__(self, title='EUP Widget'):
         super(EUPWidget, self).__init__()
@@ -89,7 +88,7 @@ class EUPWidget(QWidget):
             program_path = rospy.get_param('/program_path')
         else:
             program_path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
-            rospy.logwarn('Could not find rosparam program_path; loading an example program')
+            rospy.loginfo('Could not find rosparam program_path; loading an example program')
 
         self.interpreter.load_program(pp.load_program_from_file(program_path, 'program.pkl'))
 
@@ -111,7 +110,7 @@ class EUPWidget(QWidget):
         new_interface_status = pp.PandaRobotStatus(msg.data)
         if self.last_interface_state != new_interface_status:
             self.last_interface_state = new_interface_status
-            self.updatePandaWidgets()
+            self.updateGUI.emit()
 
     def initUI(self):
         # Create overall layout
@@ -179,6 +178,7 @@ class EUPWidget(QWidget):
         self.programGUIUpdate.connect(self.panda_program_widget.updateWidget)
         self.robotStateUpdate.connect(self.robot_state_widget.updateWidget)
         self.tuningGUIUpdate.connect(self.panda_tuning_widget.updateWidget)
+        self.updateGUI.connect(self.updatePandaWidgets)
 
         for key, page in self.panda_tuning_widget.stacks.items():
             if page.primitive_type is not None:
@@ -207,8 +207,8 @@ class EUPWidget(QWidget):
             rospy.logerr('Tuning when you should not?')
 
     def updatePandaWidgets(self):
-        rospy.logwarn('Current EUP state is {}'.format(self.state_machine))
-        rospy.logwarn('Current Interface state is {}'.format(self.last_interface_state))
+        rospy.loginfo('Current EUP state is {}'.format(self.state_machine))
+        rospy.loginfo('Current Interface state is {}'.format(self.last_interface_state))
 
         self.programGUIUpdate.emit()
         if self.last_interface_state is not None:
@@ -265,6 +265,13 @@ class EUPWidget(QWidget):
                     if key == 'go_to_current_primitive_preconditions':
                         value[0].setVisible(True)
                 self.panda_tuning_widget.setEnabled(False)
+            elif self.state_machine == EUPStateMachine.REVERTING_ERROR:
+                for key, value in self.interpreter_command_dict.items():
+                    value[0].setEnabled(key is 'go_to_current_primitive_preconditions')
+                    value[0].setVisible(key is not 'revert_one_step')
+                    if key == 'go_to_current_primitive_preconditions':
+                        value[0].setVisible(True)
+                self.panda_tuning_widget.setEnabled(False)
 
     def execute_interpreter_command(self, command):
         # Disable lower buttons
@@ -286,15 +293,25 @@ class EUPWidget(QWidget):
 
         self.threadpool.start(worker)
 
-    def reapWorkerResults(self, result):
-        rospy.logdebug("Worker result: " + str(result))
+    def reapWorkerResults(self, success):
+        rospy.logdebug("Worker result: " + str(success))
         if self.state_machine == EUPStateMachine.STARTUP_BUSY:
-            self.state_machine = EUPStateMachine.OPERATIONAL if result else EUPStateMachine.STARTUP_ERROR
+            self.state_machine = EUPStateMachine.OPERATIONAL if success else EUPStateMachine.STARTUP_ERROR
         if self.state_machine == EUPStateMachine.BUSY:
-            self.state_machine = EUPStateMachine.OPERATIONAL if result else EUPStateMachine.EXECUTION_ERROR
-        if self.state_machine == EUPStateMachine.STARTUP_ERROR and result:
+            self.state_machine = EUPStateMachine.OPERATIONAL if success else EUPStateMachine.EXECUTION_ERROR
+            # if the command failed but the primitive in error is the previous one, I was reverting
+            try:
+                reverting_check= self.interpreter.loaded_program.get_nth_primitive(
+                    self.interpreter.next_primitive_index - 1)
+                rospy.logwarn('{}'.format(reverting_check))
+                if not success and reverting_check.status == pp.PandaPrimitiveStatus.ERROR:
+                    self.state_machine = EUPStateMachine.REVERTING_ERROR
+            except pp.PandaProgramException:
+                pass
+        if self.state_machine == EUPStateMachine.STARTUP_ERROR and success:
             self.state_machine = EUPStateMachine.OPERATIONAL
-        if self.state_machine == EUPStateMachine.EXECUTION_ERROR and result:
+        if (self.state_machine == EUPStateMachine.EXECUTION_ERROR or
+            self.state_machine == EUPStateMachine.REVERTING_ERROR) and success:
             self.state_machine = EUPStateMachine.OPERATIONAL
         self.updatePandaWidgets()
 

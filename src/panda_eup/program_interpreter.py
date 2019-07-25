@@ -26,8 +26,8 @@ class PandaProgramInterpreter(object):
         self.robotless_debug = robotless_debug
         self.fake_wait = 3
 
-        self.revert_default_position_speed = .04  # m/s
-        self.revert_default_rotation_speed = 1.0  # rad/s
+        self.revert_default_position_speed = .07  # m/s
+        self.revert_default_rotation_speed = 2.0  # rad/s
 
         # TO THE PRIMITIVE_INTERFACE, IF ANY
         if not self.robotless_debug:
@@ -113,8 +113,15 @@ class PandaProgramInterpreter(object):
         try:
             arm_state, gripper_state = self.loaded_program.get_nth_primitive_preconditions(self.next_primitive_index)
         except pp.PandaProgramException:
-            rospy.logerr('Cannot find preconditions for the primitive: did you save them to begin with?')
-            return False
+            # HACK for corner case
+            # ouch, no preconditions -  we might be recovering from reverting the last primitive
+            if self.next_primitive_index == self.loaded_program.get_program_length():
+                # yes, we are - ok, let's just execute the last primitive
+                self.next_primitive_index -= 1
+                return self.execute_rest_of_program()
+            else:
+                rospy.logerr('Cannot find preconditions for the primitive: did you save them to begin with?')
+                return False
 
         primitive_to_precon = self.loaded_program.get_nth_primitive(self.next_primitive_index)
 
@@ -140,11 +147,20 @@ class PandaProgramInterpreter(object):
             success_arm = self.move_to_ee_client.wait_for_result()
             rospy.loginfo('Success? :' + str(success_arm))
 
+            # HACK:
+            # Problem: requesting ApplyForceFingers when robot is already applying force locks the service caller
+            # Solution: check if there was already force commanded (last_gripper_force > 0.0). If so, do nothing
             if gripper_state.force > 0.0:
-                # need to revert to a apply_force_fingers
-                request = ApplyForceFingersRequest()
-                request.force = gripper_state.force
-                response = self.apply_force_fingers_client.call(request)
+                if self.last_gripper_force == 0.0:
+                    # need to revert to a apply_force_fingers
+                    request = ApplyForceFingersRequest()
+                    request.force = gripper_state.force
+                    response = self.apply_force_fingers_client.call(request)
+                    if response:
+                        self.last_gripper_force = request.force
+                else:
+                    response = ApplyForceFingersResponse()
+                    response.success = True
             else:
                 # need to revert to a move_fingers
                 request = MoveFingersRequest()
@@ -163,9 +179,16 @@ class PandaProgramInterpreter(object):
 
         if success_arm and response.success:
             primitive_to_precon.status = pp.PandaPrimitiveStatus.READY
+            try:
+                if self.loaded_program.get_nth_primitive(self.next_primitive_index - 1).status == pp.PandaPrimitiveStatus.ERROR:
+                    rospy.loginfo('Was reverting a Reversion error - set previous one to EXECUTED')
+                    self.loaded_program.get_nth_primitive(self.next_primitive_index - 1).status = pp.PandaPrimitiveStatus.EXECUTED
+                if progress_callback is not None:
+                    progress_callback.emit(self.next_primitive_index)
+            except pp.PandaProgramException:
+                pass
         else:
             primitive_to_precon.status = pp.PandaPrimitiveStatus.ERROR
-
         return success_arm and response.success
 
     def execute_one_step(self, progress_callback=None):
@@ -250,7 +273,6 @@ class PandaProgramInterpreter(object):
             primitive_to_revert.status = pp.PandaPrimitiveStatus.READY
             rospy.loginfo('Reverted primitive ' + primitive_to_revert.__str__())
             self.next_primitive_index -= 1
-
         else:
             primitive_to_revert.status = pp.PandaPrimitiveStatus.ERROR
             rospy.logerr('Error while reverting ' + primitive_to_revert.__str__())
@@ -454,10 +476,16 @@ class PandaProgramInterpreter(object):
 
         if not self.robotless_debug:
             if gripper_state.force > 0.0:
-                # need to revert to a apply_force_fingers
-                request = ApplyForceFingersRequest()
-                request.force = gripper_state.force
-                response = self.apply_force_fingers_client.call(request)
+                if self.last_gripper_force == 0.0:
+                    # need to revert to a apply_force_fingers
+                    request = ApplyForceFingersRequest()
+                    request.force = gripper_state.force
+                    response = self.apply_force_fingers_client.call(request)
+                    if response:
+                        self.last_gripper_force = request.force
+                else:
+                    response = ApplyForceFingersResponse()
+                    response.success = True
             else:
                 # need to revert to a move_fingers
                 request = MoveFingersRequest()
@@ -483,10 +511,16 @@ class PandaProgramInterpreter(object):
 
         if not self.robotless_debug:
             if gripper_state.force > 0.0:
-                # need to revert to a apply_force_fingers
-                request = ApplyForceFingersRequest()
-                request.force = gripper_state.force
-                response = self.apply_force_fingers_client.call(request)
+                if self.last_gripper_force == 0.0:
+                    # need to revert to a apply_force_fingers
+                    request = ApplyForceFingersRequest()
+                    request.force = gripper_state.force
+                    response = self.apply_force_fingers_client.call(request)
+                    if response:
+                        self.last_gripper_force = request.force
+                else:
+                    response = ApplyForceFingersResponse()
+                    response.success = True
             else:
                 # need to revert to a move_fingers
                 request = MoveFingersRequest()

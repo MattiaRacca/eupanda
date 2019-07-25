@@ -215,6 +215,16 @@ class PandaProgram(object):
         gripper_state = self.gripper_state_list[prim.starting_gripper_state_index]
         return arm_state, gripper_state
 
+    def get_nth_primitive_postconditions(self, n):
+        try:
+            arm_state_index, gripper_state_index = self.get_nth_primitive_postcondition_indexes(n)
+        except:
+            raise
+
+        arm_state = self.arm_state_list[arm_state_index]
+        gripper_state = self.gripper_state_list[gripper_state_index]
+        return arm_state, gripper_state
+
     def get_nth_primitive_postcondition_indexes(self, n):
         try:
             next_primitive = self.get_nth_primitive(n + 1)
