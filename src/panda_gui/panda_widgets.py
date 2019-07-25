@@ -578,6 +578,7 @@ class PandaTuningPage(QFrame):
                                                                 self.primitive_type.gui_tunable_parameter_ranges[param])
                 self.sliders[param].valueSubmitted.connect(partial(self.signalPrimitiveTuning, param))
                 layout.addWidget(self.sliders[param])
+        layout.setAlignment(Qt.AlignTop)
 
     def updatePageFromPritimive(self, primitive):
         if primitive.__class__ is not None:
@@ -594,6 +595,7 @@ class PandaTuningPage(QFrame):
 
 class CurrentValueShowingSlider(QWidget):
     valueSubmitted = pyqtSignal(float)
+    LABEL_WIDTH = 100
 
     def __init__(self, parent, name, measure_unit='', range=[0, 1]):
         super(CurrentValueShowingSlider, self).__init__(parent)
@@ -605,9 +607,7 @@ class CurrentValueShowingSlider(QWidget):
     def initUI(self):
         self.widget_layout = QGridLayout(self)
 
-        self.slider = DoubleSlider(2, Qt.Horizontal)
-        self.slider.setMinimum(self.range[0])
-        self.slider.setMaximum(self.range[1])
+        self.slider = FixNumberTicksSlider(self.range[0], self.range[1], 50, Qt.Horizontal)
 
         self.current_value_label = QLabel('???')
         self.stored_value_label = QLabel('???')
@@ -615,29 +615,40 @@ class CurrentValueShowingSlider(QWidget):
         self._stored_label = QLabel('Stored\n Value')
         self.name_label = QLabel(self.name)
 
-        self.submit_parameter_value = QPushButton('Submit new value')
+        # TODO: Better naming of parameters
+        # TODO: more visible labels (same style of other elements)
+        
+        self.current_value_label.setFixedWidth(CurrentValueShowingSlider.LABEL_WIDTH)
+        self.stored_value_label.setFixedWidth(CurrentValueShowingSlider.LABEL_WIDTH)
+        self._current_label.setFixedWidth(CurrentValueShowingSlider.LABEL_WIDTH)
+        self._stored_label.setFixedWidth(CurrentValueShowingSlider.LABEL_WIDTH)
 
-        # TODO: better spacing and sizepolicy here
+        self.current_value_label.setAlignment(Qt.AlignCenter)
+        self.stored_value_label.setAlignment(Qt.AlignCenter)
+        self._current_label.setAlignment(Qt.AlignCenter)
+        self._stored_label.setAlignment(Qt.AlignCenter)
+
+        self.submit_parameter_value = QPushButton('Submit new value')
+        self.submit_parameter_value.setSizePolicy(QSizePolicy(QSizePolicy.Fixed, QSizePolicy.MinimumExpanding))
+
         self.widget_layout.addWidget(self.name_label, 1, 1)
         self.widget_layout.addWidget(self.slider, 2, 1)
         self.widget_layout.addWidget(self.current_value_label, 2, 2)
         self.widget_layout.addWidget(self._current_label, 1, 2)
         self.widget_layout.addWidget(self.stored_value_label, 2, 3)
         self.widget_layout.addWidget(self._stored_label, 1, 3)
-        self.widget_layout.addWidget(self.submit_parameter_value, 2, 4)
+        self.widget_layout.addWidget(self.submit_parameter_value, 1, 4, 2, 4)
 
         self.slider.doubleValueChanged.connect(self.updateLabel)
         self.submit_parameter_value.clicked.connect(self.submitValue)
 
     def updateValue(self, value):
         self.slider.setValue(value)
-        # TODO: better formatting here
-        self.current_value_label.setText('{} {}'.format(value, self.measure_unit))
-        self.stored_value_label.setText('{} {}'.format(value, self.measure_unit))
+        self.current_value_label.setText('{:.2f} {}'.format(value, self.measure_unit))
+        self.stored_value_label.setText('{:.2f} {}'.format(value, self.measure_unit))
 
     def updateLabel(self, value):
-        # TODO: better formatting here
-        self.current_value_label.setText('{} {}'.format(value, self.measure_unit))
+        self.current_value_label.setText('{:.2f} {}'.format(value, self.measure_unit))
 
     def submitValue(self):
         value = self.slider.value()
@@ -646,7 +657,7 @@ class CurrentValueShowingSlider(QWidget):
     def receiveValueConfirmation(self, tuned):
         if tuned:
             value = self.slider.value()
-            self.stored_value_label.setText('{} {}'.format(value, self.measure_unit))
+            self.stored_value_label.setText('{:.2f} {}'.format(value, self.measure_unit))
 
 
 class QVerticalLine(QFrame):
@@ -666,39 +677,34 @@ class QExpandingPushButton(QPushButton):
         return QSize(10, PRIMITIVE_HEIGHT)
 
 
-class DoubleSlider(QSlider):
+class FixNumberTicksSlider(QSlider):
 
     # create our our signal that we can connect to if necessary
     doubleValueChanged = pyqtSignal(float)
 
-    def __init__(self, decimals=3, *args, **kargs):
-        super(DoubleSlider, self).__init__( *args, **kargs)
-        self._multi = 10 ** decimals
+    def __init__(self, lowerbound, upperbound, number_of_ticks=100, *args, **kargs):
+        super(FixNumberTicksSlider, self).__init__( *args, **kargs)
+        self.setMinimum(0)
+        self.setMaximum(number_of_ticks)
+
+        self._lowerbound = lowerbound
+        self._upperbound = upperbound
+        self._number_of_ticks = number_of_ticks
+        self._range = upperbound - lowerbound
+        self._real_step = self._range/self._number_of_ticks
 
         self.valueChanged.connect(self.emitDoubleValueChanged)
-        self.setTickPosition(QSlider.TicksBelow)
+        self.setTickPosition(QSlider.TicksBothSides)
 
     def emitDoubleValueChanged(self):
-        value = float(super(DoubleSlider, self).value())/self._multi
+        value = self._lowerbound + float(super(FixNumberTicksSlider, self).value())*self._real_step
         self.doubleValueChanged.emit(value)
 
     def value(self):
-        return float(super(DoubleSlider, self).value()) / self._multi
-
-    def setMinimum(self, value):
-        return super(DoubleSlider, self).setMinimum(value * self._multi)
-
-    def setMaximum(self, value):
-        return super(DoubleSlider, self).setMaximum(value * self._multi)
-
-    def setSingleStep(self, value):
-        return super(DoubleSlider, self).setSingleStep(value * self._multi)
-
-    def singleStep(self):
-        return float(super(DoubleSlider, self).singleStep()) / self._multi
+        return self._lowerbound + float(super(FixNumberTicksSlider, self).value())*self._real_step
 
     def setValue(self, value):
-        super(DoubleSlider, self).setValue(int(value * self._multi))
+        super(FixNumberTicksSlider, self).setValue(int((value - self._lowerbound)/self._real_step))
 
 
 class WorkerSignals(QObject):
