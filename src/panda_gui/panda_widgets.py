@@ -197,14 +197,12 @@ class EUPWidget(QWidget):
 
             if ready_primitive is not None:
                 for key, value in dict.items():
-                    rospy.loginfo('before {} = {}'.format(key, getattr(ready_primitive.parameter_container, key)))
                     tuned = self.interpreter.loaded_program.update_nth_primitive_parameter(
                         self.interpreter.next_primitive_index, key, value)
                     rospy.loginfo('Tuning: {}'.format(str(tuned)))
-                    rospy.loginfo('after {} = {}'.format(key, getattr(ready_primitive.parameter_container, key)))
                     self.tuningAccepted.emit(tuned)
         else:
-            rospy.logerr('Tuning when you should not?')
+            rospy.logerr('Are you tuning when you should not?')
 
     def updatePandaWidgets(self):
         rospy.loginfo('Current EUP state is {}'.format(self.state_machine))
@@ -460,7 +458,6 @@ class PandaPrimitiveWidget(QFrame):
         pp.PandaPrimitiveStatus.REVERTING:pp.PandaPrimitiveStatus.REVERTING.name,
         pp.PandaPrimitiveStatus.EXECUTED:''
     }
-
     font=QFont()
     font.setBold(True)
     font.setPointSize(10)
@@ -540,8 +537,7 @@ class PandaPrimitiveWidget(QFrame):
             else:
                 self.setPalette(gray_palette)
 
-        self.status_label.setText(str(PandaPrimitiveWidget.status_label_dict[self.primitive.status]) +
-                                  '\nR:' + str(self.primitive.revertible))
+        self.status_label.setText(str(PandaPrimitiveWidget.status_label_dict[self.primitive.status]))
         self.update()
 
 
@@ -613,6 +609,16 @@ class PandaTuningPage(QFrame):
 class CurrentValueShowingSlider(QWidget):
     valueSubmitted = pyqtSignal(float)
     LABEL_WIDTH = 100
+    font=QFont()
+    font.setBold(True)
+    font.setPointSize(11)
+
+    readable_parameter_name = {
+        'position_speed': 'Motion Speed',
+        'force_threshold': 'Collision Threshold',
+        'force': 'Grasp Strength',
+        'width': 'Finger Distance'
+    }
 
     def __init__(self, parent, name, measure_unit='', range=[0, 1]):
         super(CurrentValueShowingSlider, self).__init__(parent)
@@ -630,7 +636,13 @@ class CurrentValueShowingSlider(QWidget):
         self.stored_value_label = QLabel('???')
         self._current_label = QLabel('Current\n Value')
         self._stored_label = QLabel('Stored\n Value')
-        self.name_label = QLabel(self.name)
+        self.name_label = QLabel(CurrentValueShowingSlider.readable_parameter_name[self.name])
+
+        self.current_value_label.setFont(CurrentValueShowingSlider.font)
+        self.stored_value_label.setFont(CurrentValueShowingSlider.font)
+        self._current_label.setFont(CurrentValueShowingSlider.font)
+        self._stored_label.setFont(CurrentValueShowingSlider.font)
+        self.name_label.setFont(CurrentValueShowingSlider.font)
 
         # TODO: Better naming of parameters
         # TODO: more visible labels (same style of other elements)
@@ -645,8 +657,9 @@ class CurrentValueShowingSlider(QWidget):
         self._current_label.setAlignment(Qt.AlignCenter)
         self._stored_label.setAlignment(Qt.AlignCenter)
 
-        self.submit_parameter_value = QPushButton('Submit new value')
+        self.submit_parameter_value = QPushButton('Submit\n new value')
         self.submit_parameter_value.setSizePolicy(QSizePolicy(QSizePolicy.Fixed, QSizePolicy.MinimumExpanding))
+        self.submit_parameter_value.setFont(CurrentValueShowingSlider.font)
 
         self.widget_layout.addWidget(self.name_label, 1, 1)
         self.widget_layout.addWidget(self.slider, 2, 1)
@@ -666,6 +679,12 @@ class CurrentValueShowingSlider(QWidget):
 
     def updateLabel(self, value):
         self.current_value_label.setText('{:.2f} {}'.format(value, self.measure_unit))
+        if self.current_value_label.text() != self.stored_value_label.text():
+            self._current_label.setStyleSheet("color: lightseagreen")
+            self.current_value_label.setStyleSheet("color: lightseagreen")
+        else:
+            self._current_label.setStyleSheet("color: black")
+            self.current_value_label.setStyleSheet("color: black")
 
     def submitValue(self):
         value = self.slider.value()
@@ -675,7 +694,8 @@ class CurrentValueShowingSlider(QWidget):
         if tuned:
             value = self.slider.value()
             self.stored_value_label.setText('{:.2f} {}'.format(value, self.measure_unit))
-
+            self.updateLabel(value)
+        self.update()
 
 class QVerticalLine(QFrame):
     def __init__(self, parent=None):
