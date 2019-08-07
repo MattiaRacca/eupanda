@@ -49,6 +49,10 @@ private:
   const std::string BASE_FRAME = "panda_link0";
   const std::string EE_FRAME = "panda_K";         // N.B.: panda_K and panda_EE are the same thing
 
+  // const for primitives
+  // TODO: turn this into rosparameters
+  const double max_rotation_speed = 5.0;  // rad/s
+
   // Internal variables
   geometry_msgs::WrenchStamped last_wrench_;
   panda_pbd::MoveToContactFeedback move_to_contact_feedback_;

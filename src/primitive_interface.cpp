@@ -516,8 +516,7 @@ void PrimitiveInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr 
   adjustImpedanceControllerStiffness();
 }
 
-void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal)
-{
+void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoalConstPtr &goal) {
   ROS_DEBUG("Received MoveToContact request");
   ROS_WARN("Setting the robot to be stiff (to execute trajectory)");
   adjustImpedanceControllerStiffness(1500.0, 300.0, 10.0);
@@ -528,7 +527,7 @@ void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoa
   current_position << current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z;
   Eigen::Quaterniond current_orientation;
   current_orientation.coeffs() << current_pose.pose.orientation.x, current_pose.pose.orientation.y,
-                             current_pose.pose.orientation.z, current_pose.pose.orientation.w;
+          current_pose.pose.orientation.z, current_pose.pose.orientation.w;
 
   // Put target pose in Eigen form
   Eigen::Vector3d target_position;
@@ -536,25 +535,48 @@ void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoa
   Eigen::Quaterniond target_orientation;
 
   target_orientation.coeffs() << goal->pose.pose.orientation.x, goal->pose.pose.orientation.y,
-                            goal->pose.pose.orientation.z, goal->pose.pose.orientation.w;
+          goal->pose.pose.orientation.z, goal->pose.pose.orientation.w;
 
-  if (current_orientation.coeffs().dot(target_orientation.coeffs()) < 0.0)
-  {
+  if (current_orientation.coeffs().dot(target_orientation.coeffs()) < 0.0) {
     target_orientation.coeffs() << -target_orientation.coeffs();
   }
 
-  double position_speed_target = goal->position_speed; // m/s
-  double rotation_speed_target = goal->rotation_speed; // rad/s
+  double expected_time = 0.0;
 
-  // Compute "pace" of motion
-  Eigen::Vector3d position_difference = target_position - current_position;
-  Eigen::Quaterniond rotation_difference(target_orientation * current_orientation.inverse());
+  if (goal->rotation_speed < 0.0){
+    // The rotation speed is computed starting from the position speed
 
-  // Convert to axis angle
-  Eigen::AngleAxisd rotation_difference_angle_axis(rotation_difference);
+    double position_speed_target = goal->position_speed; // m/s
 
-  double expected_time = std::max(rotation_difference_angle_axis.angle() / rotation_speed_target,
-                                  position_difference.norm() / position_speed_target);
+    // Compute "pace" of motion
+    Eigen::Vector3d position_difference = target_position - current_position;
+    Eigen::Quaterniond rotation_difference(target_orientation * current_orientation.inverse());
+
+    // Convert to axis angle
+    Eigen::AngleAxisd rotation_difference_angle_axis(rotation_difference);
+
+    double time_position = position_difference.norm() / position_speed_target;
+
+    double rotation_speed_target = std::min(max_rotation_speed,
+                                            position_speed_target/position_difference.norm()*rotation_difference.norm());
+
+    double time_orientation = rotation_speed_target / rotation_difference_angle_axis.angle();
+    expected_time = std::max(time_orientation, time_position);
+  } else {
+    double position_speed_target = goal->position_speed; // m/s
+    double rotation_speed_target = goal->rotation_speed; // rad/s
+
+    // Compute "pace" of motion
+    Eigen::Vector3d position_difference = target_position - current_position;
+    Eigen::Quaterniond rotation_difference(target_orientation * current_orientation.inverse());
+
+    // Convert to axis angle
+    Eigen::AngleAxisd rotation_difference_angle_axis(rotation_difference);
+
+    expected_time = std::max(rotation_difference_angle_axis.angle() / rotation_speed_target,
+                                    position_difference.norm() / position_speed_target);
+  }
+
   double progression = 0.0;
   bool in_contact = false;
   bool error_happened = false;
@@ -681,18 +703,43 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
     target_orientation.coeffs() << -target_orientation.coeffs();
   }
 
-  double position_speed_target = goal->position_speed; // m/s
-  double rotation_speed_target = goal->rotation_speed; // rad/s
+  double desired_time = 0.0;
 
-  // Compute "pace" of motion
-  Eigen::Vector3d position_difference = target_position - current_position;
-  Eigen::Quaterniond rotation_difference(target_orientation * current_orientation.inverse());
+  if(goal->rotation_speed < 0.0){
+    // The rotation speed is computed starting from the position speed
 
-  // Convert to axis angle
-  Eigen::AngleAxisd rotation_difference_angle_axis(rotation_difference);
+    double position_speed_target = goal->position_speed; // m/s
 
-  double desired_time = std::max(rotation_difference_angle_axis.angle() / rotation_speed_target,
-                                 position_difference.norm() / position_speed_target);
+    // Compute "pace" of motion
+    Eigen::Vector3d position_difference = target_position - current_position;
+    Eigen::Quaterniond rotation_difference(target_orientation * current_orientation.inverse());
+
+    // Convert to axis angle
+    Eigen::AngleAxisd rotation_difference_angle_axis(rotation_difference);
+
+    double time_position = position_difference.norm() / position_speed_target;
+
+    double rotation_speed_target = std::min(max_rotation_speed,
+            position_speed_target/position_difference.norm()*rotation_difference.norm());
+
+    double time_orientation = rotation_speed_target / rotation_difference_angle_axis.angle();
+    desired_time = std::max(time_orientation, time_position);
+
+  } else {
+    double position_speed_target = goal->position_speed; // m/s
+    double rotation_speed_target = goal->rotation_speed; // rad/s
+
+    // Compute "pace" of motion
+    Eigen::Vector3d position_difference = target_position - current_position;
+    Eigen::Quaterniond rotation_difference(target_orientation * current_orientation.inverse());
+
+    // Convert to axis angle
+    Eigen::AngleAxisd rotation_difference_angle_axis(rotation_difference);
+
+    desired_time = std::max(rotation_difference_angle_axis.angle() / rotation_speed_target,
+                                   position_difference.norm() / position_speed_target);
+  }
+
   double progression = 0.0;
   bool motion_done = false;
   bool error_happened = false;
@@ -762,7 +809,7 @@ void PrimitiveInterface::frankaStateCallback(const franka_msgs::FrankaState::Con
     interface_state_.store(0);
   }
   if ((msg->robot_mode != 4 && msg->robot_mode != 5) && interface_state_.load() == 0){
-    interface_state_.store(1); // TODO: the cartesian impedance controller does not enter by itself!
+    interface_state_.store(1); // TODO: the cartesian impedance controller does not re-enter by itself!
   }
   std_msgs::Int32 relayed_msg;
   relayed_msg.data = interface_state_.load();
