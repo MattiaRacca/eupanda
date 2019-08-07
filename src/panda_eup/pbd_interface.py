@@ -20,14 +20,14 @@ class PandaPBDInterface(object):
 
         self.default_parameters = {'kinesthestic_ft_threshold': 5.0,
                                    'move_to_ee_default_position_speed': 0.05,
-                                   'move_to_ee_default_rotation_speed': 1.0,
+                                   'move_to_ee_default_rotation_speed': -1.0,
                                    'user_sync_default_force_threshold': 10.0,
                                    'close_gripper_default_force': 20.0,
                                    'apply_force_fingers_default_force': 20.0,
                                    'move_to_contact_default_force_threshold': 5.0,
                                    'move_to_contact_default_torque_threshold': 5.0,
                                    'move_to_contact_default_position_speed': 0.05,
-                                   'move_to_contact_default_rotation_speed': 1.0}
+                                   'move_to_contact_default_rotation_speed': -1.0}
 
         for parameter_name in self.default_parameters.keys():
             if not rospy.has_param('~' + parameter_name):
