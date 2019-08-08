@@ -62,7 +62,7 @@ class EUPPlugin(Plugin):
         context.add_widget(self._widget)
 
     def shutdown_plugin(self):
-        self._widget.log_and_close()
+        self._widget.log_loaded_program()
 
 
 class EUPWidget(QWidget):
@@ -81,6 +81,7 @@ class EUPWidget(QWidget):
     def __init__(self, title='EUP Widget'):
         super(EUPWidget, self).__init__()
         self.setWindowTitle(title)
+        self.starting_timestamp = time()
 
         # Creating the interpreter and loading the program
         robotless_debug = False
@@ -111,17 +112,16 @@ class EUPWidget(QWidget):
         self.interface_state_subscriber = rospy.Subscriber("/primitive_interface_node/interface_state", Int32,
                                                            self.interface_state_callback)
 
-    def log_and_close(self):
-        if rospy.has_param('/program_logging_path'):
+    def log_loaded_program(self, need_to_log=True, partial_log=False):
+        if rospy.has_param('/program_logging_path') and need_to_log:
             program_logging_path = rospy.get_param('/program_logging_path')
-            timestamp = time()
-            date = datetime.fromtimestamp(timestamp).strftime('%m%d_%H%M')
+            date = datetime.fromtimestamp(self.starting_timestamp).strftime('%m%d_%H%M')
+            filename = '{}_program_log.pkl' if partial_log else '{}_program_partial_log.pkl'
             self.interpreter.loaded_program.dump_to_file(filepath=program_logging_path,
-                                                         filename='program_snap_{}.pkl'.format(date))
+                                                         filename=filename.format(date))
             rospy.loginfo('Loaded program saved in {}'.format(program_logging_path))
         else:
             rospy.logwarn('Could not find rosparam program_logging_path; skipped program logging')
-
 
     def interface_state_callback(self, msg):
         new_interface_status = pp.PandaRobotStatus(msg.data)
@@ -195,6 +195,7 @@ class EUPWidget(QWidget):
         self.programGUIUpdate.connect(self.panda_program_widget.updateWidget)
         self.robotStateUpdate.connect(self.robot_state_widget.updateWidget)
         self.tuningGUIUpdate.connect(self.panda_tuning_widget.updateWidget)
+        self.tuningAccepted.connect(partial(self.log_loaded_program, partial_log=True))
         self.updateGUI.connect(self.updatePandaWidgets)
 
         for key, page in self.panda_tuning_widget.stacks.items():
