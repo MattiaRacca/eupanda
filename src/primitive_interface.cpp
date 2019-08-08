@@ -545,6 +545,7 @@ void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoa
 
   if (goal->rotation_speed < 0.0){
     // The rotation speed is computed starting from the position speed
+    ROS_DEBUG("MoveToContact primitive: rotation speed not specified - Computing it with respect to the position speed");
 
     double position_speed_target = goal->position_speed; // m/s
 
@@ -562,6 +563,10 @@ void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoa
 
     double time_orientation = rotation_speed_target / rotation_difference_angle_axis.angle();
     expected_time = std::max(time_orientation, time_position);
+
+    if (expected_time == time_orientation) {
+      ROS_WARN("MovetoContact primitive: position speed was capped to respect max_rotation_speed");
+    }
   } else {
     double position_speed_target = goal->position_speed; // m/s
     double rotation_speed_target = goal->rotation_speed; // rad/s
@@ -707,6 +712,7 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
 
   if(goal->rotation_speed < 0.0){
     // The rotation speed is computed starting from the position speed
+    ROS_DEBUG("MoveToEE primitive: rotation speed not specified - Computing it with respect to the position speed");
 
     double position_speed_target = goal->position_speed; // m/s
 
@@ -724,6 +730,10 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
 
     double time_orientation = rotation_speed_target / rotation_difference_angle_axis.angle();
     desired_time = std::max(time_orientation, time_position);
+
+    if (desired_time == time_orientation) {
+      ROS_WARN("MovetoEE primitive: position speed was capped to respect max_roitation_speed");
+    }
 
   } else {
     double position_speed_target = goal->position_speed; // m/s
