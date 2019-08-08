@@ -4,6 +4,7 @@ from __future__ import division
 import pickle
 import os
 from enum import Enum
+from copy import copy
 
 from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
 from panda_pbd.srv import CloseGripperRequest, OpenGripperRequest, MoveFingersRequest, ApplyForceFingersRequest
@@ -38,23 +39,28 @@ class PandaPrimitive(object):
         self.parameters_with_effects_on_robot_state = None  # for the subclasses
         self.revertible = True
         self.status = PandaPrimitiveStatus.NEUTRAL
+        self.parameters_update_history = {}  # dictionary of lists, each containing the updates of a primitive parameter
+        self.container_update_history = []  # history of updates to primitive container
 
     def __str__(self):
         return self.description + ' (' + str(self.starting_arm_state_index) + ', ' +\
                str(self.starting_gripper_state_index) + ' R: ' + str(self.revertible) + ' S: ' + str(self.status) + ')'
 
     def set_parameter_container(self, container):
-        container_filled = isinstance(container, self.expected_container)
-        if container_filled:
+        container_fitting = isinstance(container, self.expected_container)
+
+        if container_fitting:
             self.parameter_container = container
-        return container_filled
+            self.init_parameter_update_history()
+
+        return container_fitting
 
     def set_starting_conditions(self, starting_arm_state_index, starting_gripper_state_index):
         self.starting_arm_state_index = starting_arm_state_index
         self.starting_gripper_state_index = starting_gripper_state_index
 
     def update_parameter(self, parameter_type, parameter_value):
-        if hasattr(self.expected_container, parameter_type) is False:
+        if not hasattr(self.expected_container, parameter_type):
             raise PandaProgramException(1)
 
         try:
@@ -64,7 +70,24 @@ class PandaPrimitive(object):
             revertible = True
 
         setattr(self.parameter_container, parameter_type, parameter_value)
+        self.parameters_update_history[parameter_type] = copy(parameter_value)
+        self.container_update_history.append(copy(self.parameter_container))
+
         return revertible
+
+    def init_parameter_update_history(self):
+        self.container_update_history.append(copy(self.parameter_container))
+        if not bool(self.parameters_update_history):  # if the dictionary is not full (aka not initialized)
+            self.parameters_update_history = {}
+            attributes = [attribute for attribute in dir(self.parameter_container)
+                          if not attribute.startswith('__')]
+            for attribute in attributes:
+                self.parameters_update_history[attribute] = [copy(getattr(self.parameter_container, attribute))]
+
+    def reset_parameter_update_history(self):
+        self.container_update_history = []
+        self.parameters_update_history = {}
+        self.init_parameter_update_history()
 
 
 class UserSync(PandaPrimitive):
