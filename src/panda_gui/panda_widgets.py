@@ -20,6 +20,8 @@ import traceback
 import sys
 from functools import partial
 from enum import Enum
+from datetime import datetime
+from time import time
 
 # Size of Primitive Widget
 PRIMITIVE_WIDTH = 100
@@ -58,6 +60,9 @@ class EUPPlugin(Plugin):
         super(EUPPlugin, self).__init__(context)
         self._widget = EUPWidget()
         context.add_widget(self._widget)
+
+    def shutdown_plugin(self):
+        self._widget.log_and_close()
 
 
 class EUPWidget(QWidget):
@@ -105,6 +110,18 @@ class EUPWidget(QWidget):
         # Subscriber for the interface status
         self.interface_state_subscriber = rospy.Subscriber("/primitive_interface_node/interface_state", Int32,
                                                            self.interface_state_callback)
+
+    def log_and_close(self):
+        if rospy.has_param('/program_logging_path'):
+            program_logging_path = rospy.get_param('/program_logging_path')
+            timestamp = time()
+            date = datetime.fromtimestamp(timestamp).strftime('%m%d_%H%M')
+            self.interpreter.loaded_program.dump_to_file(filepath=program_logging_path,
+                                                         filename='program_snap_{}.pkl'.format(date))
+            rospy.loginfo('Loaded program saved in {}'.format(program_logging_path))
+        else:
+            rospy.logwarn('Could not find rosparam program_logging_path; skipped program logging')
+
 
     def interface_state_callback(self, msg):
         new_interface_status = pp.PandaRobotStatus(msg.data)
