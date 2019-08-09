@@ -559,13 +559,17 @@ void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoa
     double time_position = position_difference.norm() / position_speed_target;
 
     double rotation_speed_target = std::min(max_rotation_speed,
-                                            position_speed_target/position_difference.norm()*rotation_difference.norm());
+                                            position_speed_target/position_difference.norm()*rotation_difference_angle_axis.angle());
 
     double time_orientation = rotation_speed_target / rotation_difference_angle_axis.angle();
     expected_time = std::max(time_orientation, time_position);
 
     if (expected_time == time_orientation) {
       ROS_WARN("MovetoContact primitive: position speed was capped to respect max_rotation_speed");
+      ROS_WARN("Angle of rotation is %f, rotation_speed_target is %f - required time is %f",
+               rotation_difference_angle_axis.angle(), rotation_speed_target, time_orientation);
+      ROS_WARN("Position delta is %f, position_speed_target is %f - required time is %f",
+               position_difference.norm(), position_speed_target, time_position);
     }
   } else {
     double position_speed_target = goal->position_speed; // m/s
@@ -726,13 +730,17 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
     double time_position = position_difference.norm() / position_speed_target;
 
     double rotation_speed_target = std::min(max_rotation_speed,
-            position_speed_target/position_difference.norm()*rotation_difference.norm());
+            position_speed_target/position_difference.norm()*rotation_difference_angle_axis.angle());
 
     double time_orientation = rotation_speed_target / rotation_difference_angle_axis.angle();
     desired_time = std::max(time_orientation, time_position);
 
     if (desired_time == time_orientation) {
       ROS_WARN("MovetoEE primitive: position speed was capped to respect max_rotation_speed");
+      ROS_WARN("Angle of rotation is %f, rotation_speed_target is %f - required time is %f",
+               rotation_difference_angle_axis.angle(), rotation_speed_target, time_orientation);
+      ROS_WARN("Position delta is %f, position_speed_target is %f - required time is %f",
+               position_difference.norm(), position_speed_target, time_position);
     }
 
   } else {

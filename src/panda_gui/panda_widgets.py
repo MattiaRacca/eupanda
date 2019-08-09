@@ -116,7 +116,7 @@ class EUPWidget(QWidget):
         if rospy.has_param('/program_logging_path') and need_to_log:
             program_logging_path = rospy.get_param('/program_logging_path')
             date = datetime.fromtimestamp(self.starting_timestamp).strftime('%m%d_%H%M')
-            filename = '{}_program_log.pkl' if partial_log else '{}_program_partial_log.pkl'
+            filename = '{}_program_partial_log.pkl' if partial_log else '{}_program_log.pkl'
             self.interpreter.loaded_program.dump_to_file(filepath=program_logging_path,
                                                          filename=filename.format(date))
             rospy.loginfo('Loaded program saved in {}'.format(program_logging_path))
