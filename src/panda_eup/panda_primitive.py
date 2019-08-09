@@ -4,7 +4,7 @@ from __future__ import division
 import pickle
 import os
 from enum import Enum
-from copy import copy
+from copy import deepcopy
 
 from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
 from panda_pbd.srv import CloseGripperRequest, OpenGripperRequest, MoveFingersRequest, ApplyForceFingersRequest
@@ -70,19 +70,20 @@ class PandaPrimitive(object):
             revertible = True
 
         setattr(self.parameter_container, parameter_type, parameter_value)
-        self.parameters_update_history[parameter_type] = copy(parameter_value)
-        self.container_update_history.append(copy(self.parameter_container))
+        self.parameters_update_history[parameter_type] = deepcopy(parameter_value)
+        self.container_update_history.append(deepcopy(self.parameter_container))
 
         return revertible
 
     def init_parameter_update_history(self):
-        self.container_update_history.append(copy(self.parameter_container))
+        self.container_update_history.append(deepcopy(self.parameter_container))
         if not bool(self.parameters_update_history):  # if the dictionary is not full (aka not initialized)
             self.parameters_update_history = {}
             attributes = [attribute for attribute in dir(self.parameter_container)
-                          if not attribute.startswith('__')]
+                          if not attribute.startswith('_') and not 'serialize' in attribute]
+            #  ROS adds some (de)serialize stuff to msgs/srvs - we do not need them tracked
             for attribute in attributes:
-                self.parameters_update_history[attribute] = [copy(getattr(self.parameter_container, attribute))]
+                self.parameters_update_history[attribute] = [deepcopy(getattr(self.parameter_container, attribute))]
 
     def reset_parameter_update_history(self):
         self.container_update_history = []
