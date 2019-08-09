@@ -823,11 +823,13 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
 }
 
 void PrimitiveInterface::frankaStateCallback(const franka_msgs::FrankaState::ConstPtr& msg){
-  if (msg->robot_mode == 4 || msg->robot_mode == 5){
+  if (msg->robot_mode == 4 || msg->robot_mode == 5 || msg->robot_mode == 1){
+    // if the robot is REFLEX, USER_STOPPED or IDLE --> stop the interface
     interface_state_.store(0);
   }
-  if ((msg->robot_mode != 4 && msg->robot_mode != 5) && interface_state_.load() == 0){
-    interface_state_.store(1); // TODO: the cartesian impedance controller does not re-enter by itself!
+  if ((msg->robot_mode != 4 && msg->robot_mode != 5 && msg->robot_mode != 1) && interface_state_.load() == 0){
+    interface_state_.store(1);
+    adjustImpedanceControllerStiffness();
   }
   std_msgs::Int32 relayed_msg;
   relayed_msg.data = interface_state_.load();
