@@ -732,7 +732,7 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
     desired_time = std::max(time_orientation, time_position);
 
     if (desired_time == time_orientation) {
-      ROS_WARN("MovetoEE primitive: position speed was capped to respect max_roitation_speed");
+      ROS_WARN("MovetoEE primitive: position speed was capped to respect max_rotation_speed");
     }
 
   } else {

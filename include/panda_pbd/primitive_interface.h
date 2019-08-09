@@ -51,7 +51,7 @@ private:
 
   // const for primitives
   // TODO: turn this into rosparameters
-  const double max_rotation_speed = 5.0;  // rad/s
+  const double max_rotation_speed = 0.7;  // rad/s, which is 45 degree/s
 
   // Internal variables
   geometry_msgs::WrenchStamped last_wrench_;
