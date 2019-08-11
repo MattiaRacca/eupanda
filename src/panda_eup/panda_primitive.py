@@ -55,6 +55,11 @@ class PandaPrimitive(object):
 
         return container_fitting
 
+    def get_parameter_value(self, parameter_type):
+        if not hasattr(self.expected_container, parameter_type):
+            raise PandaProgramException(1)
+        return getattr(self.parameter_container, parameter_type)
+
     def set_starting_conditions(self, starting_arm_state_index, starting_gripper_state_index):
         self.starting_arm_state_index = starting_arm_state_index
         self.starting_gripper_state_index = starting_gripper_state_index
