@@ -2,7 +2,7 @@
 from __future__ import division
 
 from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, QSizePolicy,\
-    QGroupBox, QApplication,QStackedWidget, QFormLayout, QSlider, QGridLayout
+    QGroupBox, QApplication,QStackedWidget, QSlider, QGridLayout
 from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool, pyqtProperty, QPropertyAnimation
 from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor, QFont
 from qt_gui.plugin import Plugin
@@ -116,10 +116,12 @@ class EUPWidget(QWidget):
         if rospy.has_param('/program_logging_path') and need_to_log:
             program_logging_path = rospy.get_param('/program_logging_path')
             date = datetime.fromtimestamp(self.starting_timestamp).strftime('%m%d_%H%M')
+            if not os.path.exists(program_logging_path.format(date)):
+                os.makedirs(program_logging_path.format(date))
             filename = '{}_program_partial_log.pkl' if partial_log else '{}_program_log.pkl'
-            self.interpreter.loaded_program.dump_to_file(filepath=program_logging_path,
+            self.interpreter.loaded_program.dump_to_file(filepath=program_logging_path.format(date),
                                                          filename=filename.format(date))
-            rospy.loginfo('Loaded program saved in {}'.format(program_logging_path))
+            rospy.loginfo('Loaded program saved in {}'.format(program_logging_path.format(date)))
         else:
             rospy.logwarn('Could not find rosparam program_logging_path; skipped program logging')
 

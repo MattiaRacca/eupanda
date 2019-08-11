@@ -1,5 +1,5 @@
 <launch>
     <param name="robotless_debug" type="bool" value="true" />
-    <param name="program_logging_path" type="string" value="$(find panda_pbd)/resources/logs" />
+    <param name="program_logging_path" type="string" value="$(find panda_pbd)/resources/logs/{}" />
     <node name="panda_gui" pkg="rqt_gui" type="rqt_gui" args="-s panda_gui" output="screen"/>
 </launch>

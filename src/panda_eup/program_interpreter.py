@@ -27,7 +27,7 @@ class PandaProgramInterpreter(object):
         self.fake_wait = 3
 
         self.revert_default_position_speed = .07  # m/s
-        self.revert_default_rotation_speed = 2.0  # rad/s
+        self.revert_default_rotation_speed = -1.0  # rad/s; see rotation_speed-less MoveTo** in primitive_interface.cpp
 
         # TO THE PRIMITIVE_INTERFACE, IF ANY
         if not self.robotless_debug:
