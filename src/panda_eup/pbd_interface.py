@@ -6,7 +6,7 @@ import panda_primitive as pp
 import program_interpreter as interpreter
 from panda_pbd.srv import EnableTeaching, EnableTeachingRequest
 from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
-from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest, CloseGripperRequest, OpenGripperRequest
+from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest
 from sensor_msgs.msg import JointState
 
 
@@ -22,7 +22,6 @@ class PandaPBDInterface(object):
                                    'move_to_ee_default_position_speed': 0.07,
                                    'move_to_ee_default_rotation_speed': -1.0,
                                    'user_sync_default_force_threshold': 10.0,
-                                   'close_gripper_default_force': 20.0,
                                    'apply_force_fingers_default_force': 20.0,
                                    'move_to_contact_default_force_threshold': 10.0,
                                    'move_to_contact_default_torque_threshold': 10.0,
@@ -244,44 +243,6 @@ class PandaPBDInterface(object):
         if was_relaxed:
             self.relax()
 
-    def insert_close_gripper(self):
-        # LEGACY - USE APPLY FORCE WITH FINGERS INSTEAD
-        request = CloseGripperRequest()
-        request.width = self.last_gripper_width
-        request.force = self.default_parameters['close_gripper_default_force']
-
-        was_relaxed = self.relaxed
-        if was_relaxed:
-            self.freeze()
-
-        close_gripper_primitive = pp.CloseGripper()
-        close_gripper_primitive.set_parameter_container(request)
-
-        self.execute_primitive_now(close_gripper_primitive)
-
-        self.program.insert_primitive(close_gripper_primitive, [None, pp.GripperState(self.last_gripper_width,
-                                                                                      request.force)])
-
-        if was_relaxed:
-            self.relax()
-
-    def insert_open_gripper(self):
-        # LEGACY - USE MOVE FINGERS INSTEAD
-        request = OpenGripperRequest()
-        request.width = self.last_gripper_width
-
-        was_relaxed = self.relaxed
-        if was_relaxed:
-            self.freeze()
-
-        open_gripper_primitive = pp.OpenGripper()
-        open_gripper_primitive.set_parameter_container(request)
-        self.program.insert_primitive(open_gripper_primitive, [None, pp.GripperState(self.last_gripper_width, 0.0)])
-
-        self.execute_primitive_now(open_gripper_primitive)
-
-        if was_relaxed:
-            self.relax()
 
     def execute_primitive_now(self, primitive):
         temp_program = pp.PandaProgram()

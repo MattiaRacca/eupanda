@@ -7,7 +7,7 @@ from enum import Enum
 from copy import deepcopy
 
 from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
-from panda_pbd.srv import CloseGripperRequest, OpenGripperRequest, MoveFingersRequest, ApplyForceFingersRequest
+from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest
 
 
 class PandaPrimitiveStatus(Enum):
@@ -173,20 +173,6 @@ class ApplyForceFingers(PandaPrimitive):
         self.parameters_with_effects_on_robot_state = ['force']
 
 
-class OpenGripper(PandaPrimitive):
-    def __init__(self, description="A Open Gripper primitive"):
-        super(OpenGripper, self).__init__(description)
-        self.expected_container = OpenGripperRequest
-        self.parameters_with_effects_on_robot_state = ['width']
-
-
-class CloseGripper(PandaPrimitive):
-    def __init__(self, description="A Close Gripper primitive"):
-        super(CloseGripper, self).__init__(description)
-        self.expected_container = CloseGripperRequest
-        self.parameters_with_effects_on_robot_state = ['width', 'force']
-
-
 class PandaProgram(object):
     def __init__(self, name="Unnamed Program", description="Empty Description"):
         self.name = name
@@ -202,9 +188,7 @@ class PandaProgram(object):
             MoveToContact: [True, False],
             MoveToEE: [True, False],
             MoveFingers: [False, True],
-            ApplyForceFingers: [False, True],
-            OpenGripper: [False, True],
-            CloseGripper: [False, True]
+            ApplyForceFingers: [False, True]
         }
 
     def __str__(self):
