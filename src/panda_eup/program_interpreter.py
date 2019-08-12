@@ -418,10 +418,29 @@ class PandaProgramInterpreter(object):
 
     # REVERT PRIMITIVE CALLBACK
     def revert_user_sync(self, primitive_index):
+        try:
+            pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+        except pp.PandaProgramException:
+            rospy.logerr('Cannot revert: this primitive does not exist')
+            return False
+
         rospy.loginfo('Trying to revert a user sync')
-        # User Sync does not require robot motions to be reset
-        success = True
-        rospy.loginfo('Success? :' + str(success))
+
+        # create new Goal for the primitive
+        goal = MoveToEEGoal()
+        goal.pose = pose
+        goal.position_speed = self.revert_default_position_speed
+        goal.rotation_speed = self.revert_default_rotation_speed
+
+        if not self.robotless_debug:
+            state = self.move_to_ee_client.send_goal_and_wait(goal, rospy.Duration(60))
+            success = (state == actionlib.GoalStatus.SUCCEEDED)
+        else:
+            rospy.sleep(rospy.Duration(self.fake_wait))
+            state = actionlib.GoalStatus.SUCCEEDED
+            success = True
+
+        rospy.loginfo('Success? {} [{}]'.format(str(success), str(state)))
         return success
 
     def revert_move_to_contact(self, primitive_index):
