@@ -327,14 +327,15 @@ bool PrimitiveInterface::moveFingersCallback(panda_pbd::MoveFingers::Request &re
 
   if(isInterfaceReady()){
     interface_state_.store(2);
-    gripper_move_client_->sendGoalAndWait(move_goal);
-    if (gripper_move_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED)
-    {
-      ROS_ERROR("Move fingers primitive failed: %s", gripper_move_client_->getState().getText().c_str());
+    gripper_move_client_->sendGoal(move_goal);
+    bool result = gripper_move_client_->waitForResult(ros::Duration(10.0));
+    auto state = gripper_move_client_->getState();
+    ROS_WARN("result is %d", result);
+    if (state != actionlib::SimpleClientGoalState::SUCCEEDED || !result) {
+      ROS_ERROR("Move Fingers primitive failed: %s", state.getText().c_str());
       res.success = false;
-    }
-    else
-    {
+      gripper_move_client_->cancelGoal();
+    } else {
       res.success = true;
     }
     interface_state_.store(1);
@@ -368,10 +369,14 @@ bool PrimitiveInterface::applyForceFingersCallback(panda_pbd::ApplyForceFingers:
 
   if(isInterfaceReady()) {
     interface_state_.store(2);
-    gripper_grasp_client_->sendGoalAndWait(grasping_goal);
-    if (gripper_grasp_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED) {
-      ROS_ERROR("Apply Force with Fingers primitived failed: %s", gripper_grasp_client_->getState().getText().c_str());
+    gripper_grasp_client_->sendGoal(grasping_goal);
+    bool result = gripper_grasp_client_->waitForResult(ros::Duration(10.0));
+    auto state = gripper_grasp_client_->getState();
+    ROS_WARN("result is %d", result);
+    if (state != actionlib::SimpleClientGoalState::SUCCEEDED || !result) {
+      ROS_ERROR("Apply Force with Fingers primitive failed: %s", state.getText().c_str());
       res.success = false;
+      gripper_grasp_client_->cancelGoal();
     } else {
       res.success = true;
     }
