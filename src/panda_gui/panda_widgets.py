@@ -98,6 +98,14 @@ class EUPWidget(QWidget):
 
         self.interpreter.load_program(pp.load_program_from_file(program_path, 'program.pkl'))
 
+        randomize = False
+        if rospy.has_param('/randomize_parameters'):
+            randomize = rospy.get_param('/randomize_parameters')
+
+        if randomize:
+            rospy.loginfo('Going to randomize the primitives parameters... oh dear')
+            self.interpreter.loaded_program.randomize_gui_tunable_primitives()
+
         # Setting up the state machines
         self.state_machine = EUPStateMachine(0)
         self.last_interface_state = None

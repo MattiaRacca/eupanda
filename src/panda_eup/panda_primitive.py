@@ -5,6 +5,7 @@ import pickle
 import os
 from enum import Enum
 from copy import deepcopy
+import numpy as np
 
 from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
 from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest
@@ -43,7 +44,7 @@ class PandaPrimitive(object):
         self.container_update_history = []  # history of updates to primitive container
 
     def __str__(self):
-        return self.description + ' (' + str(self.starting_arm_state_index) + ', ' +\
+        return self.description + ' (' + str(self.starting_arm_state_index) + ', ' + \
                str(self.starting_gripper_state_index) + ' R: ' + str(self.revertible) + ' S: ' + str(self.status) + ')'
 
     def set_parameter_container(self, container):
@@ -85,7 +86,7 @@ class PandaPrimitive(object):
         if not bool(self.parameters_update_history):  # if the dictionary is not full (aka not initialized)
             self.parameters_update_history = {}
             attributes = [attribute for attribute in dir(self.parameter_container)
-                          if not attribute.startswith('_') and not 'serialize' in attribute]
+                          if not attribute.startswith('_') and 'serialize' not in attribute]
             #  ROS adds some (de)serialize stuff to msgs/srvs - we do not need them tracked
             for attribute in attributes:
                 self.parameters_update_history[attribute] = [deepcopy(getattr(self.parameter_container, attribute))]
@@ -94,6 +95,14 @@ class PandaPrimitive(object):
         self.container_update_history = []
         self.parameters_update_history = {}
         self.init_parameter_update_history()
+
+    def randomize_gui_tunable_parameters(self):
+        for i, parameter in enumerate(self.gui_tunable_parameters):
+            min_value = self.gui_tunable_parameter_ranges[parameter][0]
+            max_value = self.gui_tunable_parameter_ranges[parameter][1]
+            new_value = (max_value - min_value) * np.random.random_sample() + min_value
+            self.update_parameter(parameter, new_value)
+            print('Randomized {}\' {}'.format(type(self).__name__, parameter))
 
 
 class UserSync(PandaPrimitive):
@@ -285,7 +294,7 @@ class PandaProgram(object):
         if effect[1]:
             del self.gripper_state_list[gripper_state_index]
 
-        for primitive in self.primitives[n+1:len(self.primitives)]:
+        for primitive in self.primitives[n + 1:len(self.primitives)]:
             if effect[0] and primitive.starting_arm_state_index == arm_state_index:
                 primitive.starting_arm_state_index -= 1
             if effect[1] and primitive.starting_gripper_state_index == gripper_state_index:
@@ -311,7 +320,7 @@ class PandaProgram(object):
             effect = self.effect_of_primitive.get(primitive.__class__, [False, False])
             arm_index, gripper_index = self.get_nth_primitive_postcondition_indexes(n)
 
-            for p in self.primitives[n+1:len(self.primitives)]:
+            for p in self.primitives[n + 1:len(self.primitives)]:
                 if effect[0] and p.starting_arm_state_index == arm_index:
                     p.revertible = False
                 if effect[1] and p.starting_gripper_state_index == gripper_index:
@@ -348,7 +357,7 @@ class PandaProgram(object):
         primitive impacts a single state) or more complex (revertible is computed by AND(revert_hand, revert_arm))
         """
 
-        for p in self.primitives[n+1:len(self.primitives)]:
+        for p in self.primitives[n + 1:len(self.primitives)]:
             if effect[0] and p.starting_arm_state_index == arm_index:
                 p.revertible = True
             if effect[1] and p.starting_gripper_state_index == gripper_index:
@@ -362,6 +371,10 @@ class PandaProgram(object):
             next_primitive.revertible = True
 
         return True
+
+    def randomize_gui_tunable_primitives(self):
+        for primitive in self.primitives:
+            primitive.randomize_gui_tunable_parameters()
 
     def dump_to_file(self, filepath='~', filename='program.pkl'):
         dump_program_to_file(self, filepath, filename)
