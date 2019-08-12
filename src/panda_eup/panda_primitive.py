@@ -99,7 +99,7 @@ class PandaPrimitive(object):
 class UserSync(PandaPrimitive):
     gui_tunable_parameters = ['force_threshold']
     gui_tunable_parameter_ranges = {
-        gui_tunable_parameters[0]: [0.0, 10.0]
+        gui_tunable_parameters[0]: [5.0, 30.0]
     }
     gui_tunable_parameter_units = {
         gui_tunable_parameters[0]: 'N'
@@ -114,7 +114,7 @@ class UserSync(PandaPrimitive):
 class MoveToEE(PandaPrimitive):
     gui_tunable_parameters = ['position_speed']
     gui_tunable_parameter_ranges = {
-        gui_tunable_parameters[0]: [0.001, 0.5]
+        gui_tunable_parameters[0]: [0.01, 0.25]
     }
     gui_tunable_parameter_units = {
         gui_tunable_parameters[0]: 'm/s'
@@ -129,8 +129,8 @@ class MoveToEE(PandaPrimitive):
 class MoveToContact(PandaPrimitive):
     gui_tunable_parameters = ['position_speed', 'force_threshold']
     gui_tunable_parameter_ranges = {
-        gui_tunable_parameters[0]: [0.001, 0.5],
-        gui_tunable_parameters[1]: [0.0, 10.0]
+        gui_tunable_parameters[0]: [0.01, 0.25],
+        gui_tunable_parameters[1]: [5.0, 20.0]
     }
     gui_tunable_parameter_units = {
         gui_tunable_parameters[0]: 'm/s',
@@ -161,7 +161,7 @@ class MoveFingers(PandaPrimitive):
 class ApplyForceFingers(PandaPrimitive):
     gui_tunable_parameters = ['force']
     gui_tunable_parameter_ranges = {
-        gui_tunable_parameters[0]: [20.0, 100.0]
+        gui_tunable_parameters[0]: [20.0, 60.0]
     }
     gui_tunable_parameter_units = {
         gui_tunable_parameters[0]: 'N'

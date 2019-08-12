@@ -694,11 +694,11 @@ class CurrentValueShowingSlider(QWidget):
 
     def updateValue(self, value):
         self.slider.setValue(value)
-        self.current_value_label.setText('{:.2f} {}'.format(value, self.measure_unit))
-        self.stored_value_label.setText('{:.2f} {}'.format(value, self.measure_unit))
+        self.current_value_label.setText('{:.3f} {}'.format(value, self.measure_unit))
+        self.stored_value_label.setText('{:.3f} {}'.format(value, self.measure_unit))
 
     def updateLabel(self, value):
-        self.current_value_label.setText('{:.2f} {}'.format(value, self.measure_unit))
+        self.current_value_label.setText('{:.3f} {}'.format(value, self.measure_unit))
         if self.current_value_label.text() != self.stored_value_label.text():
             self._current_label.setStyleSheet("color: lightseagreen")
             self.current_value_label.setStyleSheet("color: lightseagreen")
@@ -713,7 +713,7 @@ class CurrentValueShowingSlider(QWidget):
     def receiveValueConfirmation(self, tuned):
         if tuned:
             value = self.slider.value()
-            self.stored_value_label.setText('{:.2f} {}'.format(value, self.measure_unit))
+            self.stored_value_label.setText('{:.3f} {}'.format(value, self.measure_unit))
             self.updateLabel(value)
         self.update()
 

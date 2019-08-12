@@ -458,7 +458,7 @@ void PrimitiveInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr 
   user_sync_result_.unlock = false;
   bool error_happened = false;
 
-  adjustImpedanceControllerStiffness(1000.0, 200.0, 10.0);
+  adjustImpedanceControllerStiffness(1500.0, 300.0, 10.0);
   ROS_WARN("Setting the robot to be stiff (to be pushable)");
 
   if(isInterfaceReady()) {
