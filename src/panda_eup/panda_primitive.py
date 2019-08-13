@@ -166,6 +166,15 @@ class MoveFingers(PandaPrimitive):
         self.expected_container = MoveFingersRequest
         self.parameters_with_effects_on_robot_state = ['width']
 
+    def randomize_gui_tunable_parameters(self):
+        # HACK: prevents move finger locks
+        for i, parameter in enumerate(self.gui_tunable_parameters):
+            min_value = self.get_parameter_value(parameter)
+            max_value = self.gui_tunable_parameter_ranges[parameter][1]
+            new_value = (max_value - min_value) * np.random.random_sample() + min_value
+            self.update_parameter(parameter, new_value)
+            print('Randomized {}\' {}'.format(type(self).__name__, parameter))
+
 
 class ApplyForceFingers(PandaPrimitive):
     gui_tunable_parameters = ['force']
