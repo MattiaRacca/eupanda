@@ -121,7 +121,7 @@ private:
   // Helper functions
   geometry_msgs::PoseStamped getPose(std::string origin, std::string destination);
   geometry_msgs::PoseStamped getEEPose();
-  bool isInterfaceReady();
+  bool isInterfaceReady(int request);
   bool adjustFTThreshold(double);
   bool adjustImpedanceControllerStiffness(double transl_stiff, double rotat_stiff, double ft_mult);
   bool adjustImpedanceControllerStiffness(geometry_msgs::PoseStamped desired_pose, double transl_stiff,

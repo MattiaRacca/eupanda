@@ -115,7 +115,7 @@ PrimitiveInterface::PrimitiveInterface():
   ROS_INFO("======= Primitive Interface: initialization completed =======");
 }
 
-bool PrimitiveInterface::isInterfaceReady()
+bool PrimitiveInterface::isInterfaceReady(int request=-1)
 {
   int state = interface_state_.load();
   if(state != 1){
@@ -126,6 +126,8 @@ bool PrimitiveInterface::isInterfaceReady()
       ROS_ERROR("Interface is busy - wait for the other requests to be processed!");
     return false;
   } else {
+    if(request != -1)
+      interface_state_.store(request);
     return true;
   }
 }
@@ -300,8 +302,7 @@ bool PrimitiveInterface::adjustImpedanceControllerStiffness(panda_pbd::EnableTea
 bool PrimitiveInterface::kinestheticTeachingCallback(panda_pbd::EnableTeaching::Request &req,
     panda_pbd::EnableTeaching::Response &res)
 {
-  if(isInterfaceReady()){
-    interface_state_.store(2);
+  if(isInterfaceReady(2)){
     res.success = adjustImpedanceControllerStiffness(req, res);
     interface_state_.store(1);
     return res.success;
@@ -325,8 +326,7 @@ bool PrimitiveInterface::moveFingersCallback(panda_pbd::MoveFingers::Request &re
     return res.success;
   }
 
-  if(isInterfaceReady()){
-    interface_state_.store(2);
+  if(isInterfaceReady(2)){
     auto state = gripper_move_client_->sendGoalAndWait(move_goal);
 
     if (state != actionlib::SimpleClientGoalState::SUCCEEDED)
@@ -367,8 +367,7 @@ bool PrimitiveInterface::applyForceFingersCallback(panda_pbd::ApplyForceFingers:
     return res.success;
   }
 
-  if(isInterfaceReady()) {
-    interface_state_.store(2);
+  if(isInterfaceReady(2)) {
     auto state = gripper_grasp_client_->sendGoalAndWait(grasping_goal);
     if (state != actionlib::SimpleClientGoalState::SUCCEEDED) {
       ROS_ERROR("Apply Force with Fingers primitive failed: %s", state.toString().c_str());
@@ -398,8 +397,7 @@ bool PrimitiveInterface::openGripperCallback(panda_pbd::OpenGripper::Request &re
     return res.success;
   }
 
-  if(isInterfaceReady()) {
-    interface_state_.store(2);
+  if(isInterfaceReady(2)) {
     gripper_move_client_->sendGoalAndWait(move_goal);
     if (gripper_move_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED) {
       ROS_ERROR("Error in the grasp goal: %s", gripper_move_client_->getState().getText().c_str());
@@ -436,8 +434,7 @@ bool PrimitiveInterface::closeGripperCallback(panda_pbd::CloseGripper::Request &
     return res.success;
   }
 
-  if(isInterfaceReady()) {
-    interface_state_.store(2);
+  if(isInterfaceReady(2)) {
     gripper_grasp_client_->sendGoalAndWait(grasping_goal);
     if (gripper_grasp_client_->getState() != actionlib::SimpleClientGoalState::SUCCEEDED) {
       ROS_ERROR("Error in the grasp goal: %s", gripper_grasp_client_->getState().getText().c_str());
@@ -462,8 +459,7 @@ void PrimitiveInterface::userSyncCallback(const panda_pbd::UserSyncGoalConstPtr 
   adjustImpedanceControllerStiffness(1500.0, 300.0, 10.0);
   ROS_WARN("Setting the robot to be stiff (to be pushable)");
 
-  if(isInterfaceReady()) {
-    interface_state_.store(2);
+  if(isInterfaceReady(2)) {
     double force_threshold = goal.get()->force_threshold;
 
     while (!user_sync_result_.unlock) {
@@ -593,8 +589,7 @@ void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoa
 
   ros::Time starting_time = ros::Time::now();
 
-  if(isInterfaceReady()) {
-    interface_state_.store(2);
+  if(isInterfaceReady(2)) {
     while (!in_contact) {
       if (interface_state_.load() == 0) {
         ROS_ERROR("Robot went in an error state while executing move_to_contact - please recover from error first!");
@@ -768,8 +763,7 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
   // command to Impedance controller
   geometry_msgs::PoseStamped desired_pose;
 
-  if(isInterfaceReady()) {
-    interface_state_.store(2);
+  if(isInterfaceReady(2)) {
     while (!motion_done) {
       if (interface_state_.load() == 0) {
         ROS_ERROR("Robot went in an error state while executing move_to_ee - please recover from error first!");
