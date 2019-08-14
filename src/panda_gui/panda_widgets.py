@@ -67,7 +67,7 @@ class EUPPlugin(Plugin):
 
 class EUPWidget(QWidget):
     # static variables
-    font=QFont()
+    font = QFont()
     font.setBold(True)
     font.setPointSize(12)
     size_policy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
@@ -76,7 +76,7 @@ class EUPWidget(QWidget):
     programGUIUpdate = pyqtSignal()
     robotStateUpdate = pyqtSignal(pp.PandaRobotStatus)
     tuningGUIUpdate = pyqtSignal(object)
-    tuningAccepted = pyqtSignal(bool)
+    tuningAccepted = pyqtSignal(bool, type, str)
 
     def __init__(self, title='EUP Widget'):
         super(EUPWidget, self).__init__()
@@ -120,7 +120,7 @@ class EUPWidget(QWidget):
         self.interface_state_subscriber = rospy.Subscriber("/primitive_interface_node/interface_state", Int32,
                                                            self.interface_state_callback)
 
-    def log_loaded_program(self, need_to_log=True, partial_log=False):
+    def log_loaded_program(self, need_to_log=True, type_of_primitive=None, name_of_parameter='', partial_log=False):
         if rospy.has_param('/program_logging_path') and need_to_log:
             program_logging_path = rospy.get_param('/program_logging_path')
             date = datetime.fromtimestamp(self.starting_timestamp).strftime('%m%d_%H%M')
@@ -129,7 +129,7 @@ class EUPWidget(QWidget):
             filename = '{}_program_partial_log.pkl' if partial_log else '{}_program_log.pkl'
             self.interpreter.loaded_program.dump_to_file(filepath=program_logging_path.format(date),
                                                          filename=filename.format(date))
-            rospy.loginfo('Loaded program saved in {}'.format(program_logging_path.format(date)))
+            rospy.loginfo('Current program saved in {}'.format(program_logging_path.format(date)))
         else:
             rospy.logwarn('Could not find rosparam program_logging_path; skipped program logging')
 
@@ -162,8 +162,8 @@ class EUPWidget(QWidget):
                                                                  partial(self.execute_interpreter_command,
                                                                          self.interpreter.go_to_starting_state)]
         self.interpreter_command_dict['execute_one_step'] = [QExpandingPushButton("Execute\n one step", self),
-                                                                 partial(self.execute_interpreter_command,
-                                                                         self.interpreter.execute_one_step)]
+                                                             partial(self.execute_interpreter_command,
+                                                                     self.interpreter.execute_one_step)]
         self.interpreter_command_dict['revert_one_step'] = [QExpandingPushButton("Revert\n one step", self),
                                                                  partial(self.execute_interpreter_command,
                                                                          self.interpreter.revert_one_step)]
@@ -227,10 +227,12 @@ class EUPWidget(QWidget):
                 for key, value in dict.items():
                     tuned = self.interpreter.loaded_program.update_nth_primitive_parameter(
                         self.interpreter.next_primitive_index, key, value)
-                    rospy.loginfo('Tuning: {}'.format(str(tuned)))
-                    self.tuningAccepted.emit(tuned)
-        else:
-            rospy.logerr('Are you tuning when you should not?')
+                    rospy.loginfo('Tuning parameter {} of a {} primitive: {}'.format(key,\
+                                                                                     type(ready_primitive),\
+                                                                                     str(tuned)))
+                    self.tuningAccepted.emit(tuned, type(ready_primitive), key)
+            else:
+                rospy.logerr('Are you tuning when you should not?')
 
     def updatePandaWidgets(self):
         rospy.loginfo('Current EUP state is {}'.format(self.state_machine))
@@ -629,10 +631,12 @@ class PandaTuningPage(QFrame):
     def signalPrimitiveTuning(self, parameter_name, parameter_value):
         self.primitiveTuned.emit({parameter_name: parameter_value})
 
-    def updateAfterTuningAccepted(self, tuned):
-        for param in self.primitive_type.gui_tunable_parameters:
-                self.sliders[param].receiveValueConfirmation(tuned)
-
+    def updateAfterTuningAccepted(self, tuned, primitive_type, parameter):
+        if self.primitive_type is primitive_type:
+            print(self.sliders.keys())
+            for key, value in self.sliders.items():
+                if key == parameter:
+                    value.receiveValueConfirmation(tuned)
 
 class CurrentValueShowingSlider(QWidget):
     valueSubmitted = pyqtSignal(float)
@@ -648,17 +652,17 @@ class CurrentValueShowingSlider(QWidget):
         'width': 'Finger Distance'
     }
 
-    def __init__(self, parent, name, measure_unit='', range=[0, 1]):
+    def __init__(self, parent, name, measure_unit='', available_range=[0, 1]):
         super(CurrentValueShowingSlider, self).__init__(parent)
         self.measure_unit = measure_unit
-        self.range = range
+        self.available_range = available_range
         self.name = name
         self.initUI()
 
     def initUI(self):
         self.widget_layout = QGridLayout(self)
 
-        self.slider = FixNumberTicksSlider(self.range[0], self.range[1], 50, Qt.Horizontal)
+        self.slider = FixNumberTicksSlider(self.available_range[0], self.available_range[1], 50, Qt.Horizontal)
 
         self.current_value_label = QLabel('???')
         self.stored_value_label = QLabel('???')
