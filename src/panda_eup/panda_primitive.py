@@ -38,6 +38,7 @@ class PandaPrimitive(object):
         self.starting_arm_state_index = None  # pose of the robot at the beginning of this primitive
         self.starting_gripper_state_index = None  # gripper state at the beginning of this primitive
         self.parameters_with_effects_on_robot_state = None  # for the subclasses
+        self.gui_tunable_parameter_strict_ranges = None  # for the subclasses
         self.revertible = True
         self.status = PandaPrimitiveStatus.NEUTRAL
         self.parameters_update_history = {}  # dictionary of lists, each containing the updates of a primitive parameter
@@ -53,6 +54,7 @@ class PandaPrimitive(object):
         if container_fitting:
             self.parameter_container = container
             self.init_parameter_update_history()
+            self.gui_tunable_parameter_strict_ranges = self.gui_tunable_parameter_ranges
 
         return container_fitting
 
@@ -166,8 +168,14 @@ class MoveFingers(PandaPrimitive):
         self.expected_container = MoveFingersRequest
         self.parameters_with_effects_on_robot_state = ['width']
 
+    def set_parameter_container(self, container):
+        container_fitting = super(MoveFingers, self).set_parameter_container(container)
+        # HACK: prevents move finger locks from GUI tuning
+        self.gui_tunable_parameter_strict_ranges['width'][0] = self.get_parameter_value('width')
+        return container_fitting
+
     def randomize_gui_tunable_parameters(self):
-        # HACK: prevents move finger locks
+        # HACK: prevents move finger locks from parameter randomization
         for i, parameter in enumerate(self.gui_tunable_parameters):
             min_value = self.get_parameter_value(parameter)
             max_value = self.gui_tunable_parameter_ranges[parameter][1]

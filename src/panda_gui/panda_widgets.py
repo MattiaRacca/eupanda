@@ -227,7 +227,7 @@ class EUPWidget(QWidget):
                 for key, value in dict.items():
                     tuned = self.interpreter.loaded_program.update_nth_primitive_parameter(
                         self.interpreter.next_primitive_index, key, value)
-                    rospy.loginfo('Tuning parameter {} of a {} primitive: {}'.format(key,\
+                    rospy.logdebug('Tuning parameter {} of a {} primitive: {}'.format(key,\
                                                                                      type(ready_primitive),\
                                                                                      str(tuned)))
                     self.tuningAccepted.emit(tuned, type(ready_primitive), key)
@@ -627,6 +627,7 @@ class PandaTuningPage(QFrame):
         if primitive.__class__ is not None:
             for param in primitive.__class__.gui_tunable_parameters:
                 self.sliders[param].updateValue(getattr(primitive.parameter_container, param))
+                self.sliders[param].slider.setStrictBounds(primitive.gui_tunable_parameter_strict_ranges[param])
 
     def signalPrimitiveTuning(self, parameter_name, parameter_value):
         self.primitiveTuned.emit({parameter_name: parameter_value})
@@ -652,7 +653,7 @@ class CurrentValueShowingSlider(QWidget):
         'width': 'Finger Distance'
     }
 
-    def __init__(self, parent, name, measure_unit='', available_range=[0, 1]):
+    def __init__(self, parent, name, measure_unit='', available_range=[0.0, 1.0]):
         super(CurrentValueShowingSlider, self).__init__(parent)
         self.measure_unit = measure_unit
         self.available_range = available_range
@@ -761,9 +762,28 @@ class FixNumberTicksSlider(QSlider):
         self._number_of_ticks = number_of_ticks
         self._range = upperbound - lowerbound
         self._real_step = self._range/self._number_of_ticks
+        self.setStrictBounds([None, None])
 
         self.valueChanged.connect(self.emitDoubleValueChanged)
+        self.valueChanged.connect(self.restrictMove)
         self.setTickPosition(QSlider.TicksBothSides)
+
+    def setStrictBounds(self, strict_bounds):
+        strict_lowerbound = strict_bounds[0]
+        strict_upperbound = strict_bounds[1]
+        if (strict_lowerbound is None) or (strict_lowerbound <= self._lowerbound):
+            self._strict_lowerbound = self._lowerbound
+        elif strict_lowerbound >= self._upperbound:
+            raise ValueError
+        else:
+            self._strict_lowerbound = strict_lowerbound
+
+        if (strict_upperbound is None) or (strict_upperbound >= self._upperbound):
+            self._strict_upperbound = self._upperbound
+        elif strict_upperbound <= self._lowerbound:
+            raise ValueError
+        else:
+            self._strict_upperbound = strict_upperbound
 
     def emitDoubleValueChanged(self):
         value = self._lowerbound + float(super(FixNumberTicksSlider, self).value())*self._real_step
@@ -774,6 +794,15 @@ class FixNumberTicksSlider(QSlider):
 
     def setValue(self, value):
         super(FixNumberTicksSlider, self).setValue(int((value - self._lowerbound)/self._real_step))
+
+    def restrictMove(self):
+        value = self._lowerbound + float(super(FixNumberTicksSlider, self).value())*self._real_step
+        if not(self._strict_lowerbound <= value <= self._strict_upperbound):
+            if value >= self._strict_upperbound:
+                value = self._strict_upperbound
+            if value <= self._strict_lowerbound:
+                value = self._strict_lowerbound
+            super(FixNumberTicksSlider, self).setSliderPosition(int((value - self._lowerbound)/self._real_step))
 
 
 class WorkerSignals(QObject):
