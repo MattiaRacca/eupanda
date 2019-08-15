@@ -1,0 +1,13 @@
+<launch>
+    <arg name="expert" />
+    <arg name="task" />
+    
+    <include file="$(find panda_pbd)/launch/eup_interface.launch" />
+    
+    <param name="randomize_parameters" type="bool" value="true" />
+    <param name="program_path" type="string" value="$(find panda_pbd)/resources" />
+    <param name="program_name" type="string" value="$(arg task).pkl" />
+    <param name="program_logging_path" type="string" value="$(find panda_pbd)/resources/expert_logs/$(arg task)/$(arg expert)" />
+    
+    <node name="panda_gui" pkg="rqt_gui" type="rqt_gui" args="-s panda_gui" output="screen"/>
+</launch>

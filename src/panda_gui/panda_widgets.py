@@ -84,19 +84,18 @@ class EUPWidget(QWidget):
         self.starting_timestamp = time()
 
         # Creating the interpreter and loading the program
-        robotless_debug = False
-        if rospy.has_param('/robotless_debug'):
-            robotless_debug = rospy.get_param('/robotless_debug')
-
+        robotless_debug = rospy.get_param('/robotless_debug') if rospy.has_param('/robotless_debug') else False
         self.interpreter = PandaProgramInterpreter(robotless_debug=robotless_debug)
 
-        if rospy.has_param('/program_path'):
+        if rospy.has_param('/program_path') and rospy.has_param('/program_name'):
             program_path = rospy.get_param('/program_path')
+            program_name = rospy.get_param('/program_name')
         else:
             program_path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
-            rospy.loginfo('Could not find rosparam program_path; loading an example program')
+            program_name = 'program.pkl'
+            rospy.logwarn('Could not find rosparam program_path OR the program_name; loading the example program')
 
-        self.interpreter.load_program(pp.load_program_from_file(program_path, 'program.pkl'))
+        self.interpreter.load_program(pp.load_program_from_file(program_path, program_name))
 
         randomize = False
         if rospy.has_param('/randomize_parameters'):
@@ -124,12 +123,12 @@ class EUPWidget(QWidget):
         if rospy.has_param('/program_logging_path') and need_to_log:
             program_logging_path = rospy.get_param('/program_logging_path')
             date = datetime.fromtimestamp(self.starting_timestamp).strftime('%m%d_%H%M')
-            if not os.path.exists(program_logging_path.format(date)):
-                os.makedirs(program_logging_path.format(date))
-            filename = '{}_program_partial_log.pkl' if partial_log else '{}_program_log.pkl'
-            self.interpreter.loaded_program.dump_to_file(filepath=program_logging_path.format(date),
+            if not os.path.exists(program_logging_path):
+                os.makedirs(program_logging_path)
+            filename = '{}_partial.pkl' if partial_log else '{}.pkl'
+            self.interpreter.loaded_program.dump_to_file(filepath=program_logging_path,
                                                          filename=filename.format(date))
-            rospy.loginfo('Current program saved in {}'.format(program_logging_path.format(date)))
+            rospy.loginfo('Current program saved in {}'.format(program_logging_path))
         else:
             rospy.logwarn('Could not find rosparam program_logging_path; skipped program logging')
 
