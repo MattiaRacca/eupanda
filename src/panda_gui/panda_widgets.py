@@ -270,6 +270,7 @@ class EUPWidget(QWidget):
                 if self.interpreter.next_primitive_index == self.interpreter.loaded_program.get_program_length():
                     self.interpreter_command_dict['execute_one_step'][0].setEnabled(False)
                     self.interpreter_command_dict['execute_rest_of_program'][0].setEnabled(False)
+                    self.interpreter_command_dict['go_to_starting_state'][0].setEnabled(True)
                     self.panda_tuning_widget.setEnabled(False)
 
                 # we are at start, disable revert buttons

@@ -102,6 +102,8 @@ class PandaProgramInterpreter(object):
     def go_to_starting_state(self, progress_callback=None):
         self.next_primitive_index = 0
         success = self.go_to_current_primitive_preconditions(progress_callback)
+        for i in range(1, self.loaded_program.get_program_length()):
+            self.loaded_program.get_nth_primitive(i).status = pp.PandaPrimitiveStatus.NEUTRAL
         self.next_primitive_index = 0 if success else -1
         return success
 
