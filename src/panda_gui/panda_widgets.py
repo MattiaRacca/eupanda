@@ -772,14 +772,14 @@ class FixNumberTicksSlider(QSlider):
         strict_upperbound = strict_bounds[1]
         if (strict_lowerbound is None) or (strict_lowerbound <= self._lowerbound):
             self._strict_lowerbound = self._lowerbound
-        elif strict_lowerbound >= self._upperbound:
+        elif strict_lowerbound > self._upperbound:
             raise ValueError
         else:
             self._strict_lowerbound = strict_lowerbound
 
         if (strict_upperbound is None) or (strict_upperbound >= self._upperbound):
             self._strict_upperbound = self._upperbound
-        elif strict_upperbound <= self._lowerbound:
+        elif strict_upperbound < self._lowerbound:
             raise ValueError
         else:
             self._strict_upperbound = strict_upperbound
