@@ -125,7 +125,7 @@ class UserSync(PandaPrimitive):
 class MoveToEE(PandaPrimitive):
     gui_tunable_parameters = ['position_speed']
     gui_tunable_parameter_ranges = {
-        gui_tunable_parameters[0]: [0.01, 0.25]
+        gui_tunable_parameters[0]: [0.01, 0.35]
     }
     gui_tunable_parameter_units = {
         gui_tunable_parameters[0]: 'm/s'
