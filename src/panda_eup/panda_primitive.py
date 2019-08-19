@@ -99,6 +99,7 @@ class PandaPrimitive(object):
         self.init_parameter_update_history()
 
     def randomize_gui_tunable_parameters(self):
+        self.gui_tunable_parameter_strict_ranges = self.gui_tunable_parameter_ranges
         for i, parameter in enumerate(self.gui_tunable_parameters):
             min_value = self.gui_tunable_parameter_ranges[parameter][0]
             max_value = self.gui_tunable_parameter_ranges[parameter][1]
