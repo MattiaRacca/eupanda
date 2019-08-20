@@ -78,7 +78,7 @@ class PandaPrimitive(object):
             revertible = True
 
         setattr(self.parameter_container, parameter_type, parameter_value)
-        self.parameters_update_history[parameter_type] = deepcopy(parameter_value)
+        self.parameters_update_history[parameter_type].append(deepcopy(parameter_value))
         self.container_update_history.append(deepcopy(self.parameter_container))
 
         return revertible
@@ -91,7 +91,8 @@ class PandaPrimitive(object):
                           if not attribute.startswith('_') and 'serialize' not in attribute]
             #  ROS adds some (de)serialize stuff to msgs/srvs - we do not need them tracked
             for attribute in attributes:
-                self.parameters_update_history[attribute] = [deepcopy(getattr(self.parameter_container, attribute))]
+                self.parameters_update_history[attribute] = list()
+                self.parameters_update_history[attribute].append(deepcopy(getattr(self.parameter_container, attribute)))
 
     def reset_parameter_update_history(self):
         self.container_update_history = []
