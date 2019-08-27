@@ -25,6 +25,8 @@ from enum import Enum
 from datetime import datetime
 from time import time
 
+from range_al import range_al as ral
+
 # Size of Primitive Widget
 PRIMITIVE_WIDTH = 100
 PRIMITIVE_HEIGHT = 120
@@ -55,7 +57,8 @@ class EUPStateMachine(Enum):
     STARTUP_ERROR = 4
     EXECUTION_ERROR = 5
     REVERTING_ERROR = 6
-    USER_QUESTION = 7
+    POSING_QUESTION = 7  # for the Active Widget
+    CHOOSING_QUESTION = 8  # for the Active Widget
 
 
 class EUPPlugin(Plugin):
@@ -374,6 +377,9 @@ class EUPWidget(QWidget):
 
 
 class ActiveEUPWidget(EUPWidget):
+    questionChosen = pyqtSignal(object, str)
+    waitingAnswer = pyqtSignal()
+
     def __init__(self, title='Active EUP Widget'):
         super(ActiveEUPWidget, self).__init__(title)
 
@@ -401,14 +407,12 @@ class ActiveEUPWidget(EUPWidget):
         for key, page in self.panda_active_tuning_widget.stacks.items():
             if page.primitive_type is not None:
                 page.primitiveTuned.connect(self.updateCurrentPrimitive)
-
-        self.low_buttons_layout.update()
-        items = (self.low_buttons_layout.itemAt(i).widget() for i in range(self.low_buttons_layout.count()))
-        for item in items:
-            if isinstance(item, QExpandingPushButton):
-                print(item.text())
+                page.sendAnswer.connect(self.receiveAnswer)
 
         self.updatePandaWidgets()
+
+    def receiveAnswer(self, answer):
+        pass
 
     def updatePandaWidgets(self):
         rospy.loginfo('Current Active EUP state is {}'.format(self.state_machine))
@@ -449,11 +453,9 @@ class ActiveEUPWidget(EUPWidget):
                     self.interpreter_command_dict['go_to_starting_state'][0].setEnabled(True)
                     self.panda_active_tuning_widget.setEnabled(False)
 
-                # we are at start, disable revert buttons
-                if self.interpreter.next_primitive_index <= 0:
-                    pass
-
-            elif self.state_machine == EUPStateMachine.STARTUP_BUSY or self.state_machine == EUPStateMachine.BUSY:
+            elif self.state_machine == EUPStateMachine.STARTUP_BUSY or\
+                    self.state_machine == EUPStateMachine.BUSY or \
+                    self.state_machine == EUPStateMachine.CHOOSING_QUESTION:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(False)
                 self.panda_active_tuning_widget.setEnabled(False)
@@ -473,6 +475,10 @@ class ActiveEUPWidget(EUPWidget):
                     if key == 'go_to_current_primitive_preconditions':
                         value[0].setVisible(True)
                 self.panda_active_tuning_widget.setEnabled(False)
+            elif self.state_machine == EUPStateMachine.POSING_QUESTION:
+                self.panda_active_tuning_widget.setEnabled(True)
+                for key, value in self.interpreter_command_dict.items():
+                    value[0].setEnabled(False)
 
 
 class PandaProgramWidget(QGroupBox):
@@ -735,6 +741,8 @@ class PandaActiveTuningWidget(PandaTuningWidget):
         for primitive_type in PandaActiveTuningWidget.tunable_primitives:
             self.stacks[primitive_type] = PandaActiveTuningPage(self, primitive_type)
             self.addWidget(self.stacks[primitive_type])
+            self.parent().questionChosen.connect(self.stacks[primitive_type].showQuestion)
+            self.parent().waitingAnswer.connect(self.stacks[primitive_type].enableAnswering)
 
         self.setCurrentIndex(0)
         self.setSizePolicy(PandaActiveTuningWidget.sizePolicy)
@@ -742,6 +750,7 @@ class PandaActiveTuningWidget(PandaTuningWidget):
 
 class PandaActiveTuningPage(QFrame):
     primitiveTuned = pyqtSignal(dict)
+    sendAnswer = pyqtSignal(ral.LearnerAnswers)
 
     def __init__(self, parent, primitive_type):
         super(PandaActiveTuningPage, self).__init__(parent)
@@ -773,8 +782,11 @@ class PandaActiveTuningPage(QFrame):
             'fine': QPushButton('fine'),
             'higher': QPushButton('higher')
         }
-        for key, value in self.buttons.items():
+        answers = [ral.LearnerAnswers.LOWER, ral.LearnerAnswers.FINE, ral.LearnerAnswers.HIGHER]
+        for i, (key, value) in enumerate(self.buttons.items()):
+            value.setEnabled(False)
             self.answer_buttons_layout.addWidget(value)
+            value.clicked.connect(partial(self.communicateAnswer, answer=answers[i]))
 
         # QUESTION LABEL
         self.question_label = QLabel('question')
@@ -785,6 +797,21 @@ class PandaActiveTuningPage(QFrame):
         self.layout.addWidget(self.parameter_widget)
         self.layout.addWidget(QVerticalLine())
         self.layout.addWidget(self.dialog_widget)
+
+    def showQuestion(self, primitive, parameter):
+        if primitive.__class__ is  self.primitive_type:
+            question = 'I will try this primitive now with {} = {}'.\
+                format(parameter, str(getattr(primitive.parameter_container, parameter)))
+            self.question_label.setText(question)
+
+    def enableAnswering(self):
+        for key, value in self.buttons.items():
+            value.setEnabled(True)
+
+    def communicateAnswer(self, answer):
+        self.sendAnswer.emit(answer)
+        for key, value in self.buttons.items():
+            value.setEnabled(False)
 
     def updatePageFromPritimive(self, primitive):
         if primitive.__class__ is not None:
@@ -823,7 +850,6 @@ class PandaTuningPage(QFrame):
 
     def updateAfterTuningAccepted(self, tuned, primitive_type, parameter):
         if self.primitive_type is primitive_type:
-            print(self.sliders.keys())
             for key, value in self.sliders.items():
                 if key == parameter:
                     value.receiveValueConfirmation(tuned)
