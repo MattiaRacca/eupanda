@@ -23,6 +23,9 @@ class PandaProgramInterpreter(object):
         self.last_gripper_width = None
         self.last_gripper_force = None
 
+        self.last_primitive_attempted = None
+        # TODO: this is a quick HACK to let the widget verbalize the last primitive
+
         self.robotless_debug = robotless_debug
         self.fake_wait = 3
 
@@ -215,6 +218,7 @@ class PandaProgramInterpreter(object):
             rospy.logwarn('Nothing left to execute OR Empty program OR wrong indexing')
             return False
 
+        self.last_primitive_attempted = primitive_to_execute  # TODO: this is a quick HACK
         callback = self.callback_switcher.get(primitive_to_execute.__class__, None)
 
         if callback is None:
@@ -266,6 +270,8 @@ class PandaProgramInterpreter(object):
             primitive_to_revert.status = pp.PandaPrimitiveStatus.ERROR
             return False
 
+        self.last_primitive_attempted = None  # TODO: this is a quick HACK
+
         try:
             self.loaded_program.get_nth_primitive(self.next_primitive_index).status = \
                 pp.PandaPrimitiveStatus.NEUTRAL
@@ -314,6 +320,8 @@ class PandaProgramInterpreter(object):
             rospy.loginfo('Executed rest of the program!')
         else:
             rospy.logerr('Something went south. Program now at step {}'.format(self.next_primitive_index))
+
+        self.last_primitive_attempted = None  # TODO: this is a quick HACK
 
         if one_shot_execution:
             self.next_primitive_index = to_be_restored_index

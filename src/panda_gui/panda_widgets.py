@@ -340,9 +340,8 @@ class EUPWidget(QWidget):
             self.state_machine = EUPStateMachine.OPERATIONAL if success else EUPStateMachine.STARTUP_ERROR
         if self.state_machine == EUPStateMachine.BUSY:
             self.state_machine = EUPStateMachine.OPERATIONAL if success else EUPStateMachine.EXECUTION_ERROR
-            if self.tts_for_primitives:
-                sentence = self.interpreter.loaded_program.get_nth_primitive(
-                    self.interpreter.next_primitive_index - 1).result_message[success] if success else 'error'
+            if self.tts_for_primitives and self.interpreter.last_primitive_attempted is not None:
+                sentence = self.interpreter.last_primitive_attempted.result_message[success]
                 self.tts_engine.say(sentence)
                 self.tts_engine.runAndWait()
             # if the command failed but the primitive in error is the previous one, I was reverting
