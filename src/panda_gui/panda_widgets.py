@@ -15,6 +15,8 @@ from franka_control.msg import ErrorRecoveryActionGoal
 from panda_eup.program_interpreter import PandaProgramInterpreter
 import panda_eup.panda_primitive as pp
 
+import pyttsx3
+
 import os
 import traceback
 import sys
@@ -100,6 +102,17 @@ class EUPWidget(QWidget):
         randomize = False
         if rospy.has_param('/randomize_parameters'):
             randomize = rospy.get_param('/randomize_parameters')
+
+        self.tts_for_primitives = False
+        if rospy.has_param('/tts_for_primitives'):
+            self.tts_for_primitives = rospy.get_param('/tts_for_primitives')
+
+        # TTS engine
+        self.tts_engine = pyttsx3.init()
+        voices = self.tts_engine.getProperty('voices')
+        self.tts_engine.setProperty('voice', voices[16].id)  # American English
+        self.tts_engine.setProperty('volume', 0.8)
+        self.tts_engine.setProperty('rate', 180)
 
         if randomize:
             rospy.loginfo('Going to randomize the primitives parameters... oh dear')
@@ -327,11 +340,16 @@ class EUPWidget(QWidget):
             self.state_machine = EUPStateMachine.OPERATIONAL if success else EUPStateMachine.STARTUP_ERROR
         if self.state_machine == EUPStateMachine.BUSY:
             self.state_machine = EUPStateMachine.OPERATIONAL if success else EUPStateMachine.EXECUTION_ERROR
+            if self.tts_for_primitives:
+                sentence = self.interpreter.loaded_program.get_nth_primitive(
+                    self.interpreter.next_primitive_index - 1).result_message[success] if success else 'error'
+                self.tts_engine.say(sentence)
+                self.tts_engine.runAndWait()
             # if the command failed but the primitive in error is the previous one, I was reverting
             try:
-                reverting_check= self.interpreter.loaded_program.get_nth_primitive(
+                reverting_check = self.interpreter.loaded_program.get_nth_primitive(
                     self.interpreter.next_primitive_index - 1)
-                rospy.logwarn('{}'.format(reverting_check))
+                rospy.logwarn('REVERTING CHECK: {}'.format(reverting_check))
                 if not success and reverting_check.status == pp.PandaPrimitiveStatus.ERROR:
                     self.state_machine = EUPStateMachine.REVERTING_ERROR
             except pp.PandaProgramException:

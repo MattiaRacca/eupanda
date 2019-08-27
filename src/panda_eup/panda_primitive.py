@@ -30,6 +30,10 @@ class PandaPrimitive(object):
     gui_tunable_parameters = None  # for the subclasses
     gui_tunable_parameter_ranges = None  # for the subclasses
     gui_tunable_parameter_units = None  # for the subclasses
+    result_message = {
+        True: None,
+        False: None
+    }  # for the subclasses, to announce success/failure of primitive
 
     def __init__(self, description="An abstract Panda primitive"):
         self.description = description
@@ -116,6 +120,10 @@ class UserSync(PandaPrimitive):
     gui_tunable_parameter_units = {
         gui_tunable_parameters[0]: 'N'
     }
+    result_message = {
+        True: 'Unlocked',
+        False: 'Error while waiting'
+    }
 
     def __init__(self, description="A User Synchronization primitive"):
         super(UserSync, self).__init__(description)
@@ -130,6 +138,10 @@ class MoveToEE(PandaPrimitive):
     }
     gui_tunable_parameter_units = {
         gui_tunable_parameters[0]: 'm/s'
+    }
+    result_message = {
+        True: 'Destination reached',
+        False: 'Error while moving'
     }
 
     def __init__(self, description="A Move to End-Effector primitive"):
@@ -148,6 +160,10 @@ class MoveToContact(PandaPrimitive):
         gui_tunable_parameters[0]: 'm/s',
         gui_tunable_parameters[1]: 'N'
     }
+    result_message = {
+        True: 'Moved to contact',
+        False: 'Error while pushing'
+    }
 
     def __init__(self, description="A Move to Contact primitive"):
         super(MoveToContact, self).__init__(description)
@@ -162,6 +178,10 @@ class MoveFingers(PandaPrimitive):
     }
     gui_tunable_parameter_units = {
         gui_tunable_parameters[0]: 'm'
+    }
+    result_message = {
+        True: 'Fingers moved',
+        False: 'Error while moving fingers'
     }
 
     def __init__(self, description="A Move Fingers primitive"):
@@ -192,6 +212,10 @@ class ApplyForceFingers(PandaPrimitive):
     }
     gui_tunable_parameter_units = {
         gui_tunable_parameters[0]: 'N'
+    }
+    result_message = {
+        True: 'Forces applied',
+        False: 'Error while applying force with fingers'
     }
 
     def __init__(self, description="A Apply Force (with) Fingers primitive"):
