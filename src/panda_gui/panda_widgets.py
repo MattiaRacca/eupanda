@@ -55,12 +55,13 @@ class EUPStateMachine(Enum):
     STARTUP_ERROR = 4
     EXECUTION_ERROR = 5
     REVERTING_ERROR = 6
+    USER_QUESTION = 7
 
 
 class EUPPlugin(Plugin):
     def __init__(self, context):
         super(EUPPlugin, self).__init__(context)
-        self._widget = EUPWidget()
+        self._widget = ActiveEUPWidget()
         context.add_widget(self._widget)
 
     def shutdown_plugin(self):
@@ -164,7 +165,7 @@ class EUPWidget(QWidget):
 
         # Action button & Robot State Widget at the bottom
         self.low_buttons = QWidget()
-        self.low_buttons_layout = QHBoxLayout()
+        self.low_buttons_layout = QHBoxLayout(self.low_buttons)
         self.low_buttons_layout.setAlignment(Qt.AlignCenter)
 
         self.robot_state_widget = PandaStateWidget(self)
@@ -199,7 +200,6 @@ class EUPWidget(QWidget):
         self.low_buttons_layout.addWidget(QVerticalLine())
         self.low_buttons_layout.addWidget(self.interpreter_command_dict['execute_rest_of_program'][0])
         self.low_buttons_layout.addWidget(self.interpreter_command_dict['revert_to_beginning_of_program'][0])
-        self.low_buttons.setLayout(self.low_buttons_layout)
 
         # Click buttons events handling
         for key, value in self.interpreter_command_dict.items():
@@ -348,7 +348,7 @@ class EUPWidget(QWidget):
             try:
                 reverting_check = self.interpreter.loaded_program.get_nth_primitive(
                     self.interpreter.next_primitive_index - 1)
-                rospy.logwarn('REVERTING CHECK: {}'.format(reverting_check))
+                rospy.logdebug('REVERTING CHECK: {}'.format(reverting_check))
                 if not success and reverting_check.status == pp.PandaPrimitiveStatus.ERROR:
                     self.state_machine = EUPStateMachine.REVERTING_ERROR
             except pp.PandaProgramException:
@@ -371,6 +371,108 @@ class EUPWidget(QWidget):
 
     def minimumSizeHint(self):
         return QSize(800, 600)
+
+
+class ActiveEUPWidget(EUPWidget):
+    def __init__(self, title='Active EUP Widget'):
+        super(ActiveEUPWidget, self).__init__(title)
+
+    def initUI(self):
+        # create new elements that are updated by updatePandaWidgets
+        self.panda_active_tuning_widget = PandaActiveTuningWidget(self)
+
+        # create the standard non-active EUP Widget
+        super(ActiveEUPWidget, self).initUI()
+
+        # remove the tuning with sliders and add the active tuning page
+        self.vbox.insertWidget(1, self.panda_active_tuning_widget)
+        self.vbox.removeWidget(self.panda_tuning_widget)
+        self.tuningGUIUpdate.connect(self.panda_active_tuning_widget.updateWidget)
+
+        # remove bunch of stuff that are not needed in the Active Widget
+        self.interpreter_command_dict['revert_to_beginning_of_program'][0].setParent(None)
+        self.interpreter_command_dict['execute_rest_of_program'][0].setParent(None)
+        self.interpreter_command_dict['revert_one_step'][0].setParent(None)
+        self.panda_tuning_widget.setParent(None)
+        del self.interpreter_command_dict['revert_one_step']
+        del self.interpreter_command_dict['execute_rest_of_program']
+        del self.interpreter_command_dict['revert_to_beginning_of_program']
+
+        for key, page in self.panda_active_tuning_widget.stacks.items():
+            if page.primitive_type is not None:
+                page.primitiveTuned.connect(self.updateCurrentPrimitive)
+
+        self.low_buttons_layout.update()
+        items = (self.low_buttons_layout.itemAt(i).widget() for i in range(self.low_buttons_layout.count()))
+        for item in items:
+            if isinstance(item, QExpandingPushButton):
+                print(item.text())
+
+        self.updatePandaWidgets()
+
+    def updatePandaWidgets(self):
+        rospy.loginfo('Current Active EUP state is {}'.format(self.state_machine))
+        rospy.loginfo('Current Interface state is {}'.format(self.last_interface_state))
+
+        self.programGUIUpdate.emit()
+        if self.last_interface_state is not None:
+            self.robotStateUpdate.emit(self.last_interface_state)
+
+        ready_primitive = None
+        try:
+            ready_primitive = self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index)
+        except pp.PandaProgramException:
+            pass
+
+        self.tuningGUIUpdate.emit(ready_primitive)
+        QApplication.restoreOverrideCursor()
+
+        if self.last_interface_state == pp.PandaRobotStatus.ERROR or \
+                self.last_interface_state == pp.PandaRobotStatus.BUSY:
+            for key, value in self.interpreter_command_dict.items():
+                value[0].setEnabled(False)
+            self.panda_active_tuning_widget.setEnabled(False)
+        else:
+            if self.state_machine == EUPStateMachine.STARTUP:
+                for key, value in self.interpreter_command_dict.items():
+                    value[0].setEnabled(key is 'go_to_starting_state')
+                self.panda_active_tuning_widget.setEnabled(False)
+            elif self.state_machine == EUPStateMachine.OPERATIONAL:
+                for key, value in self.interpreter_command_dict.items():
+                    value[0].setEnabled(key is not 'go_to_starting_state')
+                    value[0].setVisible(key is not 'go_to_current_primitive_preconditions')
+                self.panda_active_tuning_widget.setEnabled(True)
+
+                # last primitive executed, disable execute buttons
+                if self.interpreter.next_primitive_index == self.interpreter.loaded_program.get_program_length():
+                    self.interpreter_command_dict['execute_one_step'][0].setEnabled(False)
+                    self.interpreter_command_dict['go_to_starting_state'][0].setEnabled(True)
+                    self.panda_active_tuning_widget.setEnabled(False)
+
+                # we are at start, disable revert buttons
+                if self.interpreter.next_primitive_index <= 0:
+                    pass
+
+            elif self.state_machine == EUPStateMachine.STARTUP_BUSY or self.state_machine == EUPStateMachine.BUSY:
+                for key, value in self.interpreter_command_dict.items():
+                    value[0].setEnabled(False)
+                self.panda_active_tuning_widget.setEnabled(False)
+            elif self.state_machine == EUPStateMachine.STARTUP_ERROR:
+                for key, value in self.interpreter_command_dict.items():
+                    value[0].setEnabled(key is 'go_to_starting_state')
+                self.panda_active_tuning_widget.setEnabled(False)
+            elif self.state_machine == EUPStateMachine.EXECUTION_ERROR:
+                for key, value in self.interpreter_command_dict.items():
+                    value[0].setEnabled(key is 'go_to_current_primitive_preconditions')
+                    if key == 'go_to_current_primitive_preconditions':
+                        value[0].setVisible(True)
+                self.panda_active_tuning_widget.setEnabled(False)
+            elif self.state_machine == EUPStateMachine.REVERTING_ERROR:
+                for key, value in self.interpreter_command_dict.items():
+                    value[0].setEnabled(key is 'go_to_current_primitive_preconditions')
+                    if key == 'go_to_current_primitive_preconditions':
+                        value[0].setVisible(True)
+                self.panda_active_tuning_widget.setEnabled(False)
 
 
 class PandaProgramWidget(QGroupBox):
@@ -620,6 +722,76 @@ class PandaTuningWidget(QStackedWidget):
         self.update()
 
 
+class PandaActiveTuningWidget(PandaTuningWidget):
+    # static variables
+    def __init__(self, parent):
+        super(PandaActiveTuningWidget, self).__init__(parent)
+
+    def initUI(self):
+        self.stacks = {}
+        self.stacks[None] = PandaActiveTuningPage(self, None)
+        self.addWidget(self.stacks[None])
+
+        for primitive_type in PandaActiveTuningWidget.tunable_primitives:
+            self.stacks[primitive_type] = PandaActiveTuningPage(self, primitive_type)
+            self.addWidget(self.stacks[primitive_type])
+
+        self.setCurrentIndex(0)
+        self.setSizePolicy(PandaActiveTuningWidget.sizePolicy)
+
+
+class PandaActiveTuningPage(QFrame):
+    primitiveTuned = pyqtSignal(dict)
+
+    def __init__(self, parent, primitive_type):
+        super(PandaActiveTuningPage, self).__init__(parent)
+        self.primitive_type = primitive_type
+        self.initUI()
+
+    def initUI(self):
+        self.parameter_widget = QWidget()
+        self.dialog_widget = QWidget()
+        self.answer_buttons = QWidget()
+
+        self.layout = QHBoxLayout(self)
+        self.parameter_layout = QVBoxLayout(self.parameter_widget)
+        self.dialog_layout = QVBoxLayout(self.dialog_widget)
+        self.answer_buttons_layout = QHBoxLayout(self.answer_buttons)
+
+        # LEFT SIDE OF QWIDGET
+        self.parameter_labels = {}
+        if self.primitive_type is not None:
+            for param in self.primitive_type.gui_tunable_parameters:
+                self.parameter_labels[param] = [QLabel(param), QLabel('unknown')]
+                self.parameter_layout.addWidget(self.parameter_labels[param][0])
+                self.parameter_layout.addWidget(self.parameter_labels[param][1])
+
+        # RIGTH SIDE OF QWIDGET
+        # ANSWER BUTTONS
+        self.buttons = {
+            'lower': QPushButton('lower'),
+            'fine': QPushButton('fine'),
+            'higher': QPushButton('higher')
+        }
+        for key, value in self.buttons.items():
+            self.answer_buttons_layout.addWidget(value)
+
+        # QUESTION LABEL
+        self.question_label = QLabel('question')
+        self.dialog_layout.addWidget(self.question_label)
+        self.dialog_layout.addWidget(self.answer_buttons)
+
+        # putting all together
+        self.layout.addWidget(self.parameter_widget)
+        self.layout.addWidget(QVerticalLine())
+        self.layout.addWidget(self.dialog_widget)
+
+    def updatePageFromPritimive(self, primitive):
+        if primitive.__class__ is not None:
+            for param in primitive.__class__.gui_tunable_parameters:
+                self.parameter_labels[param][1].setText(str(getattr(primitive.parameter_container, param)))
+
+
 class PandaTuningPage(QFrame):
     primitiveTuned = pyqtSignal(dict)
 
@@ -655,6 +827,7 @@ class PandaTuningPage(QFrame):
             for key, value in self.sliders.items():
                 if key == parameter:
                     value.receiveValueConfirmation(tuned)
+
 
 class CurrentValueShowingSlider(QWidget):
     valueSubmitted = pyqtSignal(float)
