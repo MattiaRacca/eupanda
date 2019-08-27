@@ -25,6 +25,7 @@ from enum import Enum
 from datetime import datetime
 from time import time
 
+import numpy as np
 from range_al import range_al as ral
 
 # Size of Primitive Widget
@@ -377,11 +378,43 @@ class EUPWidget(QWidget):
 
 
 class ActiveEUPWidget(EUPWidget):
+    available_primitives = [pp.ApplyForceFingers, pp.MoveToEE, pp.MoveToContact, pp.MoveFingers, pp.UserSync]
     questionChosen = pyqtSignal(object, str)
     waitingAnswer = pyqtSignal()
 
     def __init__(self, title='Active EUP Widget'):
         super(ActiveEUPWidget, self).__init__(title)
+
+        # Active Learners parameter fetching/creation
+        self.n_questions = 0  # number of questions for parameter
+        if rospy.has_param('/n_questions'):
+            self.n_questions = rospy.get_param('/n_questions')
+        else:
+            raise ValueError('Cannot find rosparam n_questions')
+
+        self.priors_path = None  # path where to find the priors for the learners
+        if rospy.has_param('/priors_path'):
+            self.priors_path = rospy.get_param('/priors_path')
+
+        self.priors = {}  # priors for the learners
+        self.n_buckets = -1  # buckets for the priors (n of bins in the histogram)
+        if self.priors_path is not None:
+            for primitive_type in self.available_primitives:
+                for parameter in primitive_type.gui_tunable_parameters:
+                    pass
+                    # TODO: actually assign the priors from the files
+                    # TODO: from the priors get also the n_buckets
+        else:
+            if rospy.has_param('/n_buckets'):
+                self.n_buckets = rospy.get_param('/n_buckets')
+            else:
+                rospy.logwarn('Cannot find rosparam n_buckets; using 101 buckets default')
+                self.n_buckets = 101
+            rospy.logwarn('Priors for parameters not found: will use uninformative priors')
+            for primitive_type in self.available_primitives:
+                for parameter in primitive_type.gui_tunable_parameters:
+                    self.priors[primitive_type, parameter] = np.ones(self.n_buckets)
+                    self.priors[primitive_type, parameter] /= np.sum(self.priors[primitive_type, parameter])
 
     def initUI(self):
         # create new elements that are updated by updatePandaWidgets
