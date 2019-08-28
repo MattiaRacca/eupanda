@@ -387,7 +387,7 @@ class EUPWidget(QWidget):
 class ActiveEUPWidget(EUPWidget):
     available_primitives = [pp.ApplyForceFingers, pp.MoveToEE, pp.MoveToContact, pp.MoveFingers, pp.UserSync]
     questionChosen = pyqtSignal(object, str)
-    waitingAnswer = pyqtSignal()
+    waitingAnswer = pyqtSignal(object)
 
     def __init__(self, title='Active EUP Widget'):
         self.learning_state_machine = ALStateMachine.NEUTRAL
@@ -449,6 +449,7 @@ class ActiveEUPWidget(EUPWidget):
         # Active Learning state machine's support variables
         self.current_learning_primitive = 0
         self.current_learning_parameter = 0
+        self.current_question_count = 0
         self.current_question = None
         self.current_answer = None
 
@@ -481,6 +482,7 @@ class ActiveEUPWidget(EUPWidget):
         self.updatePandaWidgets()
 
     def querySelectionWrapper(self, progress_callback=None):
+        self.current_question_count += 1
         try:
             self.current_question = self.learners[self.current_learning_primitive][self.current_learning_parameter].choose_query()
             rospy.loginfo('Learner query is {}'.format(self.current_question))
@@ -500,6 +502,7 @@ class ActiveEUPWidget(EUPWidget):
 
     def receiveAnswer(self, answer):
         self.current_answer = answer
+        self.updatePandaWidgets()
         rospy.loginfo('Received the answer... Updating the learner')
         self.execute_learner_command('update')
 
@@ -545,6 +548,10 @@ class ActiveEUPWidget(EUPWidget):
                 # we are at start, disable revert buttons
                 if self.interpreter.next_primitive_index <= 0:
                     pass
+                if self.learning_state_machine == ALStateMachine.POSING:
+                    # if you are asking questions, don't allow execution
+                    for key, value in self.interpreter_command_dict.items():
+                        value[0].setEnabled(False)
 
             elif self.state_machine == EUPStateMachine.STARTUP_BUSY or self.state_machine == EUPStateMachine.BUSY:
                 for key, value in self.interpreter_command_dict.items():
@@ -593,7 +600,7 @@ class ActiveEUPWidget(EUPWidget):
             self.threadpool.start(worker)
         if self.learning_state_machine == ALStateMachine.QUERY_CHOSEN and command_keyword is 'pose':
             self.learning_state_machine = ALStateMachine.POSING
-            self.waitingAnswer.emit()
+            self.waitingAnswer.emit(self.interpreter.loaded_program.primitives[self.current_learning_primitive])
         if self.learning_state_machine == ALStateMachine.POSING and command_keyword is 'update':
             self.learning_state_machine = ALStateMachine.UPDATING
             worker = Worker(self.updateWrapper)
@@ -619,10 +626,30 @@ class ActiveEUPWidget(EUPWidget):
         if self.learning_state_machine == ALStateMachine.UPDATING:
             if success:
                 self.learning_state_machine = ALStateMachine.NEUTRAL
-                rospy.logwarn('Reverting to ask new question')
-                self.execute_interpreter_command(self.interpreter.revert_one_step)
+                if self.current_question_count < self.n_questions:
+                    rospy.logwarn('Reverting to ask new question')
+                    self.execute_interpreter_command(self.interpreter.revert_one_step)
+                else:
+                    self.current_question_count = 0
+                    self.current_learning_parameter += 1
+                    try:
+                        new_param = self.interpreter.loaded_program.primitives[self.current_learning_primitive].gui_tunable_parameters[self.current_learning_parameter]
+                    except IndexError:
+                        self.current_learning_primitive += 1
+                        self.current_learning_parameter = 0
+                        if self.current_learning_primitive >= self.interpreter.loaded_program.get_program_length():
+                            self.current_learning_primitive = 0
+                            self.state_machine = EUPStateMachine.STARTUP
+                            rospy.logwarn('Moving back to beginning to learn')
+                        else:
+                            rospy.logwarn('Moving to the next primitive')
+                            self.execute_learner_command('choose')
+                    else:
+                        rospy.logwarn('Reverting to ask new question')
+                        self.execute_interpreter_command(self.interpreter.revert_one_step)
             else:
                 self.learning_state_machine = ALStateMachine.LEARNING_ERROR
+                self.execute_interpreter_command(self.interpreter.revert_one_step)
         self.updatePandaWidgets()
 
     def reapInterpreterResults(self, success):
@@ -970,6 +997,7 @@ class PandaActiveTuningPage(QFrame):
 
         # QUESTION LABEL
         self.question_label = QLabel('question')
+        self.question_label.setWordWrap(True)
         self.dialog_layout.addWidget(self.question_label)
         self.dialog_layout.addWidget(self.answer_buttons)
 
@@ -984,14 +1012,18 @@ class PandaActiveTuningPage(QFrame):
                 format(parameter, str(getattr(primitive.parameter_container, parameter)))
             self.question_label.setText(question)
 
-    def enableAnswering(self):
-        for key, value in self.buttons.items():
-            value.setEnabled(True)
+    def enableAnswering(self, primitive):
+        if primitive.__class__ is  self.primitive_type:
+            for key, value in self.buttons.items():
+                value.setEnabled(True)
+            self.question_label.setText(self.question_label.text() + '\n how was it?')
 
     def communicateAnswer(self, answer):
-        self.sendAnswer.emit(answer)
+        rospy.logdebug('Communicate the answer: {}'.format(answer))
         for key, value in self.buttons.items():
             value.setEnabled(False)
+        self.sendAnswer.emit(answer)
+
 
     def updatePageFromPritimive(self, primitive):
         if primitive.__class__ is not None:
