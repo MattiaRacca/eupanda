@@ -120,6 +120,11 @@ class UserSync(PandaPrimitive):
     gui_tunable_parameter_units = {
         gui_tunable_parameters[0]: 'N'
     }
+    gui_tunable_parameter_answer_readable = {
+        gui_tunable_parameters[0]: ['I want to push/pull\n less to unlock',
+                                    'It was okay like this',
+                                    'I want to push/pull\n more to unlock']
+    }
     result_message = {
         True: 'Unlocked',
         False: 'Error while waiting'
@@ -143,6 +148,11 @@ class MoveToEE(PandaPrimitive):
         True: 'Destination reached',
         False: 'Error while moving'
     }
+    gui_tunable_parameter_answer_readable = {
+        gui_tunable_parameters[0]: ['I want it \nslower',
+                                    'It was okay like this',
+                                    'I want it \nfaster']
+    }
 
     def __init__(self, description="A Move to End-Effector primitive"):
         super(MoveToEE, self).__init__(description)
@@ -164,6 +174,14 @@ class MoveToContact(PandaPrimitive):
         True: 'Moved to contact',
         False: 'Error while pushing'
     }
+    gui_tunable_parameter_answer_readable = {
+        gui_tunable_parameters[0]: ['I want it \nslower',
+                                    'It was okay like this',
+                                    'I want it \nfaster'],
+        gui_tunable_parameters[1]: ['I want a lower \ncollision threshold',
+                                    'It was okay like this',
+                                    'I want a higher \ncollision threshold']
+    }
 
     def __init__(self, description="A Move to Contact primitive"):
         super(MoveToContact, self).__init__(description)
@@ -182,6 +200,11 @@ class MoveFingers(PandaPrimitive):
     result_message = {
         True: 'Fingers moved',
         False: 'Error while moving fingers'
+    }
+    gui_tunable_parameter_answer_readable = {
+        gui_tunable_parameters[0]: ['I want the fingers \nmore closed',
+                                    'It was okay like this',
+                                    'I want the fingers \nmore open']
     }
 
     def __init__(self, description="A Move Fingers primitive"):
@@ -216,6 +239,11 @@ class ApplyForceFingers(PandaPrimitive):
     result_message = {
         True: 'Forces applied',
         False: 'Error while applying force with fingers'
+    }
+    gui_tunable_parameter_answer_readable = {
+        gui_tunable_parameters[0]: ['I want it \nto squeeze less',
+                                    'It was okay like this',
+                                    'I want it \nto squeeze more']
     }
 
     def __init__(self, description="A Apply Force (with) Fingers primitive"):

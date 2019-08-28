@@ -466,6 +466,7 @@ class ActiveEUPWidget(EUPWidget):
         self.tuningGUIUpdate.connect(self.panda_active_tuning_widget.updateWidget)
 
         # remove bunch of stuff that are not needed in the Active Widget
+        self.low_buttons_layout.itemAt(6).widget().setParent(None)  # remove a vertical line
         self.interpreter_command_dict['revert_to_beginning_of_program'][0].setParent(None)
         self.interpreter_command_dict['execute_rest_of_program'][0].setParent(None)
         self.interpreter_command_dict['revert_one_step'][0].setParent(None)
@@ -793,7 +794,7 @@ class PandaStateWidget(QGroupBox):
         self.setLayout(layout)
 
     def sizeHint(self):
-        return QSize(10, PRIMITIVE_HEIGHT)
+        return QSize(150, PRIMITIVE_HEIGHT)
 
     def sendErrorRecover(self):
         msg = ErrorRecoveryActionGoal()
@@ -995,6 +996,19 @@ class PandaActiveTuningWidget(PandaTuningWidget):
 class PandaActiveTuningPage(QFrame):
     primitiveTuned = pyqtSignal(dict)
     sendAnswer = pyqtSignal(ral.LearnerAnswers)
+    readable_parameter_name = {
+        'position_speed': 'Motion Speed',
+        'force_threshold': 'Collision Threshold',
+        'force': 'Grasp Strength',
+        'width': 'Finger Distance'
+    }
+    readable_primitive_name = {
+        pp.UserSync: 'User Synchronization',
+        pp.MoveToEE: 'Linear Motion',
+        pp.MoveFingers: 'Move Fingers',
+        pp.MoveToContact: 'Push Motion',
+        pp.ApplyForceFingers: 'Finger Grasp'
+    }
 
     def __init__(self, parent, primitive_type):
         super(PandaActiveTuningPage, self).__init__(parent)
@@ -1012,13 +1026,24 @@ class PandaActiveTuningPage(QFrame):
         self.dialog_layout = QVBoxLayout(self.dialog_widget)
         self.answer_buttons_layout = QHBoxLayout(self.answer_buttons)
 
+        self.dialog_layout.setAlignment(Qt.AlignTop)
+        self.parameter_layout.setAlignment(Qt.AlignTop)
+
         # LEFT SIDE OF QWIDGET
         self.parameter_labels = {}
-        if self.primitive_type is not None:
-            for param in self.primitive_type.gui_tunable_parameters:
-                self.parameter_labels[param] = [QLabel(param), QLabel('unknown')]
-                self.parameter_layout.addWidget(self.parameter_labels[param][0])
-                self.parameter_layout.addWidget(self.parameter_labels[param][1])
+        title_label = QLabel("Current Primitive's \nparameters:")
+        title_label.sizeHint = lambda : QSize(200,30)
+        title_label.setFont(EUPWidget.font)
+        self.parameter_layout.addWidget(title_label)
+        self.parameter_layout.addWidget(QHorizontalLine())
+        for param in self.primitive_type.gui_tunable_parameters:
+            self.parameter_labels[param] = [QLabel(self.readable_parameter_name[param]), QLabel('unknown')]
+            self.parameter_labels[param][0].setFont(EUPWidget.font)
+            self.parameter_labels[param][1].setFont(EUPWidget.font)
+            self.parameter_labels[param][0].sizeHint = lambda : QSize(200,30)
+            self.parameter_labels[param][1].sizeHint = lambda : QSize(200,30)
+            self.parameter_layout.addWidget(self.parameter_labels[param][0])
+            self.parameter_layout.addWidget(self.parameter_labels[param][1])
 
         # RIGTH SIDE OF QWIDGET
         # ANSWER BUTTONS
@@ -1027,15 +1052,30 @@ class PandaActiveTuningPage(QFrame):
             'fine': QExpandingPushButton('fine'),
             'higher': QExpandingPushButton('higher')
         }
-        answers = [ral.LearnerAnswers.LOWER, ral.LearnerAnswers.FINE, ral.LearnerAnswers.HIGHER]
-        for i, (key, value) in enumerate(self.buttons.items()):
+        answers = {
+            'lower': ral.LearnerAnswers.LOWER,
+            'fine':ral.LearnerAnswers.FINE,
+            'higher': ral.LearnerAnswers.HIGHER
+        }
+        for key, value in self.buttons.items():
             value.setEnabled(False)
+            value.setFont(EUPWidget.font)
             self.answer_buttons_layout.addWidget(value)
-            value.clicked.connect(partial(self.communicateAnswer, answer=answers[i]))
+            value.clicked.connect(partial(self.communicateAnswer, answer=answers[key]))
 
         # QUESTION LABEL
+        label_size_policy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
+        self.value_label = QLabel('current value')
+        self.value_label.setWordWrap(True)
+        self.value_label.setFont(EUPWidget.font)
+        self.value_label.sizeHint = lambda : QSize(200,60)
+        self.value_label.setSizePolicy(label_size_policy)
         self.question_label = QLabel('question')
         self.question_label.setWordWrap(True)
+        self.question_label.setFont(EUPWidget.font)
+        self.question_label.sizeHint = lambda : QSize(200,60)
+        self.question_label.setSizePolicy(label_size_policy)
+        self.dialog_layout.addWidget(self.value_label)
         self.dialog_layout.addWidget(self.question_label)
         self.dialog_layout.addWidget(self.answer_buttons)
 
@@ -1046,18 +1086,39 @@ class PandaActiveTuningPage(QFrame):
 
     def showQuestion(self, primitive, parameter):
         if primitive.__class__ is  self.primitive_type:
-            question = 'I will try this primitive now with {} = {}'.\
-                format(parameter, str(getattr(primitive.parameter_container, parameter)))
-            self.question_label.setText(question)
+            self.last_value = getattr(primitive.parameter_container, parameter)
+            self.last_parameter = parameter
+            value_statement = 'I will execute this {} now with {} = {:.3f} {}'.\
+                format(self.readable_primitive_name[primitive.__class__],
+                       self.readable_parameter_name[parameter],
+                       self.last_value,
+                       primitive.gui_tunable_parameter_units[parameter])
+            self.value_label.setText(value_statement)
+            self.question_label.setText('')
+            self.answer_buttons.setVisible(False)
+
 
     def enableAnswering(self, primitive):
         if primitive.__class__ is  self.primitive_type:
+            value_statement = '{} executed (with {} = {:.3f} {})'.\
+                format(self.readable_primitive_name[primitive.__class__],
+                       self.readable_parameter_name[self.last_parameter],
+                       self.last_value,
+                       primitive.gui_tunable_parameter_units[self.last_parameter])
+            self.value_label.setText(value_statement)
+            self.answer_buttons.setVisible(True)
+
+            answer_index = {
+                'lower': 0,
+                'fine': 1,
+                'higher': 2
+            }
             for key, value in self.buttons.items():
+                value.setText(primitive.gui_tunable_parameter_answer_readable[self.last_parameter][answer_index[key]])
                 value.setEnabled(True)
-            self.question_label.setText(self.question_label.text() + '\n how was it?')
+            self.question_label.setText('How was it?')
 
     def communicateAnswer(self, answer):
-        rospy.logdebug('Communicate the answer: {}'.format(answer))
         for key, value in self.buttons.items():
             value.setEnabled(False)
         self.sendAnswer.emit(answer)
@@ -1066,7 +1127,9 @@ class PandaActiveTuningPage(QFrame):
     def updatePageFromPritimive(self, primitive):
         if primitive.__class__ is not None:
             for param in primitive.__class__.gui_tunable_parameters:
-                self.parameter_labels[param][1].setText(str(getattr(primitive.parameter_container, param)))
+                s = '{:.3f} {}'.format(getattr(primitive.parameter_container, param),
+                                       primitive.gui_tunable_parameter_units[param])
+                self.parameter_labels[param][1].setText(s)
 
 
 class CurrentValueShowingSlider(QWidget):
@@ -1165,6 +1228,12 @@ class QVerticalLine(QFrame):
     def __init__(self, parent=None):
         super(QVerticalLine, self).__init__(parent)
         self.setFrameShape(QFrame.VLine)
+        self.setFrameShadow(QFrame.Sunken)
+
+class QHorizontalLine(QFrame):
+    def __init__(self, parent=None):
+        super(QHorizontalLine, self).__init__(parent)
+        self.setFrameShape(QFrame.HLine)
         self.setFrameShadow(QFrame.Sunken)
 
 
