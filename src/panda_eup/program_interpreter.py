@@ -232,7 +232,7 @@ class PandaProgramInterpreter(object):
 
         if result:
             primitive_to_execute.status = pp.PandaPrimitiveStatus.EXECUTED
-            rospy.loginfo('Executed primitive ' + primitive_to_execute.__str__())
+            rospy.logdebug('Executed primitive ' + primitive_to_execute.__str__())
             self.next_primitive_index += 1
             try:
                 next_primitive = self.loaded_program.get_nth_primitive(self.next_primitive_index)
@@ -291,7 +291,7 @@ class PandaProgramInterpreter(object):
 
         if result:
             primitive_to_revert.status = pp.PandaPrimitiveStatus.READY
-            rospy.loginfo('Reverted primitive ' + primitive_to_revert.__str__())
+            rospy.logdebug('Reverted primitive ' + primitive_to_revert.__str__())
             self.next_primitive_index -= 1
         else:
             primitive_to_revert.status = pp.PandaPrimitiveStatus.ERROR
@@ -348,7 +348,7 @@ class PandaProgramInterpreter(object):
 
     # PRIMITIVE CALLBACKS
     def execute_user_sync(self, primitive_to_execute):
-        rospy.loginfo('Trying to execute a user sync')
+        rospy.logdebug('Trying to execute a user sync')
         if not self.robotless_debug:
             state = self.user_sync_client.send_goal_and_wait(primitive_to_execute.parameter_container)
             success = (state == actionlib.GoalStatus.SUCCEEDED)
@@ -357,11 +357,11 @@ class PandaProgramInterpreter(object):
             state = actionlib.GoalStatus.SUCCEEDED
             success = True
 
-        rospy.loginfo('Success? {} [{}]'.format(str(success), str(state)))
+        rospy.loginfo('UserSync. S? {} [{}]'.format(str(success), str(state)))
         return success
 
     def execute_move_to_contact(self, primitive_to_execute):
-        rospy.loginfo('Trying to execute a move to contact')
+        rospy.logdebug('Trying to execute a move to contact')
 
         if not self.robotless_debug:
             state = self.move_to_contact_client.send_goal_and_wait(primitive_to_execute.parameter_container,
@@ -376,11 +376,11 @@ class PandaProgramInterpreter(object):
             state = actionlib.GoalStatus.SUCCEEDED
             success = True
 
-        rospy.loginfo('Success? {} [{}]'.format(str(success), str(state)))
+        rospy.loginfo('MoveToContact. S? {} [{}]'.format(str(success), str(state)))
         return success
 
     def execute_move_to_ee(self, primitive_to_execute):
-        rospy.loginfo('Trying to execute a move to EE')
+        rospy.logdebug('Trying to execute a move to EE')
 
         if not self.robotless_debug:
             state = self.move_to_ee_client.send_goal_and_wait(primitive_to_execute.parameter_container,
@@ -395,11 +395,11 @@ class PandaProgramInterpreter(object):
             state = actionlib.GoalStatus.SUCCEEDED
             success = True
 
-        rospy.loginfo('Success? {} [{}]'.format(str(success), str(state)))
+        rospy.loginfo('MoveToEE. S? {} [{}]'.format(str(success), str(state)))
         return success
 
     def execute_move_fingers(self, primitive_to_execute):
-        rospy.loginfo('Trying to execute a move fingers')
+        rospy.logdebug('Trying to execute a move fingers')
         if not self.robotless_debug:
             response = self.move_fingers_client.call(primitive_to_execute.parameter_container)
 
@@ -409,11 +409,11 @@ class PandaProgramInterpreter(object):
             rospy.sleep(rospy.Duration(self.fake_wait))
             response = MoveFingersResponse()
             response.success = True
-        rospy.loginfo('Success? :' + str(response.success))
+        rospy.loginfo('Move Fingers .S? :' + str(response.success))
         return response.success
 
     def execute_apply_force_fingers(self, primitive_to_execute):
-        rospy.loginfo('Trying to execute an apply force with fingers')
+        rospy.logdebug('Trying to execute an apply force with fingers')
         if not self.robotless_debug:
             response = self.apply_force_fingers_client.call(primitive_to_execute.parameter_container)
 
@@ -423,7 +423,7 @@ class PandaProgramInterpreter(object):
             rospy.sleep(rospy.Duration(self.fake_wait))
             response = ApplyForceFingersResponse()
             response.success = True
-        rospy.loginfo('Success? :' + str(response.success))
+        rospy.loginfo('Apply Force. S? :' + str(response.success))
         return response.success
 
     # REVERT PRIMITIVE CALLBACK
@@ -434,7 +434,7 @@ class PandaProgramInterpreter(object):
             rospy.logerr('Cannot revert: this primitive does not exist')
             return False
 
-        rospy.loginfo('Trying to revert a user sync')
+        rospy.logdebug('Trying to revert a user sync')
 
         # create new Goal for the primitive
         goal = MoveToEEGoal()
@@ -450,7 +450,7 @@ class PandaProgramInterpreter(object):
             state = actionlib.GoalStatus.SUCCEEDED
             success = True
 
-        rospy.loginfo('Success? {} [{}]'.format(str(success), str(state)))
+        rospy.loginfo('Revert UserSync. S? {} [{}]'.format(str(success), str(state)))
         return success
 
     def revert_move_to_contact(self, primitive_index):
@@ -461,7 +461,7 @@ class PandaProgramInterpreter(object):
             rospy.logerr('Cannot revert: this primitive does not exist')
             return False
 
-        rospy.loginfo('Trying to revert a move to contact')
+        rospy.logdebug('Trying to revert a move to contact')
 
         # create new Goal for the primitive
         goal = MoveToEEGoal()
@@ -477,7 +477,7 @@ class PandaProgramInterpreter(object):
             state = actionlib.GoalStatus.SUCCEEDED
             success = True
 
-        rospy.loginfo('Success? {} [{}]'.format(str(success), str(state)))
+        rospy.loginfo('Revert MoveToContact. S? {} [{}]'.format(str(success), str(state)))
         return success
 
     def revert_move_to_ee(self, primitive_index):
@@ -487,7 +487,7 @@ class PandaProgramInterpreter(object):
             rospy.logerr('Cannot revert: this primitive does not exist')
             return False
 
-        rospy.loginfo('Trying to revert a move to EE')
+        rospy.logdebug('Trying to revert a move to EE')
 
         # create new Goal for the primitive
         goal = MoveToEEGoal()
@@ -503,7 +503,7 @@ class PandaProgramInterpreter(object):
             state = actionlib.GoalStatus.SUCCEEDED
             success = True
 
-        rospy.loginfo('Success? {} [{}]'.format(str(success), str(state)))
+        rospy.loginfo('Revert MoveToEE. S? {} [{}]'.format(str(success), str(state)))
         return success
 
     def revert_move_fingers(self, primitive_index):
@@ -513,7 +513,7 @@ class PandaProgramInterpreter(object):
             rospy.logerr('Cannot revert: this primitive does not exist')
             return False
 
-        rospy.loginfo('Trying to revert a move fingers to {}, {}'.format(gripper_state.width, gripper_state.force))
+        rospy.logdebug('Trying to revert a move fingers to {}, {}'.format(gripper_state.width, gripper_state.force))
 
         if not self.robotless_debug:
             if gripper_state.force > 0.0:
@@ -547,7 +547,7 @@ class PandaProgramInterpreter(object):
             response = MoveFingersResponse()
             response.success = True
 
-        rospy.loginfo('Success? :' + str(response.success))
+        rospy.loginfo('Revert Move Fingers. S? :' + str(response.success))
         return response.success
 
     def revert_apply_force_fingers(self, primitive_index):
@@ -557,7 +557,7 @@ class PandaProgramInterpreter(object):
             rospy.logerr('Cannot revert: this primitive does not exist')
             return False
 
-        rospy.loginfo('Trying to revert an apply force fingers to {}, {}'.format(gripper_state.width,
+        rospy.logdebug('Trying to revert an apply force fingers to {}, {}'.format(gripper_state.width,
                                                                                  gripper_state.force))
 
         if not self.robotless_debug:
@@ -592,5 +592,5 @@ class PandaProgramInterpreter(object):
             response = MoveFingersResponse()
             response.success = True
 
-        rospy.loginfo('Success? :' + str(response.success))
+        rospy.loginfo('Revert Apply Force. S? :' + str(response.success))
         return response.success
