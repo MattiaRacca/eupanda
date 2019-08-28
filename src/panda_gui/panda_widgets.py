@@ -63,8 +63,8 @@ class EUPStateMachine(Enum):
 
 class ALStateMachine(Enum):
     NEUTRAL = 0
-    QUERY_CHOSEN = 1
-    CHOOSING = 2
+    CHOOSING = 1
+    QUERY_CHOSEN = 2
     POSING = 3
     UPDATING = 4
     LEARNING_ERROR = 5
@@ -432,7 +432,7 @@ class ActiveEUPWidget(EUPWidget):
                 for parameter in primitive_type.gui_tunable_parameters:
                     self.priors[primitive_type][parameter] = np.ones(self.n_buckets)
                     self.priors[primitive_type][parameter] /= np.sum(self.priors[primitive_type][parameter])
-        
+
         # Create the active learners
         # TODO: the learner type needs to be customizable (name coding?)
         # TODO: all these parameters need to be customizable (from rosparam ideally)
@@ -495,32 +495,28 @@ class ActiveEUPWidget(EUPWidget):
         self.current_question_count += 1
         try:
             self.current_question = self.learners[self.current_learning_primitive][self.current_learning_parameter].choose_query()
-            rospy.loginfo('Learner query is {}'.format(self.current_question))
+            rospy.logdebug('Learner query is {}'.format(self.current_question))
         except:
             return False
         return True
 
     def updateWrapper(self, progress_callback=None):
-        rospy.loginfo('Updating')
+        rospy.logdebug('Updating the learner')
         answer = self.current_answer
         try:
             result = self.learners[self.current_learning_primitive][self.current_learning_parameter].update_model(answer)
         except:
             result = False
-        rospy.loginfo('Learner update: {}'.format(result))
+        rospy.logdebug('Learner update: {}'.format(result))
         return result
 
     def receiveAnswer(self, answer):
         self.current_answer = answer
-        self.updatePandaWidgets()
-        rospy.loginfo('Received the answer... Updating the learner')
+        rospy.logdebug('Received the answer... Updating the learner')
         self.execute_learner_command('update')
 
     def updatePandaWidgets(self):
-        rospy.loginfo('Current EUP state is {}'.format(self.state_machine))
-        rospy.loginfo('Current Learner state is {}'.format(self.learning_state_machine))
-        rospy.loginfo('Current Interface state is {}'.format(self.last_interface_state))
-
+        rospy.loginfo('{} | {} | {}'.format(self.last_interface_state, self.state_machine, self.learning_state_machine))
         self.programGUIUpdate.emit()
         if self.last_interface_state is not None:
             self.robotStateUpdate.emit(self.last_interface_state)
@@ -542,64 +538,47 @@ class ActiveEUPWidget(EUPWidget):
                 self.last_interface_state == pp.PandaRobotStatus.BUSY:
             for key, value in self.interpreter_command_dict.items():
                 value[0].setEnabled(False)
+            self.panda_active_tuning_widget.setEnabled(False)
         else:
             if self.state_machine == EUPStateMachine.STARTUP:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(key is 'go_to_starting_state')
+                self.panda_active_tuning_widget.setEnabled(False)
             elif self.state_machine == EUPStateMachine.OPERATIONAL:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(key is not 'go_to_starting_state')
                     value[0].setVisible(key is not 'go_to_current_primitive_preconditions')
-
+                self.panda_active_tuning_widget.setEnabled(True)
                 # last primitive executed, disable execute buttons
                 if self.interpreter.next_primitive_index == self.interpreter.loaded_program.get_program_length():
                     self.interpreter_command_dict['execute_one_step'][0].setEnabled(False)
                     self.interpreter_command_dict['go_to_starting_state'][0].setEnabled(True)
 
-                # we are at start, disable revert buttons
-                if self.interpreter.next_primitive_index <= 0:
-                    pass
                 if self.learning_state_machine == ALStateMachine.POSING:
-                    # if you are asking questions, don't allow execution
+                    # if you are posing a question, don't allow execution
                     for key, value in self.interpreter_command_dict.items():
                         value[0].setEnabled(False)
 
             elif self.state_machine == EUPStateMachine.STARTUP_BUSY or self.state_machine == EUPStateMachine.BUSY:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(False)
+                self.panda_active_tuning_widget.setEnabled(False)
             elif self.state_machine == EUPStateMachine.STARTUP_ERROR:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(key is 'go_to_starting_state')
+                self.panda_active_tuning_widget.setEnabled(False)
             elif self.state_machine == EUPStateMachine.EXECUTION_ERROR:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(key is 'go_to_current_primitive_preconditions')
                     if key == 'go_to_current_primitive_preconditions':
                         value[0].setVisible(True)
+                self.panda_active_tuning_widget.setEnabled(False)
             elif self.state_machine == EUPStateMachine.REVERTING_ERROR:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(key is 'go_to_current_primitive_preconditions')
                     if key == 'go_to_current_primitive_preconditions':
                         value[0].setVisible(True)
-
-    def execute_interpreter_command(self, command):
-        # Disable lower buttons
-        for key, value in self.interpreter_command_dict.items():
-            value[0].setDisabled(True)
-
-        if self.state_machine == EUPStateMachine.STARTUP:
-            self.state_machine = EUPStateMachine.STARTUP_BUSY
-
-        if self.state_machine == EUPStateMachine.OPERATIONAL:
-            self.state_machine = EUPStateMachine.BUSY
-
-        worker = Worker(command) # Any other args, kwargs are passed to the run function
-        worker.signals.result.connect(self.reapInterpreterResults)
-        worker.signals.finished.connect(self.announceWorkerDeath)
-        worker.signals.progress.connect(self.actOnWorkerUpdate)
-
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor)) # TODO: Weird bug makes it work only once...
-
-        self.threadpool.start(worker)
+                self.panda_active_tuning_widget.setEnabled(False)
 
     def execute_learner_command(self, command_keyword):
         if self.learning_state_machine == ALStateMachine.NEUTRAL and command_keyword is 'choose':
@@ -609,17 +588,18 @@ class ActiveEUPWidget(EUPWidget):
             worker.signals.finished.connect(self.announceWorkerDeath)
             worker.signals.progress.connect(self.actOnWorkerUpdate)
             self.threadpool.start(worker)
-        if self.learning_state_machine == ALStateMachine.QUERY_CHOSEN and command_keyword is 'pose':
+        elif self.learning_state_machine == ALStateMachine.QUERY_CHOSEN and command_keyword is 'pose':
             self.learning_state_machine = ALStateMachine.POSING
             self.waitingAnswer.emit(self.interpreter.loaded_program.primitives[self.current_learning_primitive])
-        if self.learning_state_machine == ALStateMachine.POSING and command_keyword is 'update':
+        elif self.learning_state_machine == ALStateMachine.POSING and command_keyword is 'update':
             self.learning_state_machine = ALStateMachine.UPDATING
             worker = Worker(self.updateWrapper)
             worker.signals.result.connect(self.reapLearnerResults)
             worker.signals.finished.connect(self.announceWorkerDeath)
             worker.signals.progress.connect(self.actOnWorkerUpdate)
             self.threadpool.start(worker)
-        self.updatePandaWidgets()
+        else:
+            rospy.logerr('Unknown transition in the learning_state_machine')
 
     def reapLearnerResults(self, success):
         rospy.logdebug("Learner result: " + str(success))
@@ -634,11 +614,12 @@ class ActiveEUPWidget(EUPWidget):
                 self.questionChosen.emit(current_primitive, current_parameter)
             else:
                 self.learning_state_machine = ALStateMachine.LEARNING_ERROR
+                rospy.logerr('Learning error - cannot recover from here')
         if self.learning_state_machine == ALStateMachine.UPDATING:
             if success:
                 self.learning_state_machine = ALStateMachine.NEUTRAL
                 if self.current_question_count < self.n_questions:
-                    rospy.logwarn('Reverting to ask new question')
+                    rospy.loginfo('Reverting to ask new question')
                     self.execute_interpreter_command(self.interpreter.revert_one_step)
                 else:
                     self.current_question_count = 0
@@ -651,16 +632,16 @@ class ActiveEUPWidget(EUPWidget):
                         if self.current_learning_primitive >= self.interpreter.loaded_program.get_program_length():
                             self.current_learning_primitive = 0
                             self.state_machine = EUPStateMachine.STARTUP
-                            rospy.logwarn('Moving back to beginning to learn')
+                            rospy.loginfo('Moving back to beginning to learn')
                         else:
-                            rospy.logwarn('Moving to the next primitive')
+                            rospy.loginfo('Moving to the next primitive')
                             self.execute_learner_command('choose')
                     else:
-                        rospy.logwarn('Reverting to ask new question')
+                        rospy.loginfo('Reverting to ask new question')
                         self.execute_interpreter_command(self.interpreter.revert_one_step)
             else:
                 self.learning_state_machine = ALStateMachine.LEARNING_ERROR
-                self.execute_interpreter_command(self.interpreter.revert_one_step)
+                rospy.logerr('Learning error - cannot recover from here')
         self.updatePandaWidgets()
 
     def reapInterpreterResults(self, success):
