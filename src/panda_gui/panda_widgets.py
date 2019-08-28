@@ -20,6 +20,7 @@ import pyttsx3
 import os
 import traceback
 import sys
+import pickle
 from functools import partial
 from enum import Enum
 from datetime import datetime
@@ -72,7 +73,8 @@ class ALStateMachine(Enum):
 class EUPPlugin(Plugin):
     def __init__(self, context):
         super(EUPPlugin, self).__init__(context)
-        self._widget = ActiveEUPWidget()
+        active_eup = rospy.get_param('/active_eup') if rospy.has_param('/active_eup') else False
+        self._widget = ActiveEUPWidget() if active_eup else EUPWidget()
         context.add_widget(self._widget)
 
     def shutdown_plugin(self):
@@ -400,30 +402,37 @@ class ActiveEUPWidget(EUPWidget):
         else:
             raise ValueError('Cannot find rosparam n_questions')
 
-        self.priors_path = None  # path where to find the priors for the learners
-        if rospy.has_param('/priors_path'):
-            self.priors_path = rospy.get_param('/priors_path')
+        self.prior_path = None  # path where to find the priors for the learners
+        if rospy.has_param('/prior_path'):
+            self.prior_path = rospy.get_param('/prior_path')
 
         self.priors = {}  # priors for the learners
         self.n_buckets = -1  # buckets for the priors (n of bins in the histogram)
-        if self.priors_path is not None:
-            for primitive_type in self.available_primitives:
-                for parameter in primitive_type.gui_tunable_parameters:
-                    pass
-                    # TODO: actually assign the priors from the files
-                    # TODO: from the priors get also the n_buckets
+        if self.prior_path is not None:
+            try:
+                with open(self.prior_path, 'rb') as f:
+                    self.priors = pickle.load(f)
+                for key_primitive, value in self.priors.items():
+                    for key_param, prior in value.items():
+                        self.n_buckets = prior.shape[0]
+                        break
+                    break
+            except EnvironmentError as e:
+                rospy.logerr('Cant find the priors at {}!'.format(self.prior_path))
+                raise
         else:
+            rospy.logwarn('Priors for parameters not found: will use uninformative priors')
             if rospy.has_param('/n_buckets'):
                 self.n_buckets = rospy.get_param('/n_buckets')
             else:
                 rospy.logwarn('Cannot find rosparam n_buckets; using 101 buckets default')
                 self.n_buckets = 101
-            rospy.logwarn('Priors for parameters not found: will use uninformative priors')
             for primitive_type in self.available_primitives:
+                self.priors[primitive_type] = {}
                 for parameter in primitive_type.gui_tunable_parameters:
-                    self.priors[primitive_type, parameter] = np.ones(self.n_buckets)
-                    self.priors[primitive_type, parameter] /= np.sum(self.priors[primitive_type, parameter])
-
+                    self.priors[primitive_type][parameter] = np.ones(self.n_buckets)
+                    self.priors[primitive_type][parameter] /= np.sum(self.priors[primitive_type][parameter])
+        
         # Create the active learners
         # TODO: the learner type needs to be customizable (name coding?)
         # TODO: all these parameters need to be customizable (from rosparam ideally)
@@ -438,11 +447,11 @@ class ActiveEUPWidget(EUPWidget):
             self.learners.append([])
             for parameter in primitive.gui_tunable_parameters:
                 r = primitive.gui_tunable_parameter_ranges[parameter]
-                domain = np.linspace(r[0], r[1], self.n_buckets)
-                prior = self.priors[type(primitive), parameter]
+                d = np.linspace(r[0], r[1], self.n_buckets)
+                p = self.priors[type(primitive)][parameter]
                 self.learners[primitive_counter].append(ral.DivergenceMinMaxLearner(
-                    n_evidence_minmax=n_evidence_minmax, logistic_k_minmax=logistic_k_minmax, domain=domain,
-                    value_distribution=prior, profiling=False, safe=True, safe_phi=percentage))
+                    n_evidence_minmax=n_evidence_minmax, logistic_k_minmax=logistic_k_minmax, domain=d,
+                    value_distribution=p, profiling=False, safe=True, safe_phi=percentage))
                 parameter_counter += 1
             primitive_counter += 1
 
