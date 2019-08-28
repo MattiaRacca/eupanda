@@ -452,6 +452,9 @@ class ActiveEUPWidget(EUPWidget):
                 self.learners[primitive_counter].append(ral.DivergenceMinMaxLearner(
                     n_evidence_minmax=n_evidence_minmax, logistic_k_minmax=logistic_k_minmax, domain=d,
                     value_distribution=p, profiling=False, safe=True, safe_phi=percentage))
+                # TODO: the enforcing of strict range should be customizable
+                self.learners[primitive_counter][-1].enforce_strict_range(
+                    primitive.gui_tunable_parameter_strict_ranges[parameter])
                 parameter_counter += 1
             primitive_counter += 1
 
