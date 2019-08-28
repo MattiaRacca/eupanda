@@ -517,7 +517,8 @@ class ActiveEUPWidget(EUPWidget):
 
         ready_primitive = None
         try:
-            if self.learning_state_machine == ALStateMachine.POSING or self.learning_state_machine == ALStateMachine.UPDATING:
+            if self.learning_state_machine == ALStateMachine.POSING or self.learning_state_machine == ALStateMachine.UPDATING\
+                    or self.learning_state_machine == ALStateMachine.NEUTRAL:
                 ready_primitive = self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index - 1)
             else:
                 ready_primitive = self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index)
@@ -935,6 +936,42 @@ class PandaTuningWidget(QStackedWidget):
         self.update()
 
 
+class PandaTuningPage(QFrame):
+    primitiveTuned = pyqtSignal(dict)
+
+    def __init__(self, parent, primitive_type):
+        super(PandaTuningPage, self).__init__(parent)
+        self.primitive_type = primitive_type
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout(self)
+        self.sliders = {}
+        if self.primitive_type is not None:
+            for param in self.primitive_type.gui_tunable_parameters:
+                self.sliders[param] = CurrentValueShowingSlider(self, param,
+                                                                self.primitive_type.gui_tunable_parameter_units[param],
+                                                                self.primitive_type.gui_tunable_parameter_ranges[param])
+                self.sliders[param].valueSubmitted.connect(partial(self.signalPrimitiveTuning, param))
+                layout.addWidget(self.sliders[param])
+        layout.setAlignment(Qt.AlignTop)
+
+    def updatePageFromPritimive(self, primitive):
+        if primitive.__class__ is not None:
+            for param in primitive.__class__.gui_tunable_parameters:
+                self.sliders[param].updateValue(getattr(primitive.parameter_container, param))
+                self.sliders[param].slider.setStrictBounds(primitive.gui_tunable_parameter_strict_ranges[param])
+
+    def signalPrimitiveTuning(self, parameter_name, parameter_value):
+        self.primitiveTuned.emit({parameter_name: parameter_value})
+
+    def updateAfterTuningAccepted(self, tuned, primitive_type, parameter):
+        if self.primitive_type is primitive_type:
+            for key, value in self.sliders.items():
+                if key == parameter:
+                    value.receiveValueConfirmation(tuned)
+
+
 class PandaActiveTuningWidget(PandaTuningWidget):
     # static variables
     def __init__(self, parent):
@@ -962,7 +999,8 @@ class PandaActiveTuningPage(QFrame):
     def __init__(self, parent, primitive_type):
         super(PandaActiveTuningPage, self).__init__(parent)
         self.primitive_type = primitive_type
-        self.initUI()
+        if primitive_type is not None:
+            self.initUI()
 
     def initUI(self):
         self.parameter_widget = QWidget()
@@ -985,9 +1023,9 @@ class PandaActiveTuningPage(QFrame):
         # RIGTH SIDE OF QWIDGET
         # ANSWER BUTTONS
         self.buttons = {
-            'lower': QPushButton('lower'),
-            'fine': QPushButton('fine'),
-            'higher': QPushButton('higher')
+            'lower': QExpandingPushButton('lower'),
+            'fine': QExpandingPushButton('fine'),
+            'higher': QExpandingPushButton('higher')
         }
         answers = [ral.LearnerAnswers.LOWER, ral.LearnerAnswers.FINE, ral.LearnerAnswers.HIGHER]
         for i, (key, value) in enumerate(self.buttons.items()):
@@ -1029,42 +1067,6 @@ class PandaActiveTuningPage(QFrame):
         if primitive.__class__ is not None:
             for param in primitive.__class__.gui_tunable_parameters:
                 self.parameter_labels[param][1].setText(str(getattr(primitive.parameter_container, param)))
-
-
-class PandaTuningPage(QFrame):
-    primitiveTuned = pyqtSignal(dict)
-
-    def __init__(self, parent, primitive_type):
-        super(PandaTuningPage, self).__init__(parent)
-        self.primitive_type = primitive_type
-        self.initUI()
-
-    def initUI(self):
-        layout = QVBoxLayout(self)
-        self.sliders = {}
-        if self.primitive_type is not None:
-            for param in self.primitive_type.gui_tunable_parameters:
-                self.sliders[param] = CurrentValueShowingSlider(self, param,
-                                                                self.primitive_type.gui_tunable_parameter_units[param],
-                                                                self.primitive_type.gui_tunable_parameter_ranges[param])
-                self.sliders[param].valueSubmitted.connect(partial(self.signalPrimitiveTuning, param))
-                layout.addWidget(self.sliders[param])
-        layout.setAlignment(Qt.AlignTop)
-
-    def updatePageFromPritimive(self, primitive):
-        if primitive.__class__ is not None:
-            for param in primitive.__class__.gui_tunable_parameters:
-                self.sliders[param].updateValue(getattr(primitive.parameter_container, param))
-                self.sliders[param].slider.setStrictBounds(primitive.gui_tunable_parameter_strict_ranges[param])
-
-    def signalPrimitiveTuning(self, parameter_name, parameter_value):
-        self.primitiveTuned.emit({parameter_name: parameter_value})
-
-    def updateAfterTuningAccepted(self, tuned, primitive_type, parameter):
-        if self.primitive_type is primitive_type:
-            for key, value in self.sliders.items():
-                if key == parameter:
-                    value.receiveValueConfirmation(tuned)
 
 
 class CurrentValueShowingSlider(QWidget):
@@ -1157,6 +1159,7 @@ class CurrentValueShowingSlider(QWidget):
             self.stored_value_label.setText('{:.3f} {}'.format(value, self.measure_unit))
             self.updateLabel(value)
         self.update()
+
 
 class QVerticalLine(QFrame):
     def __init__(self, parent=None):
