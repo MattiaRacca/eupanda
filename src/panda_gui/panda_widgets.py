@@ -517,6 +517,12 @@ class ActiveEUPWidget(EUPWidget):
     def poseWrapper(self):
         self.waitingAnswer.emit(self.interpreter.loaded_program.primitives[self.current_learning_primitive])
 
+    def usermessageWrapper(self, message, progress_callback=None):
+        rospy.logwarn('gonna wait for a while {}'.format(message))
+        time.sleep(4)
+        rospy.logwarn('ok lets go {}'.format(message))
+        return True
+
     def receiveAnswer(self, answer):
         self.current_answer = answer
         rospy.logdebug('Received the answer... Updating the learner')
@@ -561,8 +567,9 @@ class ActiveEUPWidget(EUPWidget):
                     self.interpreter_command_dict['execute_one_step'][0].setEnabled(False)
                     self.interpreter_command_dict['go_to_starting_state'][0].setEnabled(True)
 
-                if self.learning_state_machine == ALStateMachine.POSING:
-                    # if you are posing a question, don't allow execution
+                if self.learning_state_machine == ALStateMachine.POSING or \
+                        self.learning_state_machine == ALStateMachine.USER_MESSAGE:
+                    # if you are posing a question or communicating something, don't allow execution
                     for key, value in self.interpreter_command_dict.items():
                         value[0].setEnabled(False)
 
@@ -596,7 +603,7 @@ class ActiveEUPWidget(EUPWidget):
         if self.learning_state_machine == ALStateMachine.NEUTRAL and \
                 command_keyword == self.querySelectionWrapper.__name__:
             self.learning_state_machine = ALStateMachine.CHOOSING
-            worker = Worker(self.querySelectionWrapper)
+            worker = Worker(command)
             worker.signals.result.connect(self.reapLearnerResults)
             worker.signals.finished.connect(self.announceWorkerDeath)
             worker.signals.progress.connect(self.actOnWorkerUpdate)
@@ -608,7 +615,15 @@ class ActiveEUPWidget(EUPWidget):
         elif self.learning_state_machine == ALStateMachine.POSING and \
                 command_keyword == self.updateWrapper.__name__:
             self.learning_state_machine = ALStateMachine.UPDATING
-            worker = Worker(self.updateWrapper)
+            worker = Worker(command)
+            worker.signals.result.connect(self.reapLearnerResults)
+            worker.signals.finished.connect(self.announceWorkerDeath)
+            worker.signals.progress.connect(self.actOnWorkerUpdate)
+            self.threadpool.start(worker)
+        elif self.learning_state_machine == ALStateMachine.UPDATING and \
+                command_keyword == self.usermessageWrapper.__name__:
+            self.learning_state_machine = ALStateMachine.USER_MESSAGE
+            worker = Worker(command)
             worker.signals.result.connect(self.reapLearnerResults)
             worker.signals.finished.connect(self.announceWorkerDeath)
             worker.signals.progress.connect(self.actOnWorkerUpdate)
@@ -630,55 +645,78 @@ class ActiveEUPWidget(EUPWidget):
             else:
                 self.learning_state_machine = ALStateMachine.LEARNING_ERROR
                 rospy.logerr('Learning error - cannot recover from here')
-        if self.learning_state_machine == ALStateMachine.UPDATING:
+        elif self.learning_state_machine == ALStateMachine.UPDATING:
             if success:
-                self.learning_state_machine = ALStateMachine.NEUTRAL
                 if self.current_question_count < self.n_questions:
-                    rospy.loginfo('Reverting to ask new question (n_p: {}/{} - {} - n_q: {}/{})'.
+                    partial_message = partial(self.usermessageWrapper, message='reverting to ask new question, same primitive')
+                    partial_message.__name__ = self.usermessageWrapper.__name__
+                    self.execute_learner_command(partial_message)
+                else:
+                    try:
+                        new_param = self.interpreter.loaded_program.primitives[self.current_learning_primitive].\
+                            gui_tunable_parameters[self.current_learning_parameter + 1]
+                    except IndexError:
+                        if self.current_learning_primitive + 1 >= self.interpreter.loaded_program.get_program_length():
+                            partial_message = partial(self.usermessageWrapper, message='moving back to beginning')
+                            partial_message.__name__ = self.usermessageWrapper.__name__
+                            self.execute_learner_command(partial_message)
+                        else:
+                            partial_message = partial(self.usermessageWrapper, message='moving to the next primitive')
+                            partial_message.__name__ = self.usermessageWrapper.__name__
+                            self.execute_learner_command(partial_message)
+                    else:
+                        partial_message = partial(self.usermessageWrapper, message='reverting to ask new question, same primitive, different parameter')
+                        partial_message.__name__ = self.usermessageWrapper.__name__
+                        self.execute_learner_command(partial_message)
+            else:
+                self.learning_state_machine = ALStateMachine.LEARNING_ERROR
+                rospy.logerr('Learning error - cannot recover from here')
+        elif self.learning_state_machine == ALStateMachine.USER_MESSAGE and success:
+            self.learning_state_machine = ALStateMachine.NEUTRAL
+            if self.current_question_count < self.n_questions:
+                rospy.loginfo('Reverting to ask new question (n_p: {}/{} - {} - n_q: {}/{})'.
+                              format(self.current_learning_primitive + 1,
+                                     self.interpreter.loaded_program.get_program_length(),
+                                     self.current_learning_parameter,
+                                     self.current_question_count,
+                                     self.n_questions))
+                self.execute_interpreter_command(self.interpreter.revert_one_step)
+            else:
+                self.current_question_count = 0
+                self.current_learning_parameter += 1
+                try:
+                    new_param = self.interpreter.loaded_program.primitives[self.current_learning_primitive]. \
+                        gui_tunable_parameters[self.current_learning_parameter]
+                except IndexError:
+                    self.current_learning_primitive += 1
+                    self.current_learning_parameter = 0
+                    if self.current_learning_primitive >= self.interpreter.loaded_program.get_program_length():
+                        self.current_learning_primitive = 0
+                        self.state_machine = EUPStateMachine.STARTUP
+                        rospy.loginfo('Moving back to beginning to learn (n_p: {}/{} - {} - n_q: {}/{})'.
+                                      format(self.current_learning_primitive + 1,
+                                             self.interpreter.loaded_program.get_program_length(),
+                                             self.current_learning_parameter,
+                                             self.current_question_count,
+                                             self.n_questions))
+                    else:
+                        rospy.loginfo('Moving to the next primitive (n_p: {}/{} - {} - n_q: {}/{})'.
+                                      format(self.current_learning_primitive + 1,
+                                             self.interpreter.loaded_program.get_program_length(),
+                                             self.current_learning_parameter,
+                                             self.current_question_count,
+                                             self.n_questions))
+                        self.execute_learner_command(self.querySelectionWrapper)
+                else:
+                    rospy.loginfo('Reverting to ask new question: same primitive, different parameter '
+                                  + '(n_p: {}/{} - {} - n_q: {}/{})'.
                                   format(self.current_learning_primitive + 1,
                                          self.interpreter.loaded_program.get_program_length(),
                                          self.current_learning_parameter,
                                          self.current_question_count,
                                          self.n_questions))
                     self.execute_interpreter_command(self.interpreter.revert_one_step)
-                else:
-                    self.current_question_count = 0
-                    self.current_learning_parameter += 1
-                    try:
-                        new_param = self.interpreter.loaded_program.primitives[self.current_learning_primitive].\
-                            gui_tunable_parameters[self.current_learning_parameter]
-                    except IndexError:
-                        self.current_learning_primitive += 1
-                        self.current_learning_parameter = 0
-                        if self.current_learning_primitive >= self.interpreter.loaded_program.get_program_length():
-                            self.current_learning_primitive = 0
-                            self.state_machine = EUPStateMachine.STARTUP
-                            rospy.loginfo('Moving back to beginning to learn (n_p: {}/{} - {} - n_q: {}/{})'.
-                                          format(self.current_learning_primitive + 1,
-                                                 self.interpreter.loaded_program.get_program_length(),
-                                                 self.current_learning_parameter,
-                                                 self.current_question_count,
-                                                 self.n_questions))
-                        else:
-                            rospy.loginfo('Moving to the next primitive (n_p: {}/{} - {} - n_q: {}/{})'.
-                                          format(self.current_learning_primitive + 1,
-                                                 self.interpreter.loaded_program.get_program_length(),
-                                                 self.current_learning_parameter,
-                                                 self.current_question_count,
-                                                 self.n_questions))
-                            self.execute_learner_command(self.querySelectionWrapper)
-                    else:
-                        rospy.loginfo('Reverting to ask new question: same primitive, different parameter '
-                                      + '(n_p: {}/{} - {} - n_q: {}/{})'.
-                                      format(self.current_learning_primitive + 1,
-                                             self.interpreter.loaded_program.get_program_length(),
-                                             self.current_learning_parameter,
-                                             self.current_question_count,
-                                             self.n_questions))
-                        self.execute_interpreter_command(self.interpreter.revert_one_step)
-            else:
-                self.learning_state_machine = ALStateMachine.LEARNING_ERROR
-                rospy.logerr('Learning error - cannot recover from here')
+
         self.updatePandaWidgets()
 
     def reapInterpreterResults(self, success):
@@ -1121,7 +1159,7 @@ class PandaActiveTuningPage(QFrame):
         self.last_parameter = None
 
     def showQuestion(self, primitive, parameter):
-        if primitive.__class__ is  self.primitive_type:
+        if primitive.__class__ is self.primitive_type:
             self.last_value = getattr(primitive.parameter_container, parameter)
             self.last_parameter = parameter
             value_statement = 'I will execute this {} now with {} = {:.3f} {}'.\
@@ -1135,7 +1173,7 @@ class PandaActiveTuningPage(QFrame):
 
 
     def enableAnswering(self, primitive):
-        if primitive.__class__ is  self.primitive_type:
+        if primitive.__class__ is self.primitive_type:
             value_statement = '{} executed (with {} = {:.3f} {})'.\
                 format(self.readable_primitive_name[primitive.__class__],
                        self.readable_parameter_name[self.last_parameter],
