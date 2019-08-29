@@ -1039,6 +1039,8 @@ class PandaActiveTuningPage(QFrame):
         pp.MoveToContact: 'Push Motion',
         pp.ApplyForceFingers: 'Finger Grasp'
     }
+    not_bold_font = QFont()
+    not_bold_font.setPointSize(12)
 
     def __init__(self, parent, primitive_type):
         super(PandaActiveTuningPage, self).__init__(parent)
@@ -1114,6 +1116,10 @@ class PandaActiveTuningPage(QFrame):
         self.layout.addWidget(QVerticalLine())
         self.layout.addWidget(self.dialog_widget)
 
+        # support variable
+        self.last_value = None
+        self.last_parameter = None
+
     def showQuestion(self, primitive, parameter):
         if primitive.__class__ is  self.primitive_type:
             self.last_value = getattr(primitive.parameter_container, parameter)
@@ -1160,6 +1166,12 @@ class PandaActiveTuningPage(QFrame):
                 s = '{:.3f} {}'.format(getattr(primitive.parameter_container, param),
                                        primitive.gui_tunable_parameter_units[param])
                 self.parameter_labels[param][1].setText(s)
+                if param == self.last_parameter:
+                    self.parameter_labels[param][0].setFont(EUPWidget.font)
+                    self.parameter_labels[param][1].setFont(EUPWidget.font)
+                else:
+                    self.parameter_labels[param][0].setFont(self.not_bold_font)
+                    self.parameter_labels[param][1].setFont(self.not_bold_font)
 
 
 class CurrentValueShowingSlider(QWidget):
