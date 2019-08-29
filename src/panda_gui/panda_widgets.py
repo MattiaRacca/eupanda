@@ -390,6 +390,7 @@ class EUPWidget(QWidget):
 class ActiveEUPWidget(EUPWidget):
     available_primitives = [pp.ApplyForceFingers, pp.MoveToEE, pp.MoveToContact, pp.MoveFingers, pp.UserSync]
     questionChosen = pyqtSignal(object, str)
+    messageSent = pyqtSignal(object, str)
     waitingAnswer = pyqtSignal(object)
 
     def __init__(self, title='Active EUP Widget'):
@@ -489,7 +490,7 @@ class ActiveEUPWidget(EUPWidget):
         del self.interpreter_command_dict['revert_to_beginning_of_program']
 
         for key, page in self.panda_active_tuning_widget.stacks.items():
-            if page.primitive_type is not None:
+            if type(page) is PandaActiveTuningPage:
                 page.primitiveTuned.connect(self.updateCurrentPrimitive)
                 page.sendAnswer.connect(self.receiveAnswer)
 
@@ -519,8 +520,10 @@ class ActiveEUPWidget(EUPWidget):
 
     def usermessageWrapper(self, message, progress_callback=None):
         rospy.logwarn('gonna wait for a while {}'.format(message))
+        current_primitive = self.interpreter.loaded_program.primitives[self.current_learning_primitive]
+        self.messageSent.emit(current_primitive, message)
         time.sleep(4)
-        rospy.logwarn('ok lets go {}'.format(message))
+        rospy.logwarn('ok lets go')
         return True
 
     def receiveAnswer(self, answer):
@@ -536,8 +539,8 @@ class ActiveEUPWidget(EUPWidget):
 
         ready_primitive = None
         try:
-            if self.learning_state_machine == ALStateMachine.POSING or self.learning_state_machine == ALStateMachine.UPDATING\
-                    or self.learning_state_machine == ALStateMachine.NEUTRAL:
+            if self.learning_state_machine != ALStateMachine.CHOOSING and \
+                    self.learning_state_machine != ALStateMachine.QUERY_CHOSEN:
                 ready_primitive = self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index - 1)
             else:
                 ready_primitive = self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index)
@@ -995,7 +998,6 @@ class PandaTuningWidget(QStackedWidget):
         self.setCurrentIndex(0)
         self.setSizePolicy(PandaTuningWidget.sizePolicy)
 
-
     def updateWidget(self, primitive):
         if primitive is None:
             self.setCurrentIndex(0)
@@ -1048,13 +1050,14 @@ class PandaActiveTuningWidget(PandaTuningWidget):
 
     def initUI(self):
         self.stacks = {}
-        self.stacks[None] = PandaActiveTuningPage(self, None)
+        self.stacks[None] = QWidget(self)
         self.addWidget(self.stacks[None])
 
         for primitive_type in PandaActiveTuningWidget.tunable_primitives:
             self.stacks[primitive_type] = PandaActiveTuningPage(self, primitive_type)
             self.addWidget(self.stacks[primitive_type])
             self.parent().questionChosen.connect(self.stacks[primitive_type].showQuestion)
+            self.parent().messageSent.connect(self.stacks[primitive_type].showMessage)
             self.parent().waitingAnswer.connect(self.stacks[primitive_type].enableAnswering)
 
         self.setCurrentIndex(0)
@@ -1083,8 +1086,7 @@ class PandaActiveTuningPage(QFrame):
     def __init__(self, parent, primitive_type):
         super(PandaActiveTuningPage, self).__init__(parent)
         self.primitive_type = primitive_type
-        if primitive_type is not None:
-            self.initUI()
+        self.initUI()
 
     def initUI(self):
         self.parameter_widget = QWidget()
@@ -1171,6 +1173,11 @@ class PandaActiveTuningPage(QFrame):
             self.question_label.setText('')
             self.answer_buttons.setVisible(False)
 
+    def showMessage(self, primitive, message):
+        if primitive.__class__ is self.primitive_type:
+            self.value_label.setText(message)
+            self.question_label.setText('')
+            self.answer_buttons.setVisible(False)
 
     def enableAnswering(self, primitive):
         if primitive.__class__ is self.primitive_type:
