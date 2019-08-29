@@ -651,26 +651,21 @@ class ActiveEUPWidget(EUPWidget):
         elif self.learning_state_machine == ALStateMachine.UPDATING:
             if success:
                 if self.current_question_count < self.n_questions:
-                    partial_message = partial(self.usermessageWrapper, message='reverting to ask new question, same primitive')
-                    partial_message.__name__ = self.usermessageWrapper.__name__
-                    self.execute_learner_command(partial_message)
+                    message = "Now I'll revert and repeat this primitive to ask a new question"
                 else:
                     try:
                         new_param = self.interpreter.loaded_program.primitives[self.current_learning_primitive].\
                             gui_tunable_parameters[self.current_learning_parameter + 1]
                     except IndexError:
                         if self.current_learning_primitive + 1 >= self.interpreter.loaded_program.get_program_length():
-                            partial_message = partial(self.usermessageWrapper, message='moving back to beginning')
-                            partial_message.__name__ = self.usermessageWrapper.__name__
-                            self.execute_learner_command(partial_message)
+                            message="Now you can go to back to beginning or quit the program"
                         else:
-                            partial_message = partial(self.usermessageWrapper, message='moving to the next primitive')
-                            partial_message.__name__ = self.usermessageWrapper.__name__
-                            self.execute_learner_command(partial_message)
+                            message="I'm done tuning this primitive. Let's move to the next primitive!"
                     else:
-                        partial_message = partial(self.usermessageWrapper, message='reverting to ask new question, same primitive, different parameter')
-                        partial_message.__name__ = self.usermessageWrapper.__name__
-                        self.execute_learner_command(partial_message)
+                        message="Now I'll revert and repeat this primitive to ask questions on a different parameter"
+                partial_message = partial(self.usermessageWrapper, message=message)
+                partial_message.__name__ = self.usermessageWrapper.__name__
+                self.execute_learner_command(partial_message)
             else:
                 self.learning_state_machine = ALStateMachine.LEARNING_ERROR
                 rospy.logerr('Learning error - cannot recover from here')
@@ -1080,8 +1075,16 @@ class PandaActiveTuningPage(QFrame):
         pp.MoveToContact: 'Push Motion',
         pp.ApplyForceFingers: 'Finger Grasp'
     }
+    font = QFont()
+    font.setPointSize(12)
+    font.setBold(True)
+
     not_bold_font = QFont()
     not_bold_font.setPointSize(12)
+
+    message_font = QFont()
+    message_font.setPointSize(16)
+    message_font.setBold(True)
 
     def __init__(self, parent, primitive_type):
         super(PandaActiveTuningPage, self).__init__(parent)
@@ -1105,13 +1108,13 @@ class PandaActiveTuningPage(QFrame):
         self.parameter_labels = {}
         title_label = QLabel("Current Primitive's \nparameters:")
         title_label.sizeHint = lambda : QSize(200,30)
-        title_label.setFont(EUPWidget.font)
+        title_label.setFont(self.font)
         self.parameter_layout.addWidget(title_label)
         self.parameter_layout.addWidget(QHorizontalLine())
         for param in self.primitive_type.gui_tunable_parameters:
             self.parameter_labels[param] = [QLabel(self.readable_parameter_name[param]), QLabel('unknown')]
-            self.parameter_labels[param][0].setFont(EUPWidget.font)
-            self.parameter_labels[param][1].setFont(EUPWidget.font)
+            self.parameter_labels[param][0].setFont(self.font)
+            self.parameter_labels[param][1].setFont(self.font)
             self.parameter_labels[param][0].sizeHint = lambda : QSize(200,30)
             self.parameter_labels[param][1].sizeHint = lambda : QSize(200,30)
             self.parameter_layout.addWidget(self.parameter_labels[param][0])
@@ -1131,7 +1134,7 @@ class PandaActiveTuningPage(QFrame):
         }
         for key, value in self.buttons.items():
             value.setEnabled(False)
-            value.setFont(EUPWidget.font)
+            value.setFont(self.font)
             self.answer_buttons_layout.addWidget(value)
             value.clicked.connect(partial(self.communicateAnswer, answer=answers[key]))
 
@@ -1139,12 +1142,12 @@ class PandaActiveTuningPage(QFrame):
         label_size_policy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
         self.value_label = QLabel('current value')
         self.value_label.setWordWrap(True)
-        self.value_label.setFont(EUPWidget.font)
+        self.value_label.setFont(self.message_font)
         self.value_label.sizeHint = lambda : QSize(200,60)
         self.value_label.setSizePolicy(label_size_policy)
         self.question_label = QLabel('question')
         self.question_label.setWordWrap(True)
-        self.question_label.setFont(EUPWidget.font)
+        self.question_label.setFont(self.font)
         self.question_label.sizeHint = lambda : QSize(200,60)
         self.question_label.setSizePolicy(label_size_policy)
         self.dialog_layout.addWidget(self.value_label)
@@ -1176,6 +1179,7 @@ class PandaActiveTuningPage(QFrame):
     def showMessage(self, primitive, message):
         if primitive.__class__ is self.primitive_type:
             self.value_label.setText(message)
+            self.value_label.setFont(self.message_font)
             self.question_label.setText('')
             self.answer_buttons.setVisible(False)
 
@@ -1187,6 +1191,7 @@ class PandaActiveTuningPage(QFrame):
                        self.last_value,
                        primitive.gui_tunable_parameter_units[self.last_parameter])
             self.value_label.setText(value_statement)
+            self.value_label.setFont(self.font)
             self.answer_buttons.setVisible(True)
 
             answer_index = {
@@ -1197,13 +1202,13 @@ class PandaActiveTuningPage(QFrame):
             for key, value in self.buttons.items():
                 value.setText(primitive.gui_tunable_parameter_answer_readable[self.last_parameter][answer_index[key]])
                 value.setEnabled(True)
+            self.question_label.setFont(self.message_font)
             self.question_label.setText('How was it?')
 
     def communicateAnswer(self, answer):
         for key, value in self.buttons.items():
             value.setEnabled(False)
         self.sendAnswer.emit(answer)
-
 
     def updatePageFromPritimive(self, primitive):
         if primitive.__class__ is not None:
@@ -1212,8 +1217,8 @@ class PandaActiveTuningPage(QFrame):
                                        primitive.gui_tunable_parameter_units[param])
                 self.parameter_labels[param][1].setText(s)
                 if param == self.last_parameter:
-                    self.parameter_labels[param][0].setFont(EUPWidget.font)
-                    self.parameter_labels[param][1].setFont(EUPWidget.font)
+                    self.parameter_labels[param][0].setFont(self.font)
+                    self.parameter_labels[param][1].setFont(self.font)
                 else:
                     self.parameter_labels[param][0].setFont(self.not_bold_font)
                     self.parameter_labels[param][1].setFont(self.not_bold_font)
