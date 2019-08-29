@@ -178,9 +178,9 @@ class MoveToContact(PandaPrimitive):
         gui_tunable_parameters[0]: ['I want it \nslower',
                                     'It was okay like this',
                                     'I want it \nfaster'],
-        gui_tunable_parameters[1]: ['I want a lower \ncollision threshold',
+        gui_tunable_parameters[1]: ['I want a lower \ncollision threshold \n(robot should push less)',
                                     'It was okay like this',
-                                    'I want a higher \ncollision threshold']
+                                    'I want a higher \ncollision threshold \n(robot should push more)']
     }
 
     def __init__(self, description="A Move to Contact primitive"):
@@ -202,9 +202,9 @@ class MoveFingers(PandaPrimitive):
         False: 'Error while moving fingers'
     }
     gui_tunable_parameter_answer_readable = {
-        gui_tunable_parameters[0]: ['I want the fingers \nmore closed',
+        gui_tunable_parameters[0]: ['I want the fingers \ncloser together',
                                     'It was okay like this',
-                                    'I want the fingers \nmore open']
+                                    'I want the fingers \nfurther apart']
     }
 
     def __init__(self, description="A Move Fingers primitive"):
