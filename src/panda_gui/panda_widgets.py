@@ -24,7 +24,7 @@ import pickle
 from functools import partial
 from enum import Enum
 from datetime import datetime
-from time import time
+import time
 
 import numpy as np
 from range_al import range_al as ral
@@ -67,7 +67,8 @@ class ALStateMachine(Enum):
     QUERY_CHOSEN = 2
     POSING = 3
     UPDATING = 4
-    LEARNING_ERROR = 5
+    USER_MESSAGE = 5
+    LEARNING_ERROR = 6
 
 
 class EUPPlugin(Plugin):
@@ -97,7 +98,7 @@ class EUPWidget(QWidget):
     def __init__(self, title='EUP Widget'):
         super(EUPWidget, self).__init__()
         self.setWindowTitle(title)
-        self.starting_timestamp = time()
+        self.starting_timestamp = time.time()
 
         # Creating the interpreter and loading the program
         robotless_debug = rospy.get_param('/robotless_debug') if rospy.has_param('/robotless_debug') else False
@@ -510,13 +511,16 @@ class ActiveEUPWidget(EUPWidget):
             result = self.learners[self.current_learning_primitive][self.current_learning_parameter].update_model(answer)
         except:
             result = False
-        rospy.logdebug('Learner update: {}'.format(result))
+        rospy.logwarn('Learner update: {}'.format(result))
         return result
+
+    def poseWrapper(self):
+        self.waitingAnswer.emit(self.interpreter.loaded_program.primitives[self.current_learning_primitive])
 
     def receiveAnswer(self, answer):
         self.current_answer = answer
         rospy.logdebug('Received the answer... Updating the learner')
-        self.execute_learner_command('update')
+        self.execute_learner_command(self.updateWrapper)
 
     def updatePandaWidgets(self):
         rospy.loginfo('{} | {} | {}'.format(self.last_interface_state, self.state_machine, self.learning_state_machine))
@@ -587,18 +591,22 @@ class ActiveEUPWidget(EUPWidget):
                         value[0].setVisible(True)
                 self.panda_active_tuning_widget.setEnabled(False)
 
-    def execute_learner_command(self, command_keyword):
-        if self.learning_state_machine == ALStateMachine.NEUTRAL and command_keyword is 'choose':
+    def execute_learner_command(self, command):
+        command_keyword = command.__name__
+        if self.learning_state_machine == ALStateMachine.NEUTRAL and \
+                command_keyword == self.querySelectionWrapper.__name__:
             self.learning_state_machine = ALStateMachine.CHOOSING
             worker = Worker(self.querySelectionWrapper)
             worker.signals.result.connect(self.reapLearnerResults)
             worker.signals.finished.connect(self.announceWorkerDeath)
             worker.signals.progress.connect(self.actOnWorkerUpdate)
             self.threadpool.start(worker)
-        elif self.learning_state_machine == ALStateMachine.QUERY_CHOSEN and command_keyword is 'pose':
+        elif self.learning_state_machine == ALStateMachine.QUERY_CHOSEN and \
+                command_keyword == self.poseWrapper.__name__:
             self.learning_state_machine = ALStateMachine.POSING
-            self.waitingAnswer.emit(self.interpreter.loaded_program.primitives[self.current_learning_primitive])
-        elif self.learning_state_machine == ALStateMachine.POSING and command_keyword is 'update':
+            command()
+        elif self.learning_state_machine == ALStateMachine.POSING and \
+                command_keyword == self.updateWrapper.__name__:
             self.learning_state_machine = ALStateMachine.UPDATING
             worker = Worker(self.updateWrapper)
             worker.signals.result.connect(self.reapLearnerResults)
@@ -658,7 +666,7 @@ class ActiveEUPWidget(EUPWidget):
                                                  self.current_learning_parameter,
                                                  self.current_question_count,
                                                  self.n_questions))
-                            self.execute_learner_command('choose')
+                            self.execute_learner_command(self.querySelectionWrapper)
                     else:
                         rospy.loginfo('Reverting to ask new question: same primitive, different parameter '
                                       + '(n_p: {}/{} - {} - n_q: {}/{})'.
@@ -678,7 +686,7 @@ class ActiveEUPWidget(EUPWidget):
         if self.state_machine == EUPStateMachine.STARTUP_BUSY:
             if success:
                 self.state_machine = EUPStateMachine.OPERATIONAL
-                self.execute_learner_command('choose')
+                self.execute_learner_command(self.querySelectionWrapper)
             else:
                 self.state_machine = EUPStateMachine.STARTUP_ERROR
         if self.state_machine == EUPStateMachine.BUSY:
@@ -697,9 +705,9 @@ class ActiveEUPWidget(EUPWidget):
             except pp.PandaProgramException:
                 pass
             if success and self.learning_state_machine == ALStateMachine.QUERY_CHOSEN:
-                self.execute_learner_command('pose')
+                self.execute_learner_command(self.poseWrapper)
             if success and self.learning_state_machine == ALStateMachine.NEUTRAL:
-                self.execute_learner_command('choose')
+                self.execute_learner_command(self.querySelectionWrapper)
 
         if self.state_machine == EUPStateMachine.STARTUP_ERROR and success:
             self.state_machine = EUPStateMachine.STARTUP
