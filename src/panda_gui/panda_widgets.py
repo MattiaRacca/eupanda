@@ -194,7 +194,7 @@ class EUPWidget(QWidget):
                                                                  partial(self.execute_interpreter_command,
                                                                          self.interpreter.revert_one_step)]
         self.interpreter_command_dict['go_to_current_primitive_preconditions'] = \
-            [QExpandingPushButton("Revert current\n primitive", self),
+            [QExpandingPushButton("Recover from error\n on current primitive", self),
              partial(self.execute_interpreter_command, self.interpreter.go_to_current_primitive_preconditions)]
         self.interpreter_command_dict['execute_rest_of_program'] = [QExpandingPushButton("Execute rest\n of program", self),
                                                                  partial(self.execute_interpreter_command,
@@ -573,12 +573,16 @@ class ActiveEUPWidget(EUPWidget):
             elif self.state_machine == EUPStateMachine.EXECUTION_ERROR:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(key is 'go_to_current_primitive_preconditions')
+                    if key == 'execute_one_step':
+                        value[0].setVisible(False)
                     if key == 'go_to_current_primitive_preconditions':
                         value[0].setVisible(True)
                 self.panda_active_tuning_widget.setEnabled(False)
             elif self.state_machine == EUPStateMachine.REVERTING_ERROR:
                 for key, value in self.interpreter_command_dict.items():
                     value[0].setEnabled(key is 'go_to_current_primitive_preconditions')
+                    if key == 'execute_one_step':
+                        value[0].setVisible(False)
                     if key == 'go_to_current_primitive_preconditions':
                         value[0].setVisible(True)
                 self.panda_active_tuning_widget.setEnabled(False)
@@ -622,25 +626,47 @@ class ActiveEUPWidget(EUPWidget):
             if success:
                 self.learning_state_machine = ALStateMachine.NEUTRAL
                 if self.current_question_count < self.n_questions:
-                    rospy.loginfo('Reverting to ask new question')
+                    rospy.loginfo('Reverting to ask new question (n_p: {}/{} - {} - n_q: {}/{})'.
+                                  format(self.current_learning_primitive + 1,
+                                         self.interpreter.loaded_program.get_program_length(),
+                                         self.current_learning_parameter,
+                                         self.current_question_count,
+                                         self.n_questions))
                     self.execute_interpreter_command(self.interpreter.revert_one_step)
                 else:
                     self.current_question_count = 0
                     self.current_learning_parameter += 1
                     try:
-                        new_param = self.interpreter.loaded_program.primitives[self.current_learning_primitive].gui_tunable_parameters[self.current_learning_parameter]
+                        new_param = self.interpreter.loaded_program.primitives[self.current_learning_primitive].\
+                            gui_tunable_parameters[self.current_learning_parameter]
                     except IndexError:
                         self.current_learning_primitive += 1
                         self.current_learning_parameter = 0
                         if self.current_learning_primitive >= self.interpreter.loaded_program.get_program_length():
                             self.current_learning_primitive = 0
                             self.state_machine = EUPStateMachine.STARTUP
-                            rospy.loginfo('Moving back to beginning to learn')
+                            rospy.loginfo('Moving back to beginning to learn (n_p: {}/{} - {} - n_q: {}/{})'.
+                                          format(self.current_learning_primitive + 1,
+                                                 self.interpreter.loaded_program.get_program_length(),
+                                                 self.current_learning_parameter,
+                                                 self.current_question_count,
+                                                 self.n_questions))
                         else:
-                            rospy.loginfo('Moving to the next primitive')
+                            rospy.loginfo('Moving to the next primitive (n_p: {}/{} - {} - n_q: {}/{})'.
+                                          format(self.current_learning_primitive + 1,
+                                                 self.interpreter.loaded_program.get_program_length(),
+                                                 self.current_learning_parameter,
+                                                 self.current_question_count,
+                                                 self.n_questions))
                             self.execute_learner_command('choose')
                     else:
-                        rospy.loginfo('Reverting to ask new question')
+                        rospy.loginfo('Reverting to ask new question: same primitive, different parameter '
+                                      + '(n_p: {}/{} - {} - n_q: {}/{})'.
+                                      format(self.current_learning_primitive + 1,
+                                             self.interpreter.loaded_program.get_program_length(),
+                                             self.current_learning_parameter,
+                                             self.current_question_count,
+                                             self.n_questions))
                         self.execute_interpreter_command(self.interpreter.revert_one_step)
             else:
                 self.learning_state_machine = ALStateMachine.LEARNING_ERROR
@@ -677,9 +703,12 @@ class ActiveEUPWidget(EUPWidget):
 
         if self.state_machine == EUPStateMachine.STARTUP_ERROR and success:
             self.state_machine = EUPStateMachine.STARTUP
-        if (self.state_machine == EUPStateMachine.EXECUTION_ERROR or
-            self.state_machine == EUPStateMachine.REVERTING_ERROR) and success:
+        if self.state_machine == EUPStateMachine.REVERTING_ERROR and success:
             self.state_machine = EUPStateMachine.OPERATIONAL
+            self.execute_interpreter_command(self.interpreter.revert_one_step)
+        if self.state_machine == EUPStateMachine.EXECUTION_ERROR and success:
+            self.state_machine = EUPStateMachine.OPERATIONAL
+
         self.updatePandaWidgets()
 
 
