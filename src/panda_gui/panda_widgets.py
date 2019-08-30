@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QPushButton, QHBoxLayout, Q
 from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool, pyqtProperty, QPropertyAnimation
 from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor, QFont
 from qt_gui.plugin import Plugin
+import qt_range_slider.qtRangeSlider as qtRangeSlider
 
 import rospkg
 import rospy
@@ -80,6 +81,24 @@ class EUPPlugin(Plugin):
 
     def shutdown_plugin(self):
         self._widget.log_loaded_program()
+
+
+class RangeSliderTestWidget(QWidget):
+    def __init__(self, title='RangeSliderTestWidget'):
+        super(RangeSliderTestWidget, self).__init__()
+        self.setWindowTitle(title)
+        self.layout = QVBoxLayout(self)
+        self.range_slider = qtRangeSlider.QHRangeSlider(parent=self)
+        self.layout.addWidget(self.range_slider)
+        self.range_slider.setRange([0, 100, 1])
+        self.range_slider.setValues([30, 60])
+        self.range_slider.rangeChanged.connect(self.report)
+
+    def report(self, min, max):
+        rospy.logerr('slider moved from {} {}'.format(min, max))
+
+    def log_loaded_program(self):
+        pass
 
 
 class EUPWidget(QWidget):
