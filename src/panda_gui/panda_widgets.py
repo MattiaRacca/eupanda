@@ -137,6 +137,10 @@ class EUPWidget(QWidget):
         if rospy.has_param('/randomize_parameters'):
             randomize = rospy.get_param('/randomize_parameters')
 
+        self.range_sliders = False
+        if rospy.has_param('/range_sliders'):
+            self.range_sliders = rospy.get_param('/range_sliders')
+
         self.tts_for_primitives = False
         if rospy.has_param('/tts_for_primitives'):
             self.tts_for_primitives = rospy.get_param('/tts_for_primitives')
@@ -194,7 +198,7 @@ class EUPWidget(QWidget):
         self.panda_program_widget = PandaProgramWidget(self)
 
         # Parameter tuning frame
-        self.panda_tuning_widget = PandaTuningWidget(self)
+        self.panda_tuning_widget = PandaTuningWidget(parent=self, range_sliders=self.range_sliders)
 
         # Action button & Robot State Widget at the bottom
         self.low_buttons = QWidget()
@@ -995,8 +999,9 @@ class PandaTuningWidget(QStackedWidget):
     sizePolicy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
     tunable_primitives = [pp.MoveToEE, pp.MoveToContact, pp.MoveFingers, pp.ApplyForceFingers, pp.UserSync]
 
-    def __init__(self, parent):
+    def __init__(self, parent, range_sliders=False):
         super(PandaTuningWidget, self).__init__(parent)
+        self.range_sliders = range_sliders
         self.initUI()
 
     def initUI(self):
@@ -1005,7 +1010,7 @@ class PandaTuningWidget(QStackedWidget):
         self.addWidget(self.stacks[None])
 
         for primitive_type in PandaTuningWidget.tunable_primitives:
-            self.stacks[primitive_type] = PandaTuningPage(self, primitive_type)
+            self.stacks[primitive_type] = PandaTuningPage(self, primitive_type, range_sliders=self.range_sliders)
             self.addWidget(self.stacks[primitive_type])
             self.parent().tuningAccepted.connect(self.stacks[primitive_type].updateAfterTuningAccepted)
 
@@ -1024,9 +1029,10 @@ class PandaTuningWidget(QStackedWidget):
 class PandaTuningPage(QFrame):
     primitiveTuned = pyqtSignal(dict)
 
-    def __init__(self, parent, primitive_type):
+    def __init__(self, parent, primitive_type, range_sliders=False):
         super(PandaTuningPage, self).__init__(parent)
         self.primitive_type = primitive_type
+        self.range_sliders = range_sliders
         self.initUI()
 
     def initUI(self):
@@ -1036,7 +1042,8 @@ class PandaTuningPage(QFrame):
             for param in self.primitive_type.gui_tunable_parameters:
                 self.sliders[param] = CurrentValueShowingSlider(self, param,
                                                                 self.primitive_type.gui_tunable_parameter_units[param],
-                                                                self.primitive_type.gui_tunable_parameter_ranges[param])
+                                                                self.primitive_type.gui_tunable_parameter_ranges[param],
+                                                                range_slider_enabled=self.range_sliders)
                 self.sliders[param].valueSubmitted.connect(partial(self.signalPrimitiveTuning, param))
                 layout.addWidget(self.sliders[param])
         layout.setAlignment(Qt.AlignTop)
@@ -1060,7 +1067,8 @@ class PandaTuningPage(QFrame):
 class PandaActiveTuningWidget(PandaTuningWidget):
     # static variables
     def __init__(self, parent):
-        super(PandaActiveTuningWidget, self).__init__(parent)
+        super(PandaActiveTuningWidget, self).__init__(parent=parent,
+                                                      range_sliders=False)
 
     def initUI(self):
         self.stacks = {}
@@ -1257,18 +1265,26 @@ class CurrentValueShowingSlider(QWidget):
         'width': 'Finger Distance'
     }
 
-    def __init__(self, parent, name, measure_unit='', available_range=[0.0, 1.0]):
+    def __init__(self, parent, name, measure_unit='', available_range=[0.0, 1.0], range_slider_enabled=False):
         super(CurrentValueShowingSlider, self).__init__(parent)
         self.measure_unit = measure_unit
         self.available_range = available_range
         self.name = name
+        self.range_slider_enabled=range_slider_enabled
         self.initUI()
 
     def initUI(self):
         self.widget_layout = QGridLayout(self)
 
         self.slider = FixNumberTicksSlider(self.available_range[0], self.available_range[1], 50, Qt.Horizontal)
-
+        if self.range_slider_enabled:
+            rospy.logwarn('creating range_sliders')
+            self.range_slider = qtRangeSlider.QHRangeSlider()
+            min_value = self.available_range[0]
+            max_value = self.available_range[1]
+            step = (max_value - min_value) / 50  # TODO: this should be a parameter
+            self.range_slider.setRange([min_value, max_value, step])
+            self.range_slider.setValues([min_value, max_value])
         self.current_value_label = QLabel('???')
         self.stored_value_label = QLabel('???')
         self._current_label = QLabel('Current\n Value')
@@ -1298,13 +1314,15 @@ class CurrentValueShowingSlider(QWidget):
         self.submit_parameter_value.setSizePolicy(QSizePolicy(QSizePolicy.Fixed, QSizePolicy.MinimumExpanding))
         self.submit_parameter_value.setFont(CurrentValueShowingSlider.font)
 
-        self.widget_layout.addWidget(self.name_label, 1, 1)
-        self.widget_layout.addWidget(self.slider, 2, 1)
-        self.widget_layout.addWidget(self.current_value_label, 2, 2)
-        self.widget_layout.addWidget(self._current_label, 1, 2)
-        self.widget_layout.addWidget(self.stored_value_label, 2, 3)
-        self.widget_layout.addWidget(self._stored_label, 1, 3)
-        self.widget_layout.addWidget(self.submit_parameter_value, 1, 4, 2, 4)
+        self.widget_layout.addWidget(self.name_label, 0, 0)
+        self.widget_layout.addWidget(self.slider, 2, 0)
+        self.widget_layout.addWidget(self.current_value_label, 2, 1)
+        self.widget_layout.addWidget(self._current_label, 1, 1)
+        self.widget_layout.addWidget(self.stored_value_label, 2, 2)
+        self.widget_layout.addWidget(self._stored_label, 1, 2)
+        self.widget_layout.addWidget(self.submit_parameter_value, 1, 3, 2, 1)
+        if self.range_slider_enabled:
+            self.widget_layout.addWidget(self.range_slider, 1, 0)
 
         self.slider.doubleValueChanged.connect(self.updateLabel)
         self.submit_parameter_value.clicked.connect(self.submitValue)
@@ -1340,6 +1358,7 @@ class QVerticalLine(QFrame):
         super(QVerticalLine, self).__init__(parent)
         self.setFrameShape(QFrame.VLine)
         self.setFrameShadow(QFrame.Sunken)
+
 
 class QHorizontalLine(QFrame):
     def __init__(self, parent=None):
