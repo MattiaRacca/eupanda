@@ -11,7 +11,7 @@
 #
 # Hazen 07/14
 #
-
+from __future__ import division
 import decimal
 from PyQt5 import QtCore, QtGui
 import sys
@@ -43,7 +43,7 @@ class QRangeSlider(QWidget):
     #
     def __init__(self, slider_range, values, parent = None):
         QWidget.__init__(self, parent)
-        self.bar_width = 30
+        self.bar_width = 10
         self.emit_while_moving = False
         self.moving = "none"
         self.old_min_val = 0.0
@@ -72,8 +72,6 @@ class QRangeSlider(QWidget):
             self.rangeChanged.emit(self.min_val, self.max_val)
             self.old_min_val = self.min_val
             self.old_max_val = self.max_val
-            if 0:
-                print ("Range change:", self.min_val, self.max_val)
 
     ## getValues
     #
@@ -149,7 +147,6 @@ class QRangeSlider(QWidget):
                 self.display_min = temp
                 if self.display_max < self.display_min:
                     self.display_max = self.display_min
-                    self.max_val = self.min_val
                 self.updateScaleValues()
                 if self.emit_while_moving:
                     self.emitRange()
@@ -159,18 +156,18 @@ class QRangeSlider(QWidget):
                 self.display_max = temp
                 if self.display_max < self.display_min:
                     self.display_min = self.display_max
-                    self.min_val = self.max_val
                 self.updateScaleValues()
                 if self.emit_while_moving:
                     self.emitRange()
         elif self.moving == "bar":
-            temp = self.start_display_min - diff
-            if (temp >= self.bar_width) and (temp < size - self.bar_width - (self.start_display_max - self.start_display_min)):
-                self.display_min = temp
-                self.display_max = self.start_display_max - diff
-                self.updateScaleValues()
-                if self.emit_while_moving:
-                    self.emitRange()
+            pass
+            # temp = self.start_display_min - diff
+            # if (temp >= self.bar_width) and (temp < size - self.bar_width - (self.start_display_max - self.start_display_min)):
+            #     self.display_min = temp
+            #     self.display_max = self.start_display_max - diff
+            #     self.updateScaleValues()
+            #     if self.emit_while_moving:
+            #         self.emitRange()
 
     ## mousePressEvent
     #
@@ -266,11 +263,15 @@ class QRangeSlider(QWidget):
     def updateScaleValues(self):
         size = float(self.rangeSliderSize() - 2 * self.bar_width - 1)
         if (self.moving == "min") or (self.moving == "bar"):
-            self.min_val = self.start + (self.display_min - self.bar_width)/float(size) * self.scale
-            self.min_val = float(round(self.min_val/self.single_step))*self.single_step
+            self.min_val = (self.display_min - self.bar_width)/float(size) * self.scale
+            self.min_val = self.start + float(round(self.min_val/self.single_step))*self.single_step
+            if self.max_val < self.min_val:
+                self.max_val = self.min_val
         if (self.moving == "max") or (self.moving == "bar"):
-            self.max_val = self.start + (self.display_max - self.bar_width)/float(size) * self.scale
-            self.max_val = float(round(self.max_val/self.single_step))*self.single_step
+            self.max_val = (self.display_max - self.bar_width)/float(size) * self.scale
+            self.max_val = self.start + float(round(self.max_val/self.single_step))*self.single_step
+            if self.max_val < self.min_val:
+                self.min_val = self.max_val
         self.updateDisplayValues()
         self.update()
 
@@ -326,12 +327,12 @@ class QHRangeSlider(QRangeSlider):
         painter.setPen(QtCore.Qt.black)
         painter.setBrush(QtCore.Qt.gray)
         painter.drawRect(self.display_min-self.bar_width, 1, self.bar_width, h-2)
-        painter.drawText(self.display_min-self.bar_width, 1, self.bar_width, h-2, QtCore.Qt.AlignCenter, 'min')
+        painter.drawText(self.display_min + 2, 1, self.bar_width*3, h-2, QtCore.Qt.AlignCenter, 'min')
 
         painter.setPen(QtCore.Qt.black)
         painter.setBrush(QtCore.Qt.gray)
         painter.drawRect(self.display_max, 1, self.bar_width, h-2)
-        painter.drawText(self.display_max, 1, self.bar_width, h-2, QtCore.Qt.AlignCenter, 'max')
+        painter.drawText(self.display_max-self.bar_width*3.5, 1, self.bar_width*3, h-2, QtCore.Qt.AlignCenter, 'max')
 
     ## rangeSliderSize
     #

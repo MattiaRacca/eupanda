@@ -1276,15 +1276,13 @@ class CurrentValueShowingSlider(QWidget):
     def initUI(self):
         self.widget_layout = QGridLayout(self)
 
-        self.slider = FixNumberTicksSlider(self.available_range[0], self.available_range[1], 50, Qt.Horizontal)
+        n_ticks = 50
+        self.slider = FixNumberTicksSlider(self.available_range[0], self.available_range[1], n_ticks, Qt.Horizontal)
         if self.range_slider_enabled:
-            rospy.logwarn('creating range_sliders')
-            self.range_slider = qtRangeSlider.QHRangeSlider()
             min_value = self.available_range[0]
             max_value = self.available_range[1]
-            step = (max_value - min_value) / 50  # TODO: this should be a parameter
-            self.range_slider.setRange([min_value, max_value, step])
-            self.range_slider.setValues([min_value, max_value])
+            step = (max_value - min_value) / n_ticks  # TODO: this should be a parameter
+            self.range_slider = qtRangeSlider.QHRangeSlider([min_value, max_value, step], [min_value, max_value])
         self.current_value_label = QLabel('???')
         self.stored_value_label = QLabel('???')
         self._current_label = QLabel('Current\n Value')
@@ -1323,6 +1321,7 @@ class CurrentValueShowingSlider(QWidget):
         self.widget_layout.addWidget(self.submit_parameter_value, 1, 3, 2, 1)
         if self.range_slider_enabled:
             self.widget_layout.addWidget(self.range_slider, 1, 0)
+            self.range_slider.rangeChanged.connect(self.rangeTuned)
 
         self.slider.doubleValueChanged.connect(self.updateLabel)
         self.submit_parameter_value.clicked.connect(self.submitValue)
@@ -1340,6 +1339,9 @@ class CurrentValueShowingSlider(QWidget):
         else:
             self._current_label.setStyleSheet("color: black")
             self.current_value_label.setStyleSheet("color: black")
+
+    def rangeTuned(self, min, max):
+        rospy.logerr('[{}-{}]'.format(min, max))
 
     def submitValue(self):
         value = self.slider.value()
