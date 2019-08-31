@@ -82,9 +82,8 @@ class PandaPrimitive(object):
             revertible = True
 
         setattr(self.parameter_container, parameter_type, parameter_value)
-        self.parameters_update_history[parameter_type] = deepcopy(parameter_value)
+        self.parameters_update_history[parameter_type].append(deepcopy(parameter_value))
         self.container_update_history.append(deepcopy(self.parameter_container))
-
         return revertible
 
     def init_parameter_update_history(self):
@@ -97,7 +96,7 @@ class PandaPrimitive(object):
             for attribute in attributes:
                 self.parameters_update_history[attribute] = [deepcopy(getattr(self.parameter_container, attribute))]
 
-    def reset_parameter_update_history(self):
+    def reset_primitive_update_history(self):
         self.container_update_history = []
         self.parameters_update_history = {}
         self.init_parameter_update_history()
@@ -110,6 +109,7 @@ class PandaPrimitive(object):
             new_value = (max_value - min_value) * np.random.random_sample() + min_value
             self.update_parameter(parameter, new_value)
             print('Randomized {}\' {}'.format(type(self).__name__, parameter))
+        self.reset_primitive_update_history()
 
 
 class UserSync(PandaPrimitive):
