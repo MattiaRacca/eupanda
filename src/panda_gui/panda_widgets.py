@@ -1,8 +1,7 @@
 #!/usr/bin/python
 from __future__ import division
 
-from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, QSizePolicy,\
-    QGroupBox, QApplication,QStackedWidget, QSlider, QGridLayout
+from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, QSizePolicy, QGroupBox, QApplication,QStackedWidget, QSlider, QGridLayout
 from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool, pyqtProperty, QPropertyAnimation
 from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor, QFont
 from qt_gui.plugin import Plugin
@@ -83,24 +82,6 @@ class EUPPlugin(Plugin):
         self._widget.log_loaded_program()
 
 
-class RangeSliderTestWidget(QWidget):
-    def __init__(self, title='RangeSliderTestWidget'):
-        super(RangeSliderTestWidget, self).__init__()
-        self.setWindowTitle(title)
-        self.layout = QVBoxLayout(self)
-        self.range_slider = qtRangeSlider.QHRangeSlider(parent=self)
-        self.layout.addWidget(self.range_slider)
-        self.range_slider.setRange([0, 100, 1])
-        self.range_slider.setValues([30, 60])
-        self.range_slider.rangeChanged.connect(self.report)
-
-    def report(self, min, max):
-        rospy.logerr('slider moved from {} {}'.format(min, max))
-
-    def log_loaded_program(self):
-        pass
-
-
 class EUPWidget(QWidget):
     # static variables
     font = QFont()
@@ -117,7 +98,11 @@ class EUPWidget(QWidget):
     def __init__(self, title='EUP Widget'):
         super(EUPWidget, self).__init__()
         self.setWindowTitle(title)
+
+        # Starting timestamp, for logs name and logging wallclock time
         self.starting_timestamp = time.time()
+        self.tuning_timeseries = []  # wallclock time of all primitive tunings
+        self.execution_timeseries = []  # wallclock time of all primitive executions
 
         # Creating the interpreter and loading the program
         robotless_debug = rospy.get_param('/robotless_debug') if rospy.has_param('/robotless_debug') else False
@@ -133,9 +118,14 @@ class EUPWidget(QWidget):
 
         self.interpreter.load_program(pp.load_program_from_file(program_path, program_name))
 
+        # Randomizing, Range Sliders and TTS options
         randomize = False
         if rospy.has_param('/randomize_parameters'):
             randomize = rospy.get_param('/randomize_parameters')
+
+        if randomize:
+            rospy.loginfo('Going to randomize the primitives parameters... oh dear')
+            self.interpreter.loaded_program.randomize_gui_tunable_primitives()
 
         self.range_sliders = False
         if rospy.has_param('/range_sliders'):
@@ -145,16 +135,11 @@ class EUPWidget(QWidget):
         if rospy.has_param('/tts_for_primitives'):
             self.tts_for_primitives = rospy.get_param('/tts_for_primitives')
 
-        # TTS engine
         self.tts_engine = pyttsx3.init()
         voices = self.tts_engine.getProperty('voices')
         self.tts_engine.setProperty('voice', voices[16].id)  # American English
         self.tts_engine.setProperty('volume', 0.8)
         self.tts_engine.setProperty('rate', 180)
-
-        if randomize:
-            rospy.loginfo('Going to randomize the primitives parameters... oh dear')
-            self.interpreter.loaded_program.randomize_gui_tunable_primitives()
 
         # Setting up the state machines
         self.state_machine = EUPStateMachine.STARTUP
@@ -164,6 +149,7 @@ class EUPWidget(QWidget):
         self.threadpool = QThreadPool()
         rospy.logdebug("Multi-threading with maximum %d threads" % self.threadpool.maxThreadCount())
 
+        # Initializing the UI
         self.initUI()
 
         # Subscriber for the interface status
@@ -172,18 +158,28 @@ class EUPWidget(QWidget):
 
     def log_loaded_program(self, need_to_log=True, type_of_primitive=None, name_of_parameter='', partial_log=False):
         if rospy.has_param('/program_logging_path') and need_to_log:
+            # naming and pathing for the logs
             program_logging_path = rospy.get_param('/program_logging_path')
             date = datetime.fromtimestamp(self.starting_timestamp).strftime('%m%d_%H%M')
             if not os.path.exists(program_logging_path):
                 os.makedirs(program_logging_path)
             filename = '{}_partial.pkl' if partial_log else '{}.pkl'
-            self.interpreter.loaded_program.dump_to_file(filepath=program_logging_path,
-                                                         filename=filename.format(date))
+
+            # log creation and dumping
+            log = {}
+            log['program'] = self.interpreter.loaded_program
+            log['wallclock_time'] = time.time() - self.starting_timestamp
+            log['tuning_timeseries'] = self.tuning_timeseries
+            log['execution_timeseries'] = self.execution_timeseries
+
+            with open(os.path.join(os.path.expanduser(program_logging_path), filename.format(date)), 'wb') as f:
+                pickle.dump(log, f)
             rospy.loginfo('Current program saved in {}'.format(program_logging_path))
         else:
             rospy.logwarn('Could not find rosparam program_logging_path; skipped program logging')
 
     def interface_state_callback(self, msg):
+        # callback for when interface status msg is received
         new_interface_status = pp.PandaRobotStatus(msg.data)
         if self.last_interface_state != new_interface_status:
             self.last_interface_state = new_interface_status
@@ -199,7 +195,7 @@ class EUPWidget(QWidget):
 
         # Parameter tuning frame
         self.panda_tuning_widget = PandaTuningWidget(parent=self, range_sliders=self.range_sliders)
-        self.current_tuning = None
+        self.current_tuning = None  # holds a dictionary of current tuning done by the user through the UI
 
         # Action button & Robot State Widget at the bottom
         self.low_buttons = QWidget()
@@ -208,6 +204,7 @@ class EUPWidget(QWidget):
 
         self.robot_state_widget = PandaStateWidget(self)
 
+        # Making the push button do something useful (call different versions of execute_interpreter_command
         self.interpreter_command_dict = {}
         self.interpreter_command_dict['go_to_starting_state'] = [QExpandingPushButton("Go to\n start state", self),
                                                                  partial(self.execute_interpreter_command,
@@ -229,7 +226,7 @@ class EUPWidget(QWidget):
                                                                          self.interpreter.revert_to_beginning_of_program
                                                                          )]
 
-        # Partials do not have __name__ attribute
+        # Give the partials a __name__ attribute, used in the execute_interpreter_command function
         for key, value in self.interpreter_command_dict.items():
             value[1].__name__ = key
 
@@ -243,7 +240,7 @@ class EUPWidget(QWidget):
         self.low_buttons_layout.addWidget(self.interpreter_command_dict['execute_rest_of_program'][0])
         self.low_buttons_layout.addWidget(self.interpreter_command_dict['revert_to_beginning_of_program'][0])
 
-        # Click buttons events handling
+        # PushButtons events handling
         for key, value in self.interpreter_command_dict.items():
             value[0].clicked.connect(value[1])
             value[0].setEnabled(key is 'go_to_starting_state')
@@ -256,41 +253,33 @@ class EUPWidget(QWidget):
         self.vbox.addWidget(self.low_buttons)
 
         # Connect update signals
-        self.programGUIUpdate.connect(self.panda_program_widget.updateWidget)
-        self.robotStateUpdate.connect(self.robot_state_widget.updateWidget)
-        self.tuningGUIUpdate.connect(self.panda_tuning_widget.updateWidget)
-        self.tuningAccepted.connect(partial(self.log_loaded_program, partial_log=True))
-        self.updateGUI.connect(self.updatePandaWidgets)
-
-        for key, page in self.panda_tuning_widget.stacks.items():
-            if page.primitive_type is not None:
-                page.primitiveTuned.connect(self.currentPrimitiveUpdatedfromGUI)
+        self.tuningAccepted.connect(partial(self.log_loaded_program, partial_log=True))  # triggers partial logging
+        self.updateGUI.connect(self.updatePandaWidgets)  # overall GUI update, triggers the update below
+        self.programGUIUpdate.connect(self.panda_program_widget.updateWidget)  # program widget update
+        self.robotStateUpdate.connect(self.robot_state_widget.updateWidget)  # robot state widget update
+        self.tuningGUIUpdate.connect(self.panda_tuning_widget.updateWidget)  # tuning widget update
 
         self.updatePandaWidgets()
 
-    def currentPrimitiveUpdatedfromGUI(self, dictionary):
-        rospy.logdebug('User updated the parameters {} from gui'.format(dictionary))
-        self.current_tuning = dictionary
-
     def updateCurrentPrimitive(self):
         if self.state_machine == EUPStateMachine.OPERATIONAL:
-            if self.current_tuning is not None:
-                ready_primitive = None
-                try:
-                    ready_primitive = self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index)
-                    rospy.loginfo('Attempting to tune {}'.format(str(ready_primitive)))
-                except pp.PandaProgramException:
-                    pass
+            ready_primitive = None
+            try:
+                ready_primitive = self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index)
+                rospy.loginfo('Attempting to tune {}'.format(str(ready_primitive)))
+            except pp.PandaProgramException:
+                pass
 
-                if ready_primitive is not None:
-                    for key, value in self.current_tuning.items():
-                        tuned = self.interpreter.loaded_program.update_nth_primitive_parameter(
-                            self.interpreter.next_primitive_index, key, value)
-                        rospy.logdebug('Tuning parameter {} of a {} primitive: {}'.format(key,\
-                                                                                         type(ready_primitive),\
-                                                                                         str(tuned)))
-                        self.tuningAccepted.emit(tuned, type(ready_primitive), key)
-                    self.current_tuning = None
+            if ready_primitive is not None:
+                self.tuning_timeseries.append(time.time())
+                tuning_targets = self.panda_tuning_widget.stacks[type(ready_primitive)].current_tuning
+                for key, value in tuning_targets.items():
+                    tuned = self.interpreter.loaded_program.update_nth_primitive_parameter(
+                        self.interpreter.next_primitive_index, key, value)
+                    rospy.loginfo('Tuning parameter {} of a {} primitive: {}'.format(key,\
+                                                                                     type(ready_primitive),\
+                                                                                     str(tuned)))
+                    self.tuningAccepted.emit(tuned, type(ready_primitive), key)
         else:
             rospy.logerr('Are you tuning when you should not?')
 
@@ -366,9 +355,12 @@ class EUPWidget(QWidget):
         for key, value in self.interpreter_command_dict.items():
             value[0].setDisabled(True)
 
-        if command.__name__ == 'execute_one_step' or \
-            command.__name__ == 'execute_rest_of_program':
+        if (command.__name__ == 'execute_one_step' or \
+            command.__name__ == 'execute_rest_of_program'):
             self.updateCurrentPrimitive()
+
+        if command.__name__ == 'execute_one_step':
+            self.execution_timeseries.append(time.time())
 
         if self.state_machine == EUPStateMachine.STARTUP:
             self.state_machine = EUPStateMachine.STARTUP_BUSY
@@ -568,6 +560,9 @@ class ActiveEUPWidget(EUPWidget):
         rospy.logdebug('Received the answer... Updating the learner')
         self.execute_learner_command(self.updateWrapper)
 
+    def updateCurrentPrimitive(self):
+        self.log_loaded_program(need_to_log=True, partial_log=True)
+
     def updatePandaWidgets(self):
         rospy.loginfo('{} | {} | {}'.format(self.last_interface_state, self.state_machine, self.learning_state_machine))
         self.programGUIUpdate.emit()
@@ -681,6 +676,7 @@ class ActiveEUPWidget(EUPWidget):
 
                 # UPDATE THE VALUE IN THE PRIMITIVE
                 current_primitive.update_parameter(current_parameter, self.current_question)
+                self.tuning_timeseries.append(time.time())
                 self.questionChosen.emit(current_primitive, current_parameter)
             else:
                 self.learning_state_machine = ALStateMachine.LEARNING_ERROR
@@ -1041,7 +1037,6 @@ class PandaTuningWidget(QStackedWidget):
 
 
 class PandaTuningPage(QFrame):
-    primitiveTuned = pyqtSignal(dict)
 
     def __init__(self, parent, primitive_type, range_sliders=False):
         super(PandaTuningPage, self).__init__(parent)
@@ -1071,10 +1066,6 @@ class PandaTuningPage(QFrame):
 
     def getParameterTuning(self, parameter_name, parameter_value):
         self.current_tuning[parameter_name] = parameter_value
-        self.signalPrimitiveTuning()
-
-    def signalPrimitiveTuning(self):
-        self.primitiveTuned.emit(self.current_tuning)
 
     def updateAfterTuningAccepted(self, tuned, primitive_type, parameter):
         if self.primitive_type is primitive_type:
@@ -1512,3 +1503,21 @@ class Worker(QRunnable):
             self.signals.result.emit(result)  # Return the result of the processing
         finally:
             self.signals.finished.emit()  # Done
+
+
+class RangeSliderTestWidget(QWidget):
+    def __init__(self, title='RangeSliderTestWidget'):
+        super(RangeSliderTestWidget, self).__init__()
+        self.setWindowTitle(title)
+        self.layout = QVBoxLayout(self)
+        self.range_slider = qtRangeSlider.QHRangeSlider(parent=self)
+        self.layout.addWidget(self.range_slider)
+        self.range_slider.setRange([0, 100, 1])
+        self.range_slider.setValues([30, 60])
+        self.range_slider.rangeChanged.connect(self.report)
+
+    def report(self, min, max):
+        rospy.logerr('slider moved from {} {}'.format(min, max))
+
+    def log_loaded_program(self):
+        pass
