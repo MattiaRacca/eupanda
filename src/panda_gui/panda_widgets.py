@@ -199,6 +199,7 @@ class EUPWidget(QWidget):
 
         # Parameter tuning frame
         self.panda_tuning_widget = PandaTuningWidget(parent=self, range_sliders=self.range_sliders)
+        self.current_tuning = None
 
         # Action button & Robot State Widget at the bottom
         self.low_buttons = QWidget()
@@ -227,6 +228,10 @@ class EUPWidget(QWidget):
                                                                  partial(self.execute_interpreter_command,
                                                                          self.interpreter.revert_to_beginning_of_program
                                                                          )]
+
+        # Partials do not have __name__ attribute
+        for key, value in self.interpreter_command_dict.items():
+            value[1].__name__ = key
 
         self.low_buttons_layout.addWidget(self.robot_state_widget)
         self.low_buttons_layout.addWidget(self.interpreter_command_dict['go_to_starting_state'][0])
@@ -259,29 +264,35 @@ class EUPWidget(QWidget):
 
         for key, page in self.panda_tuning_widget.stacks.items():
             if page.primitive_type is not None:
-                page.primitiveTuned.connect(self.updateCurrentPrimitive)
+                page.primitiveTuned.connect(self.currentPrimitiveUpdatedfromGUI)
 
         self.updatePandaWidgets()
 
-    def updateCurrentPrimitive(self, dict):
-        if self.state_machine == EUPStateMachine.OPERATIONAL:
-            ready_primitive = None
-            try:
-                ready_primitive = self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index)
-                rospy.loginfo('Attempting to tune {}'.format(str(ready_primitive)))
-            except pp.PandaProgramException:
-                pass
+    def currentPrimitiveUpdatedfromGUI(self, dictionary):
+        rospy.logdebug('User updated the parameters {} from gui'.format(dictionary))
+        self.current_tuning = dictionary
 
-            if ready_primitive is not None:
-                for key, value in dict.items():
-                    tuned = self.interpreter.loaded_program.update_nth_primitive_parameter(
-                        self.interpreter.next_primitive_index, key, value)
-                    rospy.logdebug('Tuning parameter {} of a {} primitive: {}'.format(key,\
-                                                                                     type(ready_primitive),\
-                                                                                     str(tuned)))
-                    self.tuningAccepted.emit(tuned, type(ready_primitive), key)
-            else:
-                rospy.logerr('Are you tuning when you should not?')
+    def updateCurrentPrimitive(self):
+        if self.state_machine == EUPStateMachine.OPERATIONAL:
+            if self.current_tuning is not None:
+                ready_primitive = None
+                try:
+                    ready_primitive = self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index)
+                    rospy.loginfo('Attempting to tune {}'.format(str(ready_primitive)))
+                except pp.PandaProgramException:
+                    pass
+
+                if ready_primitive is not None:
+                    for key, value in self.current_tuning.items():
+                        tuned = self.interpreter.loaded_program.update_nth_primitive_parameter(
+                            self.interpreter.next_primitive_index, key, value)
+                        rospy.logdebug('Tuning parameter {} of a {} primitive: {}'.format(key,\
+                                                                                         type(ready_primitive),\
+                                                                                         str(tuned)))
+                        self.tuningAccepted.emit(tuned, type(ready_primitive), key)
+                    self.current_tuning = None
+        else:
+            rospy.logerr('Are you tuning when you should not?')
 
     def updatePandaWidgets(self):
         rospy.loginfo('Current EUP state is {}'.format(self.state_machine))
@@ -355,6 +366,10 @@ class EUPWidget(QWidget):
         # Disable lower buttons
         for key, value in self.interpreter_command_dict.items():
             value[0].setDisabled(True)
+
+        if command.__name__ == 'execute_one_step' or \
+            command.__name__ == 'execute_rest_of_program':
+            self.updateCurrentPrimitive()
 
         if self.state_machine == EUPStateMachine.STARTUP:
             self.state_machine = EUPStateMachine.STARTUP_BUSY
@@ -508,13 +523,14 @@ class ActiveEUPWidget(EUPWidget):
         self.interpreter_command_dict['execute_rest_of_program'][0].setParent(None)
         self.interpreter_command_dict['revert_one_step'][0].setParent(None)
         self.panda_tuning_widget.setParent(None)
+
+        del self.panda_tuning_widget
         del self.interpreter_command_dict['revert_one_step']
         del self.interpreter_command_dict['execute_rest_of_program']
         del self.interpreter_command_dict['revert_to_beginning_of_program']
 
         for key, page in self.panda_active_tuning_widget.stacks.items():
             if type(page) is PandaActiveTuningPage:
-                page.primitiveTuned.connect(self.updateCurrentPrimitive)
                 page.sendAnswer.connect(self.receiveAnswer)
 
         self.updatePandaWidgets()
@@ -523,7 +539,7 @@ class ActiveEUPWidget(EUPWidget):
         self.current_question_count += 1
         try:
             self.current_question = self.learners[self.current_learning_primitive][self.current_learning_parameter].choose_query()
-            rospy.logdebug('Learner query is {}'.format(self.current_question))
+            rospy.logwarn('Learner query is {}'.format(self.current_question))
         except:
             return False
         return True
@@ -542,11 +558,10 @@ class ActiveEUPWidget(EUPWidget):
         self.waitingAnswer.emit(self.interpreter.loaded_program.primitives[self.current_learning_primitive])
 
     def usermessageWrapper(self, message, progress_callback=None):
-        rospy.logwarn('gonna wait for a while {}'.format(message))
+        rospy.logwarn('gonna wait for a while before {}'.format(message))
         current_primitive = self.interpreter.loaded_program.primitives[self.current_learning_primitive]
         self.messageSent.emit(current_primitive, message)
-        time.sleep(4)
-        rospy.logwarn('ok lets go')
+        time.sleep(3)  # TODO: make this a parameter
         return True
 
     def receiveAnswer(self, answer):
@@ -1034,6 +1049,7 @@ class PandaTuningPage(QFrame):
         self.primitive_type = primitive_type
         self.range_sliders = range_sliders
         self.initUI()
+        self.current_tuning = {}
 
     def initUI(self):
         layout = QVBoxLayout(self)
@@ -1044,24 +1060,31 @@ class PandaTuningPage(QFrame):
                                                                 self.primitive_type.gui_tunable_parameter_units[param],
                                                                 self.primitive_type.gui_tunable_parameter_ranges[param],
                                                                 range_slider_enabled=self.range_sliders)
-                self.sliders[param].valueSubmitted.connect(partial(self.signalPrimitiveTuning, param))
+                self.sliders[param].valueChanged.connect(partial(self.getParameterTuning, param))
                 layout.addWidget(self.sliders[param])
         layout.setAlignment(Qt.AlignTop)
 
     def updatePageFromPritimive(self, primitive):
         if primitive.__class__ is not None:
             for param in primitive.__class__.gui_tunable_parameters:
-                self.sliders[param].updateValue(getattr(primitive.parameter_container, param))
+                self.sliders[param].setValue(getattr(primitive.parameter_container, param))
                 self.sliders[param].slider.setStrictBounds(primitive.gui_tunable_parameter_strict_ranges[param])
 
-    def signalPrimitiveTuning(self, parameter_name, parameter_value):
-        self.primitiveTuned.emit({parameter_name: parameter_value})
+    def getParameterTuning(self, parameter_name, parameter_value):
+        self.current_tuning[parameter_name] = parameter_value
+        self.signalPrimitiveTuning()
+
+    def signalPrimitiveTuning(self):
+        self.primitiveTuned.emit(self.current_tuning)
 
     def updateAfterTuningAccepted(self, tuned, primitive_type, parameter):
         if self.primitive_type is primitive_type:
-            for key, value in self.sliders.items():
-                if key == parameter:
-                    value.receiveValueConfirmation(tuned)
+            try:
+                self.sliders[parameter].receiveValueConfirmation(tuned)
+            except KeyError:
+                pass
+            if tuned:
+                self.current_tuning = {}
 
 
 class PandaActiveTuningWidget(PandaTuningWidget):
@@ -1087,7 +1110,6 @@ class PandaActiveTuningWidget(PandaTuningWidget):
 
 
 class PandaActiveTuningPage(QFrame):
-    primitiveTuned = pyqtSignal(dict)
     sendAnswer = pyqtSignal(ral.LearnerAnswers)
     readable_parameter_name = {
         'position_speed': 'Motion Speed',
@@ -1252,7 +1274,7 @@ class PandaActiveTuningPage(QFrame):
 
 
 class CurrentValueShowingSlider(QWidget):
-    valueSubmitted = pyqtSignal(float)
+    valueChanged = pyqtSignal(float)
     LABEL_WIDTH = 100
     font=QFont()
     font.setBold(True)
@@ -1296,7 +1318,6 @@ class CurrentValueShowingSlider(QWidget):
         self.name_label.setFont(CurrentValueShowingSlider.font)
 
         # TODO: Better naming of parameters
-        # TODO: more visible labels (same style of other elements)
         
         self.current_value_label.setFixedWidth(CurrentValueShowingSlider.LABEL_WIDTH)
         self.stored_value_label.setFixedWidth(CurrentValueShowingSlider.LABEL_WIDTH)
@@ -1308,9 +1329,9 @@ class CurrentValueShowingSlider(QWidget):
         self._current_label.setAlignment(Qt.AlignCenter)
         self._stored_label.setAlignment(Qt.AlignCenter)
 
-        self.submit_parameter_value = QPushButton('Submit\n new value')
-        self.submit_parameter_value.setSizePolicy(QSizePolicy(QSizePolicy.Fixed, QSizePolicy.MinimumExpanding))
-        self.submit_parameter_value.setFont(CurrentValueShowingSlider.font)
+        # self.submit_parameter_value = QPushButton('Submit\n new value')
+        # self.submit_parameter_value.setSizePolicy(QSizePolicy(QSizePolicy.Fixed, QSizePolicy.MinimumExpanding))
+        # self.submit_parameter_value.setFont(CurrentValueShowingSlider.font)
 
         self.widget_layout.addWidget(self.name_label, 0, 0)
         self.widget_layout.addWidget(self.slider, 2, 0)
@@ -1318,15 +1339,15 @@ class CurrentValueShowingSlider(QWidget):
         self.widget_layout.addWidget(self._current_label, 1, 1)
         self.widget_layout.addWidget(self.stored_value_label, 2, 2)
         self.widget_layout.addWidget(self._stored_label, 1, 2)
-        self.widget_layout.addWidget(self.submit_parameter_value, 1, 3, 2, 1)
+        # self.widget_layout.addWidget(self.submit_parameter_value, 1, 3, 2, 1)
         if self.range_slider_enabled:
             self.widget_layout.addWidget(self.range_slider, 1, 0)
-            self.range_slider.rangeChanged.connect(self.rangeTuned)
 
         self.slider.doubleValueChanged.connect(self.updateLabel)
-        self.submit_parameter_value.clicked.connect(self.submitValue)
+        self.slider.doubleValueChanged.connect(self.valueChanged.emit)
+        # self.submit_parameter_value.clicked.connect(self.submitValue)
 
-    def updateValue(self, value):
+    def setValue(self, value):
         self.slider.setValue(value)
         self.current_value_label.setText('{:.3f} {}'.format(value, self.measure_unit))
         self.stored_value_label.setText('{:.3f} {}'.format(value, self.measure_unit))
@@ -1339,13 +1360,6 @@ class CurrentValueShowingSlider(QWidget):
         else:
             self._current_label.setStyleSheet("color: black")
             self.current_value_label.setStyleSheet("color: black")
-
-    def rangeTuned(self, min, max):
-        rospy.logerr('[{}-{}]'.format(min, max))
-
-    def submitValue(self):
-        value = self.slider.value()
-        self.valueSubmitted.emit(value)
 
     def receiveValueConfirmation(self, tuned):
         if tuned:
