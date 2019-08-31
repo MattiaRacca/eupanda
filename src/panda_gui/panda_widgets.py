@@ -295,8 +295,7 @@ class EUPWidget(QWidget):
             rospy.logerr('Are you tuning when you should not?')
 
     def updatePandaWidgets(self):
-        rospy.loginfo('Current EUP state is {}'.format(self.state_machine))
-        rospy.loginfo('Current Interface state is {}'.format(self.last_interface_state))
+        rospy.loginfo('{} | {}'.format(self.last_interface_state, self.state_machine))
 
         self.programGUIUpdate.emit()
         if self.last_interface_state is not None:
@@ -539,7 +538,7 @@ class ActiveEUPWidget(EUPWidget):
         self.current_question_count += 1
         try:
             self.current_question = self.learners[self.current_learning_primitive][self.current_learning_parameter].choose_query()
-            rospy.logwarn('Learner query is {}'.format(self.current_question))
+            rospy.loginfo('Learner query is {}'.format(self.current_question))
         except:
             return False
         return True
@@ -551,14 +550,14 @@ class ActiveEUPWidget(EUPWidget):
             result = self.learners[self.current_learning_primitive][self.current_learning_parameter].update_model(answer)
         except:
             result = False
-        rospy.logwarn('Learner update: {}'.format(result))
+        rospy.loginfo('Learner update: {}'.format(result))
         return result
 
     def poseWrapper(self):
         self.waitingAnswer.emit(self.interpreter.loaded_program.primitives[self.current_learning_primitive])
 
     def usermessageWrapper(self, message, progress_callback=None):
-        rospy.logwarn('gonna wait for a while before {}'.format(message))
+        rospy.logdebug('Gonna wait for a while before {}'.format(message))
         current_primitive = self.interpreter.loaded_program.primitives[self.current_learning_primitive]
         self.messageSent.emit(current_primitive, message)
         time.sleep(3)  # TODO: make this a parameter
@@ -710,7 +709,7 @@ class ActiveEUPWidget(EUPWidget):
         elif self.learning_state_machine == ALStateMachine.USER_MESSAGE and success:
             self.learning_state_machine = ALStateMachine.NEUTRAL
             if self.current_question_count < self.n_questions:
-                rospy.loginfo('Reverting to ask new question (n_p: {}/{} - {} - n_q: {}/{})'.
+                rospy.logdebug('Reverting to ask new question (n_p: {}/{} - {} - n_q: {}/{})'.
                               format(self.current_learning_primitive + 1,
                                      self.interpreter.loaded_program.get_program_length(),
                                      self.current_learning_parameter,
@@ -729,14 +728,14 @@ class ActiveEUPWidget(EUPWidget):
                     if self.current_learning_primitive >= self.interpreter.loaded_program.get_program_length():
                         self.current_learning_primitive = 0
                         self.state_machine = EUPStateMachine.STARTUP
-                        rospy.loginfo('Moving back to beginning to learn (n_p: {}/{} - {} - n_q: {}/{})'.
+                        rospy.logdebug('Moving back to beginning to learn (n_p: {}/{} - {} - n_q: {}/{})'.
                                       format(self.current_learning_primitive + 1,
                                              self.interpreter.loaded_program.get_program_length(),
                                              self.current_learning_parameter,
                                              self.current_question_count,
                                              self.n_questions))
                     else:
-                        rospy.loginfo('Moving to the next primitive (n_p: {}/{} - {} - n_q: {}/{})'.
+                        rospy.logdebug('Moving to the next primitive (n_p: {}/{} - {} - n_q: {}/{})'.
                                       format(self.current_learning_primitive + 1,
                                              self.interpreter.loaded_program.get_program_length(),
                                              self.current_learning_parameter,
@@ -744,7 +743,7 @@ class ActiveEUPWidget(EUPWidget):
                                              self.n_questions))
                         self.execute_learner_command(self.querySelectionWrapper)
                 else:
-                    rospy.loginfo('Reverting to ask new question: same primitive, different parameter '
+                    rospy.logdebug('Reverting to ask new question: same primitive, different parameter '
                                   + '(n_p: {}/{} - {} - n_q: {}/{})'.
                                   format(self.current_learning_primitive + 1,
                                          self.interpreter.loaded_program.get_program_length(),
@@ -1297,18 +1296,19 @@ class CurrentValueShowingSlider(QWidget):
 
     def initUI(self):
         self.widget_layout = QGridLayout(self)
-
         n_ticks = 50
+
         self.slider = FixNumberTicksSlider(self.available_range[0], self.available_range[1], n_ticks, Qt.Horizontal)
         if self.range_slider_enabled:
             min_value = self.available_range[0]
             max_value = self.available_range[1]
             step = (max_value - min_value) / n_ticks  # TODO: this should be a parameter
             self.range_slider = qtRangeSlider.QHRangeSlider([min_value, max_value, step], [min_value, max_value])
+
         self.current_value_label = QLabel('???')
         self.stored_value_label = QLabel('???')
         self._current_label = QLabel('Current\n Value')
-        self._stored_label = QLabel('Stored\n Value')
+        self._stored_label = QLabel('Previous\n Value')
         self.name_label = QLabel(CurrentValueShowingSlider.readable_parameter_name[self.name])
 
         self.current_value_label.setFont(CurrentValueShowingSlider.font)
@@ -1317,8 +1317,6 @@ class CurrentValueShowingSlider(QWidget):
         self._stored_label.setFont(CurrentValueShowingSlider.font)
         self.name_label.setFont(CurrentValueShowingSlider.font)
 
-        # TODO: Better naming of parameters
-        
         self.current_value_label.setFixedWidth(CurrentValueShowingSlider.LABEL_WIDTH)
         self.stored_value_label.setFixedWidth(CurrentValueShowingSlider.LABEL_WIDTH)
         self._current_label.setFixedWidth(CurrentValueShowingSlider.LABEL_WIDTH)
@@ -1329,23 +1327,17 @@ class CurrentValueShowingSlider(QWidget):
         self._current_label.setAlignment(Qt.AlignCenter)
         self._stored_label.setAlignment(Qt.AlignCenter)
 
-        # self.submit_parameter_value = QPushButton('Submit\n new value')
-        # self.submit_parameter_value.setSizePolicy(QSizePolicy(QSizePolicy.Fixed, QSizePolicy.MinimumExpanding))
-        # self.submit_parameter_value.setFont(CurrentValueShowingSlider.font)
-
         self.widget_layout.addWidget(self.name_label, 0, 0)
         self.widget_layout.addWidget(self.slider, 2, 0)
         self.widget_layout.addWidget(self.current_value_label, 2, 1)
         self.widget_layout.addWidget(self._current_label, 1, 1)
         self.widget_layout.addWidget(self.stored_value_label, 2, 2)
         self.widget_layout.addWidget(self._stored_label, 1, 2)
-        # self.widget_layout.addWidget(self.submit_parameter_value, 1, 3, 2, 1)
         if self.range_slider_enabled:
             self.widget_layout.addWidget(self.range_slider, 1, 0)
 
         self.slider.doubleValueChanged.connect(self.updateLabel)
         self.slider.doubleValueChanged.connect(self.valueChanged.emit)
-        # self.submit_parameter_value.clicked.connect(self.submitValue)
 
     def setValue(self, value):
         self.slider.setValue(value)
