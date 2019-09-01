@@ -496,6 +496,29 @@ class ActiveEUPWidget(EUPWidget):
         self.current_question = None
         self.current_answer = None
 
+    def log_loaded_program(self, need_to_log=True, type_of_primitive=None, name_of_parameter='', partial_log=False):
+        if rospy.has_param('/program_logging_path') and need_to_log:
+            # naming and pathing for the logs
+            program_logging_path = rospy.get_param('/program_logging_path')
+            date = datetime.fromtimestamp(self.starting_timestamp).strftime('%m%d_%H%M')
+            if not os.path.exists(program_logging_path):
+                os.makedirs(program_logging_path)
+            filename = '{}_partial.pkl' if partial_log else '{}.pkl'
+
+            # log creation and dumping
+            log = {}
+            log['program'] = self.interpreter.loaded_program
+            log['wallclock_time'] = time.time() - self.starting_timestamp
+            log['tuning_timeseries'] = self.tuning_timeseries
+            log['execution_timeseries'] = self.execution_timeseries
+            log['learners'] = self.learners
+
+            with open(os.path.join(os.path.expanduser(program_logging_path), filename.format(date)), 'wb') as f:
+                pickle.dump(log, f)
+            rospy.loginfo('Current program saved in {}'.format(program_logging_path))
+        else:
+            rospy.logwarn('Could not find rosparam program_logging_path; skipped program logging')
+
     def initUI(self):
         # create new elements that are updated by updatePandaWidgets
         self.panda_active_tuning_widget = PandaActiveTuningWidget(self)
