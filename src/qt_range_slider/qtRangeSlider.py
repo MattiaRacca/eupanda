@@ -240,6 +240,19 @@ class QRangeSlider(QWidget):
         if (abs(steps - round(steps)) > 0.01 * self.single_step):
             raise Exception("Slider range is not a multiple of the step size!")
 
+    def setStrictRange(self, strict_range):
+        self.strict_range = strict_range
+        if self.min_val < self.strict_range[0]:
+            self.min_val = self.strict_range[0]
+        if self.max_val < self.strict_range[0]:
+            self.max_val = self.strict_range[0]
+        if self.min_val > self.strict_range[1]:
+            self.min_val = self.strict_range[1]
+        if self.max_val > self.strict_range[1]:
+            self.max_val = self.strict_range[1]
+        self.updateDisplayValues()
+        self.update()
+
     ## setValues
     #
     # @param values [position of minimum slider, position of maximum slider].
@@ -342,12 +355,31 @@ class QHRangeSlider(QRangeSlider):
         painter.setPen(QtCore.Qt.black)
         painter.setBrush(QtCore.Qt.gray)
         painter.drawRect(self.display_min-self.bar_width, 1, self.bar_width, h-2)
-        painter.drawText(self.display_min + 2, 1, self.bar_width*3, h-2, QtCore.Qt.AlignCenter, 'min')
-
         painter.setPen(QtCore.Qt.black)
         painter.setBrush(QtCore.Qt.gray)
         painter.drawRect(self.display_max, 1, self.bar_width, h-2)
-        painter.drawText(self.display_max-self.bar_width*3.5, 1, self.bar_width*3, h-2, QtCore.Qt.AlignCenter, 'max')
+
+        metrics = QtGui.QFontMetrics(painter.font())
+
+        pixelsWide_min = metrics.width('{:.2f}'.format(self.min_val))
+        pixelsWide_max = metrics.width('{:.2f}'.format(self.max_val))
+
+        text_inside = self.display_max - self.display_min > pixelsWide_min + pixelsWide_max
+        if text_inside:
+
+            painter.drawText(self.display_min + 1, 1, pixelsWide_min, h-2,
+                             QtCore.Qt.AlignCenter,
+                             '{:.2f}'.format(self.min_val))
+            painter.drawText(self.display_max - pixelsWide_max, 1, pixelsWide_max, h-2,
+                             QtCore.Qt.AlignCenter,
+                             '{:.2f}'.format(self.max_val))
+        else:
+            painter.drawText(self.display_min - pixelsWide_min - self.bar_width - 1, 1, pixelsWide_min, h-2,
+                             QtCore.Qt.AlignCenter,
+                             '{:.2f}'.format(self.min_val))
+            painter.drawText(self.display_max + self.bar_width + 1, 1, pixelsWide_max, h-2,
+                             QtCore.Qt.AlignCenter,
+                             '{:.2f}'.format(self.max_val))
 
     ## rangeSliderSize
     #

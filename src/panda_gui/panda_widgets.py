@@ -75,8 +75,8 @@ class EUPPlugin(Plugin):
     def __init__(self, context):
         super(EUPPlugin, self).__init__(context)
         active_eup = rospy.get_param('/active_eup') if rospy.has_param('/active_eup') else False
-        # self._widget = ActiveEUPWidget() if active_eup else EUPWidget()
-        self._widget = RangeSliderTestWidget()
+        self._widget = ActiveEUPWidget() if active_eup else EUPWidget()
+        # self._widget = RangeSliderTestWidget()
         context.add_widget(self._widget)
 
     def shutdown_plugin(self):
@@ -1044,7 +1044,7 @@ class PandaTuningWidget(QStackedWidget):
         self.addWidget(self.stacks[None])
 
         for primitive_type in PandaTuningWidget.tunable_primitives:
-            self.stacks[primitive_type] = PandaTuningPage(self, primitive_type, range_sliders=self.range_sliders)
+            self.stacks[primitive_type] = PandaTuningPage(self, primitive_type, range_slider_enabled=self.range_sliders)
             self.addWidget(self.stacks[primitive_type])
             self.parent().tuningAccepted.connect(self.stacks[primitive_type].updateAfterTuningAccepted)
 
@@ -1062,12 +1062,13 @@ class PandaTuningWidget(QStackedWidget):
 
 class PandaTuningPage(QFrame):
 
-    def __init__(self, parent, primitive_type, range_sliders=False):
+    def __init__(self, parent, primitive_type, range_slider_enabled=False):
         super(PandaTuningPage, self).__init__(parent)
         self.primitive_type = primitive_type
-        self.range_sliders = range_sliders
+        self.range_slider_enabled = range_slider_enabled
         self.initUI()
         self.current_tuning = {}
+        self.range_tuning = {}
 
     def initUI(self):
         layout = QVBoxLayout(self)
@@ -1077,8 +1078,9 @@ class PandaTuningPage(QFrame):
                 self.sliders[param] = CurrentValueShowingSlider(self, param,
                                                                 self.primitive_type.gui_tunable_parameter_units[param],
                                                                 self.primitive_type.gui_tunable_parameter_ranges[param],
-                                                                range_slider_enabled=self.range_sliders)
-                self.sliders[param].valueChanged.connect(partial(self.getParameterTuning, param))
+                                                                range_slider_enabled=self.range_slider_enabled)
+                self.sliders[param].valueChanged.connect(partial(self.setParameterTuning, param))
+                self.sliders[param].rangeChanged.connect(partial(self.setRangeTuning, param))
                 layout.addWidget(self.sliders[param])
         layout.setAlignment(Qt.AlignTop)
 
@@ -1087,9 +1089,15 @@ class PandaTuningPage(QFrame):
             for param in primitive.__class__.gui_tunable_parameters:
                 self.sliders[param].setValue(getattr(primitive.parameter_container, param))
                 self.sliders[param].slider.setStrictBounds(primitive.gui_tunable_parameter_strict_ranges[param])
+                if self.range_slider_enabled:
+                    self.sliders[param].range_slider.setStrictRange(primitive.gui_tunable_parameter_strict_ranges[param])
 
-    def getParameterTuning(self, parameter_name, parameter_value):
+    def setParameterTuning(self, parameter_name, parameter_value):
         self.current_tuning[parameter_name] = parameter_value
+
+    def setRangeTuning(self, parameter_name, min_value, max_value):
+        self.range_tuning[parameter_name] = [min_value, max_value]
+        print(self.range_tuning)
 
     def updateAfterTuningAccepted(self, tuned, primitive_type, parameter):
         if self.primitive_type is primitive_type:
@@ -1098,7 +1106,7 @@ class PandaTuningPage(QFrame):
             except KeyError:
                 pass
             if tuned:
-                self.current_tuning = {}
+                del self.current_tuning[parameter]
 
 
 class PandaActiveTuningWidget(PandaTuningWidget):
@@ -1289,6 +1297,7 @@ class PandaActiveTuningPage(QFrame):
 
 class CurrentValueShowingSlider(QWidget):
     valueChanged = pyqtSignal(float)
+    rangeChanged = pyqtSignal(float, float)
     LABEL_WIDTH = 100
     font=QFont()
     font.setBold(True)
@@ -1318,7 +1327,8 @@ class CurrentValueShowingSlider(QWidget):
             min_value = self.available_range[0]
             max_value = self.available_range[1]
             step = (max_value - min_value) / n_ticks  # TODO: this should be a parameter
-            self.range_slider = qtRangeSlider.QHRangeSlider([min_value, max_value, step], [min_value, max_value])
+            self.range_slider = qtRangeSlider.QHRangeSlider(slider_range=[min_value, max_value, step],
+                                                            values=[min_value, max_value])
 
         self.current_value_label = QLabel('???')
         self.stored_value_label = QLabel('???')
@@ -1353,6 +1363,8 @@ class CurrentValueShowingSlider(QWidget):
 
         self.slider.doubleValueChanged.connect(self.updateLabel)
         self.slider.doubleValueChanged.connect(self.valueChanged.emit)
+        if self.range_slider_enabled:
+            self.range_slider.rangeChanged.connect(self.rangeChanged.emit)
 
     def setValue(self, value):
         self.slider.setValue(value)
@@ -1455,7 +1467,12 @@ class FixNumberTicksSlider(QSlider):
                 value = self._strict_upperbound
             if value <= self._strict_lowerbound:
                 value = self._strict_lowerbound
-            super(FixNumberTicksSlider, self).setSliderPosition(int((value - self._lowerbound)/self._real_step))
+            where = int((value - self._lowerbound)/self._real_step)
+            super(FixNumberTicksSlider, self).setSliderPosition(where)
+            value = self._lowerbound + float(super(FixNumberTicksSlider, self).value())*self._real_step
+            # TODO: HORRIBLE HACK BECAUSE OF ROUNDINGS. But I don't want to loose time on this
+            if not(self._strict_lowerbound <= value <= self._strict_upperbound):
+                super(FixNumberTicksSlider, self).setSliderPosition(where + 1)
 
 
 class WorkerSignals(QObject):
