@@ -273,9 +273,9 @@ class EUPWidget(QWidget):
                 pass
 
             if ready_primitive is not None:
-                self.tuning_timeseries.append(time.time())
                 tuning_targets = self.panda_tuning_widget.stacks[type(ready_primitive)].current_tuning
                 range_tuning_targets = self.panda_tuning_widget.stacks[type(ready_primitive)].range_tuning
+                something_tuned = False
                 for key, value in tuning_targets.items():
                     tuned = self.interpreter.loaded_program.update_nth_primitive_parameter(
                         self.interpreter.next_primitive_index, key, value)
@@ -283,6 +283,9 @@ class EUPWidget(QWidget):
                                                                                      type(ready_primitive), \
                                                                                      str(tuned)))
                     self.tuningAccepted.emit(tuned, type(ready_primitive), key)
+                    something_tuned = something_tuned or tuned
+                if something_tuned:
+                    self.tuning_timeseries.append(time.time())
 
                 for key, value in range_tuning_targets.items():
                     self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index).\
@@ -1101,6 +1104,12 @@ class PandaTuningPage(QFrame):
                 self.sliders[param].setValue(getattr(primitive.parameter_container, param))
                 self.sliders[param].slider.setStrictBounds(primitive.gui_tunable_parameter_strict_ranges[param])
                 if self.range_slider_enabled:
+                    current_range = []
+                    try:
+                        current_range = primitive.parameters_range_history[param][-1]
+                    except:
+                        current_range = primitive.gui_tunable_parameter_strict_ranges[param]
+                    self.sliders[param].range_slider.setValues(current_range)
                     self.sliders[param].range_slider.setStrictRange(primitive.gui_tunable_parameter_strict_ranges[param])
 
     def setParameterTuning(self, parameter_name, parameter_value):

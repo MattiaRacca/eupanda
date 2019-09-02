@@ -56,7 +56,6 @@ class PandaPrimitive(object):
 
     def set_parameter_container(self, container):
         container_fitting = isinstance(container, self.expected_container)
-
         if container_fitting:
             self.parameter_container = container
             self.init_parameter_update_history()
@@ -105,10 +104,7 @@ class PandaPrimitive(object):
                 self.parameters_update_history[attribute] = [deepcopy(getattr(self.parameter_container, attribute))]
         if not bool(self.parameters_range_history):  # if the dictionary is not full (aka not initialized)
             self.parameters_range_history = {}
-            attributes = [attribute for attribute in dir(self.parameter_container)
-                          if not attribute.startswith('_') and 'serialize' not in attribute]
-            #  ROS adds some (de)serialize stuff to msgs/srvs - we do not need them tracked
-            for attribute in attributes:
+            for attribute in self.gui_tunable_parameters:
                 self.parameters_range_history[attribute] = []
 
     def reset_primitive_update_history(self):
@@ -242,6 +238,7 @@ class MoveFingers(PandaPrimitive):
             new_value = (max_value - min_value) * np.random.random_sample() + min_value
             self.update_parameter(parameter, new_value)
             print('Randomized {}\' {}'.format(type(self).__name__, parameter))
+        self.reset_primitive_update_history()
 
 
 class ApplyForceFingers(PandaPrimitive):
