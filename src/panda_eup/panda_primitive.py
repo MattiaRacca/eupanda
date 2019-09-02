@@ -47,6 +47,8 @@ class PandaPrimitive(object):
         self.status = PandaPrimitiveStatus.NEUTRAL
         self.parameters_update_history = {}  # dictionary of lists, each containing the updates of a primitive parameter
         self.container_update_history = []  # history of updates to primitive container
+        # dictionary of lists, each containing updates to parameter ranges (lists of len 2)
+        self.parameters_range_history = {}
 
     def __str__(self):
         return self.description + ' (' + str(self.starting_arm_state_index) + ', ' + \
@@ -86,6 +88,12 @@ class PandaPrimitive(object):
         self.container_update_history.append(deepcopy(self.parameter_container))
         return revertible
 
+    def update_parameter_range(self, parameter_type, parameter_range):
+        if not hasattr(self.expected_container, parameter_type):
+            raise PandaProgramException(1)
+        self.parameters_range_history[parameter_type].append(deepcopy(parameter_range))
+        return True
+
     def init_parameter_update_history(self):
         self.container_update_history.append(deepcopy(self.parameter_container))
         if not bool(self.parameters_update_history):  # if the dictionary is not full (aka not initialized)
@@ -95,10 +103,18 @@ class PandaPrimitive(object):
             #  ROS adds some (de)serialize stuff to msgs/srvs - we do not need them tracked
             for attribute in attributes:
                 self.parameters_update_history[attribute] = [deepcopy(getattr(self.parameter_container, attribute))]
+        if not bool(self.parameters_range_history):  # if the dictionary is not full (aka not initialized)
+            self.parameters_range_history = {}
+            attributes = [attribute for attribute in dir(self.parameter_container)
+                          if not attribute.startswith('_') and 'serialize' not in attribute]
+            #  ROS adds some (de)serialize stuff to msgs/srvs - we do not need them tracked
+            for attribute in attributes:
+                self.parameters_range_history[attribute] = []
 
     def reset_primitive_update_history(self):
         self.container_update_history = []
         self.parameters_update_history = {}
+        self.parameters_range_history = {}
         self.init_parameter_update_history()
 
     def randomize_gui_tunable_parameters(self):

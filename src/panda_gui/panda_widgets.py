@@ -95,6 +95,7 @@ class EUPWidget(QWidget):
     robotStateUpdate = pyqtSignal(pp.PandaRobotStatus)
     tuningGUIUpdate = pyqtSignal(object)
     tuningAccepted = pyqtSignal(bool, type, str)
+    rangeAccepted = pyqtSignal(bool, type, str)
 
     def __init__(self, title='EUP Widget'):
         super(EUPWidget, self).__init__()
@@ -196,7 +197,6 @@ class EUPWidget(QWidget):
 
         # Parameter tuning frame
         self.panda_tuning_widget = PandaTuningWidget(parent=self, range_sliders=self.range_sliders)
-        self.current_tuning = None  # holds a dictionary of current tuning done by the user through the UI
 
         # Action button & Robot State Widget at the bottom
         self.low_buttons = QWidget()
@@ -254,7 +254,8 @@ class EUPWidget(QWidget):
         self.vbox.addWidget(self.low_buttons)
 
         # Connect update signals
-        self.tuningAccepted.connect(partial(self.log_loaded_program, partial_log=True))  # triggers partial logging
+        self.tuningAccepted.connect(partial(self.log_loaded_program, partial_log=True))  # triggers partial logging after parameter tuning
+        self.rangeAccepted.connect(partial(self.log_loaded_program, partial_log=True))  # triggers partial logging after range update
         self.updateGUI.connect(self.updatePandaWidgets)  # overall GUI update, triggers the update below
         self.programGUIUpdate.connect(self.panda_program_widget.updateWidget)  # program widget update
         self.robotStateUpdate.connect(self.robot_state_widget.updateWidget)  # robot state widget update
@@ -274,13 +275,23 @@ class EUPWidget(QWidget):
             if ready_primitive is not None:
                 self.tuning_timeseries.append(time.time())
                 tuning_targets = self.panda_tuning_widget.stacks[type(ready_primitive)].current_tuning
+                range_tuning_targets = self.panda_tuning_widget.stacks[type(ready_primitive)].range_tuning
                 for key, value in tuning_targets.items():
                     tuned = self.interpreter.loaded_program.update_nth_primitive_parameter(
                         self.interpreter.next_primitive_index, key, value)
-                    rospy.loginfo('Tuning parameter {} of a {} primitive: {}'.format(key,\
-                                                                                     type(ready_primitive),\
+                    rospy.loginfo('Tuning parameter {} of a {} primitive: {}'.format(key, \
+                                                                                     type(ready_primitive), \
                                                                                      str(tuned)))
                     self.tuningAccepted.emit(tuned, type(ready_primitive), key)
+
+                for key, value in range_tuning_targets.items():
+                    self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index).\
+                        update_parameter_range(key, value)
+                    rospy.loginfo('Saving range {} of a {} primitive: {}'.format(key, \
+                                                                                 type(ready_primitive), \
+                                                                                 str(True)))
+                    self.rangeAccepted.emit(True, type(ready_primitive), key)
+
         else:
             rospy.logerr('Are you tuning when you should not?')
 
@@ -1047,6 +1058,7 @@ class PandaTuningWidget(QStackedWidget):
             self.stacks[primitive_type] = PandaTuningPage(self, primitive_type, range_slider_enabled=self.range_sliders)
             self.addWidget(self.stacks[primitive_type])
             self.parent().tuningAccepted.connect(self.stacks[primitive_type].updateAfterTuningAccepted)
+            self.parent().rangeAccepted.connect(self.stacks[primitive_type].updateAfterRangeAccepted)
 
         self.setCurrentIndex(0)
         self.setSizePolicy(PandaTuningWidget.sizePolicy)
@@ -1061,7 +1073,6 @@ class PandaTuningWidget(QStackedWidget):
 
 
 class PandaTuningPage(QFrame):
-
     def __init__(self, parent, primitive_type, range_slider_enabled=False):
         super(PandaTuningPage, self).__init__(parent)
         self.primitive_type = primitive_type
@@ -1097,7 +1108,6 @@ class PandaTuningPage(QFrame):
 
     def setRangeTuning(self, parameter_name, min_value, max_value):
         self.range_tuning[parameter_name] = [min_value, max_value]
-        print(self.range_tuning)
 
     def updateAfterTuningAccepted(self, tuned, primitive_type, parameter):
         if self.primitive_type is primitive_type:
@@ -1107,6 +1117,11 @@ class PandaTuningPage(QFrame):
                 pass
             if tuned:
                 del self.current_tuning[parameter]
+
+    def updateAfterRangeAccepted(self, tuned, primitive_type, parameter):
+        if self.primitive_type is primitive_type:
+            if tuned:
+                del self.range_tuning[parameter]
 
 
 class PandaActiveTuningWidget(PandaTuningWidget):
