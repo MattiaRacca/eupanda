@@ -75,7 +75,8 @@ class EUPPlugin(Plugin):
     def __init__(self, context):
         super(EUPPlugin, self).__init__(context)
         active_eup = rospy.get_param('/active_eup') if rospy.has_param('/active_eup') else False
-        self._widget = ActiveEUPWidget() if active_eup else EUPWidget()
+        # self._widget = ActiveEUPWidget() if active_eup else EUPWidget()
+        self._widget = RangeSliderTestWidget()
         context.add_widget(self._widget)
 
     def shutdown_plugin(self):
@@ -1533,10 +1534,9 @@ class RangeSliderTestWidget(QWidget):
         super(RangeSliderTestWidget, self).__init__()
         self.setWindowTitle(title)
         self.layout = QVBoxLayout(self)
-        self.range_slider = qtRangeSlider.QHRangeSlider(parent=self)
+        self.range_slider = qtRangeSlider.QHRangeSlider(slider_range=[0, 100, 1], values=[20, 80], strict_range=[10, 80],
+                                                        parent=self)
         self.layout.addWidget(self.range_slider)
-        self.range_slider.setRange([0, 100, 1])
-        self.range_slider.setValues([30, 60])
         self.range_slider.rangeChanged.connect(self.report)
 
     def report(self, min, max):

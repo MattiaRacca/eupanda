@@ -41,7 +41,7 @@ class QRangeSlider(QWidget):
     # @param values [initial minimum setting, initial maximum setting].
     # @param parent (Optional) The PyQt parent of this widget.
     #
-    def __init__(self, slider_range, values, parent = None):
+    def __init__(self, slider_range, values, strict_range=None, parent = None):
         QWidget.__init__(self, parent)
         self.bar_width = 10
         self.emit_while_moving = False
@@ -60,6 +60,10 @@ class QRangeSlider(QWidget):
             self.setValues(values)
         else:
             self.setValues([0.3, 0.6])
+        if strict_range is None:
+            self.strict_range = [self.start, self.end]
+        else:
+            self.strict_range = strict_range
 
         self.setFocusPolicy(QtCore.Qt.ClickFocus)
 
@@ -272,6 +276,17 @@ class QRangeSlider(QWidget):
             self.max_val = self.start + float(round(self.max_val/self.single_step))*self.single_step
             if self.max_val < self.min_val:
                 self.min_val = self.max_val
+
+        if self.max_val >= self.strict_range[1]:
+            self.max_val = self.strict_range[1]
+        if self.min_val >= self.strict_range[1]:
+            self.min_val = self.strict_range[1]
+
+        if self.max_val <= self.strict_range[0]:
+            self.max_val = self.strict_range[0]
+        if self.min_val <= self.strict_range[0]:
+            self.min_val = self.strict_range[0]
+
         self.updateDisplayValues()
         self.update()
 
@@ -288,8 +303,8 @@ class QHRangeSlider(QRangeSlider):
     # @param values (Optional) [initial minimum setting, initial maximum setting].
     # @param parent (Optional) The PyQt parent of this widget.
     #
-    def __init__(self, slider_range = None, values = None, parent = None):
-        QRangeSlider.__init__(self, slider_range, values, parent)
+    def __init__(self, slider_range = None, strict_range = None, values = None, parent = None):
+        QRangeSlider.__init__(self, slider_range=slider_range, strict_range=strict_range, values=values, parent=parent)
         if parent is not None:
             self.setGeometry(200, 200, 200, 100)
 
