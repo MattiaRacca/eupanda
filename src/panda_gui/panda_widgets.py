@@ -399,9 +399,10 @@ class EUPWidget(QWidget):
         if self.state_machine == EUPStateMachine.BUSY:
             self.state_machine = EUPStateMachine.OPERATIONAL if success else EUPStateMachine.EXECUTION_ERROR
             if self.tts_for_primitives and self.interpreter.last_primitive_attempted is not None:
-                sentence = self.interpreter.last_primitive_attempted.result_message[success]
-                self.tts_engine.say(sentence)
-                self.tts_engine.runAndWait()
+                if type(self.interpreter.last_primitive_attempted) is pp.UserSync:
+                    sentence = self.interpreter.last_primitive_attempted.result_message[success]
+                    self.tts_engine.say(sentence)
+                    self.tts_engine.runAndWait()
             # if the command failed but the primitive in error is the previous one, I was reverting
             try:
                 reverting_check = self.interpreter.loaded_program.get_nth_primitive(
@@ -799,9 +800,10 @@ class ActiveEUPWidget(EUPWidget):
         if self.state_machine == EUPStateMachine.BUSY:
             self.state_machine = EUPStateMachine.OPERATIONAL if success else EUPStateMachine.EXECUTION_ERROR
             if self.tts_for_primitives and self.interpreter.last_primitive_attempted is not None:
-                sentence = self.interpreter.last_primitive_attempted.result_message[success]
-                self.tts_engine.say(sentence)
-                self.tts_engine.runAndWait()
+                if type(self.interpreter.last_primitive_attempted) is pp.UserSync:
+                    sentence = self.interpreter.last_primitive_attempted.result_message[success]
+                    self.tts_engine.say(sentence)
+                    self.tts_engine.runAndWait()
             # if the command failed but the primitive in error is the previous one, I was reverting
             try:
                 reverting_check = self.interpreter.loaded_program.get_nth_primitive(
