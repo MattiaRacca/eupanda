@@ -1,5 +1,6 @@
 <launch>
     <arg name="active" />
+    <arg name="user" />
 
     <param name="randomize_parameters" type="bool" value="true" />
     <param name="tts_for_primitives" type="bool" value="true" />
@@ -9,9 +10,11 @@
     <param name="n_questions" type="int" value="4" />
     <param name="prior_path" type="string" value="$(find panda_pbd)/resources/priors/priors.pkl" />
 
-    <param name="program_path" type="string" value="$(find panda_pbd)/resources/" />
+    <param name="program_path" type="string" value="$(find panda_pbd)/resources/"/>
     <param name="program_name" type="string" value="handover.pkl" />
 
-    <param name="program_logging_path" type="string" value="$(find panda_pbd)/resources/user_study_logs/" />
+    <param name="program_logging_path" type="string" value="$(find panda_pbd)/resources/user_study_logs/active/$(arg user)/" if="$(arg active)"/>
+    <param name="program_logging_path" type="string" value="$(find panda_pbd)/resources/user_study_logs/baseline/$(arg user)/" unless="$(arg active)"/>
+
     <node name="panda_gui" pkg="rqt_gui" type="rqt_gui" args="-s panda_gui" output="screen"/>
 </launch>

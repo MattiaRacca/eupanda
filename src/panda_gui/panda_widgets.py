@@ -591,7 +591,7 @@ class ActiveEUPWidget(EUPWidget):
         rospy.logdebug('Gonna wait for a while before {}'.format(message))
         current_primitive = self.interpreter.loaded_program.primitives[self.current_learning_primitive]
         self.messageSent.emit(current_primitive, message)
-        time.sleep(3)  # TODO: make this a parameter
+        time.sleep(2.5)  # TODO: make this a parameter
         return True
 
     def receiveAnswer(self, answer):
