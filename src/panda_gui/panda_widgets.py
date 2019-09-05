@@ -219,14 +219,16 @@ class EUPWidget(QWidget):
         self.interpreter_command_dict['go_to_current_primitive_preconditions'] = \
             [QExpandingPushButton("Recover from error\n on current primitive", self),
              partial(self.execute_interpreter_command, self.interpreter.go_to_current_primitive_preconditions)]
+        """"
         self.interpreter_command_dict['execute_rest_of_program'] = [QExpandingPushButton("Execute rest\n of program", self),
                                                                  partial(self.execute_interpreter_command,
                                                                          self.interpreter.execute_rest_of_program)]
+        
         self.interpreter_command_dict['revert_to_beginning_of_program'] = [QExpandingPushButton("Revert to\n beginning", self),
                                                                  partial(self.execute_interpreter_command,
                                                                          self.interpreter.revert_to_beginning_of_program
                                                                          )]
-
+        """
         # Give the partials a __name__ attribute, used in the execute_interpreter_command function
         for key, value in self.interpreter_command_dict.items():
             value[1].__name__ = key
@@ -238,8 +240,8 @@ class EUPWidget(QWidget):
         self.low_buttons_layout.addWidget(self.interpreter_command_dict['revert_one_step'][0])
         self.low_buttons_layout.addWidget(self.interpreter_command_dict['go_to_current_primitive_preconditions'][0])
         self.low_buttons_layout.addWidget(QVerticalLine())
-        self.low_buttons_layout.addWidget(self.interpreter_command_dict['execute_rest_of_program'][0])
-        self.low_buttons_layout.addWidget(self.interpreter_command_dict['revert_to_beginning_of_program'][0])
+        # self.low_buttons_layout.addWidget(self.interpreter_command_dict['execute_rest_of_program'][0])
+        # self.low_buttons_layout.addWidget(self.interpreter_command_dict['revert_to_beginning_of_program'][0])
 
         # PushButtons events handling
         for key, value in self.interpreter_command_dict.items():
@@ -333,14 +335,14 @@ class EUPWidget(QWidget):
                 # last primitive executed, disable execute buttons
                 if self.interpreter.next_primitive_index == self.interpreter.loaded_program.get_program_length():
                     self.interpreter_command_dict['execute_one_step'][0].setEnabled(False)
-                    self.interpreter_command_dict['execute_rest_of_program'][0].setEnabled(False)
+                    # self.interpreter_command_dict['execute_rest_of_program'][0].setEnabled(False)
                     self.interpreter_command_dict['go_to_starting_state'][0].setEnabled(True)
                     self.panda_tuning_widget.setEnabled(False)
 
                 # we are at start, disable revert buttons
                 if self.interpreter.next_primitive_index <= 0:
                     self.interpreter_command_dict['revert_one_step'][0].setEnabled(False)
-                    self.interpreter_command_dict['revert_to_beginning_of_program'][0].setEnabled(False)
+                    # self.interpreter_command_dict['revert_to_beginning_of_program'][0].setEnabled(False)
 
             elif self.state_machine == EUPStateMachine.STARTUP_BUSY or self.state_machine == EUPStateMachine.BUSY:
                 for key, value in self.interpreter_command_dict.items():
@@ -370,8 +372,7 @@ class EUPWidget(QWidget):
         for key, value in self.interpreter_command_dict.items():
             value[0].setDisabled(True)
 
-        if (command.__name__ == 'execute_one_step' or \
-            command.__name__ == 'execute_rest_of_program'):
+        if (command.__name__ == 'execute_one_step' or command.__name__ == 'execute_rest_of_program'):
             self.updateCurrentPrimitive()
 
         if command.__name__ == 'execute_one_step':
