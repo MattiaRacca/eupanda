@@ -731,7 +731,7 @@ class ActiveEUPWidget(EUPWidget):
                             gui_tunable_parameters[self.current_learning_parameter + 1]
                     except IndexError:
                         if self.current_learning_primitive + 1 >= self.interpreter.loaded_program.get_program_length():
-                            message="Now you can go to back to beginning or quit the program"
+                            message="Now you can quit the program"
                         else:
                             message="I'm done tuning this primitive. Let's move to the next primitive!"
                     else:
