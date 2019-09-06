@@ -550,15 +550,15 @@ class ActiveEUPWidget(EUPWidget):
 
         # remove bunch of stuff that are not needed in the Active Widget
         self.low_buttons_layout.itemAt(6).widget().setParent(None)  # remove a vertical line
-        self.interpreter_command_dict['revert_to_beginning_of_program'][0].setParent(None)
-        self.interpreter_command_dict['execute_rest_of_program'][0].setParent(None)
+        # self.interpreter_command_dict['revert_to_beginning_of_program'][0].setParent(None)
+        # self.interpreter_command_dict['execute_rest_of_program'][0].setParent(None)
         self.interpreter_command_dict['revert_one_step'][0].setParent(None)
         self.panda_tuning_widget.setParent(None)
 
         del self.panda_tuning_widget
         del self.interpreter_command_dict['revert_one_step']
-        del self.interpreter_command_dict['execute_rest_of_program']
-        del self.interpreter_command_dict['revert_to_beginning_of_program']
+        # del self.interpreter_command_dict['execute_rest_of_program']
+        # del self.interpreter_command_dict['revert_to_beginning_of_program']
 
         for key, page in self.panda_active_tuning_widget.stacks.items():
             if type(page) is PandaActiveTuningPage:
@@ -1588,3 +1588,4 @@ class RangeSliderTestWidget(QWidget):
 
     def log_loaded_program(self):
         pass
+
