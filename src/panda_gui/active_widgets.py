@@ -14,7 +14,8 @@ from PyQt5.QtGui import QFont
 
 import rospy
 
-from panda_gui.panda_widgets import EUPWidget, EUPStateMachine, Worker, PandaTuningWidget, QHorizontalLine, QExpandingPushButton, QVerticalLine
+from panda_gui.panda_widgets import EUPWidget, EUPStateMachine, Worker, PandaTuningWidget
+from panda_gui.gui_elements import QHorizontalLine, QExpandingPushButton, QVerticalLine
 import panda_eup.panda_primitive as pp
 
 import numpy as np
