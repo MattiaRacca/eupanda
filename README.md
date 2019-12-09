@@ -1,6 +1,6 @@
-## panda_pbd: A end-user programming framework for the FRANKA Panda
+## EUPanda: a End-User Programming framework for the FRANKA Panda
 
-_panda_pbd_ (temporary name) is a ROS-based end-user programming framework for the FRANKA Panda Robot Arm that tries to replicate the proprietary Desk environment [1].
+_EUPanda_ is a End-User Programming framework for the FRANKA Panda Robot Arm that tries to replicate the proprietary Desk environment [1] in a open source ROS-based fashion.
 
 The framework allows to create from kinestethic teaching robot programs made of 5 primitives (move to, move to contact, move fingers, apply force with fingers and an user synchronization primitive). Programs can be executed step-by-step or fully; Similarly, primitives can be reverted.
 
