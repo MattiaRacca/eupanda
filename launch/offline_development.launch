@@ -6,7 +6,7 @@
     <param name="active_eup" type="bool" value="false" />
     <!-- <param name="n_questions" type="int" value="2" /> -->
 
-    <param name="range_sliders" type="bool" value="range" />
+    <param name="range_sliders" type="bool" value="false" />
 
     <param name="prior_path" type="string" value="$(find panda_pbd)/resources/priors/priors.pkl" />
 
