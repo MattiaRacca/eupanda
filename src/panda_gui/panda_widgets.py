@@ -95,6 +95,9 @@ class EUPWidget(QWidget):
 
         self.interpreter.load_program(pp.load_program_from_file(program_path, program_name))
 
+        # TODO: this reset of history should be an option! it is now here for dealing with old program.pkl
+        self.interpreter.loaded_program.reset_primitives_history()
+
         # Randomizing, Range Sliders and TTS options
         randomize = False
         if rospy.has_param('/randomize_parameters'):
