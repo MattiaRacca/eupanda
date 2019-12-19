@@ -459,6 +459,10 @@ class PandaProgram(object):
         for primitive in self.primitives:
             primitive.randomize_gui_tunable_parameters()
 
+    def reset_primitives_history(self):
+        for primitive in self.primitives:
+            primitive.reset_primitive_update_history()
+
     def dump_to_file(self, filepath='~', filename='program.pkl'):
         dump_program_to_file(self, filepath, filename)
 
