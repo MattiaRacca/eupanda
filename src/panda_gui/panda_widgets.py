@@ -6,7 +6,7 @@ QSizePolicy, QGroupBox, QApplication, QStackedWidget, QSlider, QGridLayout, QTab
 from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool, pyqtProperty, QPropertyAnimation
 from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor, QFont, QIcon
 import qt_range_slider.qtRangeSlider as qtRangeSlider
-from panda_gui.gui_elements import QExpandingPushButton, QVerticalLine, FixNumberTicksSlider
+from panda_gui.gui_elements import QExpandingPushButton, QVerticalLine, FixNumberTicksSlider, QHorizontalLine
 
 import rospkg
 import rospy
@@ -239,11 +239,13 @@ class EUPWidget(QWidget):
 
         self.program_creation_widget = PandaProgramWidget(self)
         self.program_creation_widget.clear()
-
         self.program_creation_buttons = ProgramCreationButtons(self)
+        self.lowerProgramMenu = LowerProgramMenu(self)
 
         self.tabSelection.createProgramTab.layout.addWidget(self.program_creation_widget)
         self.tabSelection.createProgramTab.layout.addWidget(self.program_creation_buttons)
+        self.tabSelection.createProgramTab.layout.addWidget(QHorizontalLine())
+        self.tabSelection.createProgramTab.layout.addWidget(self.lowerProgramMenu)
 
         # Connect update signals
         self.tuningAccepted.connect(partial(self.log_loaded_program, partial_log=True))  # triggers partial logging after parameter tuning
@@ -455,38 +457,59 @@ class ProgramCreationButtons(QWidget):
         self.initUI()
 
     def initUI(self):
+        self.setSizePolicy(self.sizePolicy)
         self.layout = QHBoxLayout(self)
         self.addPrimitiveButtons()
+        self.layout.addWidget(QVerticalLine())
         self.addControlButtons()
 
     def addPrimitiveButtons(self):
-        self.primitiveButtonWidget = QWidget(self)
+        self.primitiveButtonAreaWidget = QWidget(self)
         self.primitiveButtons = []
-        self.primitiveButtonLayout = QHBoxLayout(self.primitiveButtonWidget)
+        self.primitiveVerticalLayout = QVBoxLayout(self.primitiveButtonAreaWidget)
+        self.primitiveVerticalLayout.setAlignment(Qt.AlignTop)
+        label = QLabel("Add primitive for program")
+        label.setFont(EUPWidget.font)
+        self.primitiveVerticalLayout.addWidget(label)
+        self.primitiveButtonRowWidget = QWidget(self)
+        self.primitiveButtonLayout = QHBoxLayout(self.primitiveButtonRowWidget)
         self.primitiveButtonLayout.setAlignment(Qt.AlignLeft)
         primitives = [pp.MoveToEE(), pp.MoveToContact(), pp.UserSync(), pp.MoveFingers(), pp.ApplyForceFingers()]
         for primitive in primitives:
             button = QPushButton('', self)
             imagePath = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources', primitive.__class__.__name__ + '.png')
             button.setIcon(QIcon(imagePath))
-            button.setIconSize(QSize(60,60))
+            button.setIconSize(QSize(80,80))
             self.primitiveButtonLayout.addWidget(button)
             self.primitiveButtons.append(button)
-        self.layout.addWidget(self.primitiveButtonWidget)    
+        self.primitiveVerticalLayout.addWidget(self.primitiveButtonRowWidget)    
+        self.layout.addWidget(self.primitiveButtonAreaWidget)    
 
     def addControlButtons(self):
         self.controlButtonWidget = QWidget(self)
         self.controlButtons = []
-        self.controlButtonLayout = QHBoxLayout(self.controlButtonWidget)
+        self.controlButtonLayout = QGridLayout(self.controlButtonWidget)
         self.controlButtonLayout.setAlignment(Qt.AlignRight)
-        labels = ["Freeze", "Relax", "Relax\nfingers", "Relax\nonly arm", "Relax\nonly wrist"]
-        for label in labels:
-            button = QExpandingPushButton(label, self)
-            button.setVerticalExpanding()
-            self.controlButtonLayout.addWidget(button)
+        labels = ["Freeze", "Initialize\nprogram", "Relax", "Relax\nfingers", "Relax\nonly arm", "Relax\nonly wrist"]
+        for i in range(len(labels)):
+            button = QExpandingPushButton(labels[i], self)
+            button.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed))
+            button.setFont(EUPWidget.font)
+            self.controlButtonLayout.addWidget(button, i/3, i % 3)
             self.controlButtons.append(button)
         self.layout.addWidget(self.controlButtonWidget)            
 
+class LowerProgramMenu(QWidget):
+
+    def __init__(self, parent):
+        super(LowerProgramMenu, self).__init__(parent)
+        self.initUI()
+
+    def initUI(self):
+        self.layout = QHBoxLayout(self)
+        self.layout.setAlignment(Qt.AlignLeft)    
+        self.stateWidget = PandaStateWidget(self)
+        self.layout.addWidget(self.stateWidget)
         
 
 class PandaProgramWidget(QGroupBox):
