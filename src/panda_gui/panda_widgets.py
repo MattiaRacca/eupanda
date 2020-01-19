@@ -2,7 +2,7 @@
 from __future__ import division
 
 from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, \
-QSizePolicy, QGroupBox, QApplication, QStackedWidget, QSlider, QGridLayout, QTabWidget
+QSizePolicy, QGroupBox, QApplication, QStackedWidget, QSlider, QGridLayout, QTabWidget, QLineEdit
 from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool, pyqtProperty, QPropertyAnimation
 from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor, QFont, QIcon
 import qt_range_slider.qtRangeSlider as qtRangeSlider
@@ -15,6 +15,7 @@ from franka_control.msg import ErrorRecoveryActionGoal
 
 from panda_eup.program_interpreter import PandaProgramInterpreter
 import panda_eup.panda_primitive as pp
+from panda_eup.pbd_interface import PandaPBDInterface
 
 import pyttsx3
 
@@ -85,6 +86,7 @@ class EUPWidget(QWidget):
         # Creating the interpreter and loading the program
         robotless_debug = rospy.get_param('/robotless_debug') if rospy.has_param('/robotless_debug') else False
         self.interpreter = PandaProgramInterpreter(robotless_debug=robotless_debug)
+        self.interface = PandaPBDInterface(robotless_debug=robotless_debug)
 
         if rospy.has_param('/program_path') and rospy.has_param('/program_name'):
             program_path = rospy.get_param('/program_path')
@@ -246,6 +248,10 @@ class EUPWidget(QWidget):
         self.tabSelection.createProgramTab.layout.addWidget(self.program_creation_buttons)
         self.tabSelection.createProgramTab.layout.addWidget(QHorizontalLine())
         self.tabSelection.createProgramTab.layout.addWidget(self.lowerProgramMenu)
+
+        self.addPrimitiveButtonActions()
+        self.addProgramUtilityActions()
+        self.addControlButtonActions()
 
         # Connect update signals
         self.tuningAccepted.connect(partial(self.log_loaded_program, partial_log=True))  # triggers partial logging after parameter tuning
@@ -413,6 +419,48 @@ class EUPWidget(QWidget):
             self.state_machine = EUPStateMachine.OPERATIONAL
         self.updatePandaWidgets()
 
+    def addControlButtonActions(self):
+        controlActions = {
+            self.program_creation_buttons.controlButtons[0]: self.interface.initialize_program,
+            self.program_creation_buttons.controlButtons[1]: self.interface.freeze,
+            self.program_creation_buttons.controlButtons[2]: self.interface.relax,
+            self.program_creation_buttons.controlButtons[3]: self.interface.relax_finger,
+            self.program_creation_buttons.controlButtons[4]: self.interface.relax_only_arm,
+            self.program_creation_buttons.controlButtons[5]: self.interface.relax_only_wrist
+        } 
+        for k,v in controlActions.items():
+            k.pressed.connect(v)   
+
+    def addPrimitiveButtonActions(self):
+        primitiveActions = {
+            self.program_creation_buttons.primitiveButtons[0]: partial(self.addPrimitive, pp.MoveToEE(), self.interface.insert_move_to_ee),
+            self.program_creation_buttons.primitiveButtons[1]: partial(self.addPrimitive, pp.MoveToContact(), self.interface.insert_move_to_contact),
+            self.program_creation_buttons.primitiveButtons[2]: partial(self.addPrimitive, pp.UserSync(), self.interface.insert_user_sync),
+            self.program_creation_buttons.primitiveButtons[3]: partial(self.addPrimitive, pp.MoveFingers(), self.interface.insert_move_fingers),
+            self.program_creation_buttons.primitiveButtons[4]: partial(self.addPrimitive, pp.ApplyForceFingers(), self.interface.insert_apply_force_fingers)
+        }
+        for k,v in primitiveActions.items():
+            k.pressed.connect(v)
+
+    def addPrimitive(self, primitive, fn):
+        fn()
+        self.program_creation_widget.addPrimitiveWidget(primitive, interpreter=self.interpreter)
+        self.program_creation_widget.updateWidget()
+
+    def saveProgram(self):
+        inputField = self.lowerProgramMenu.inputField
+        filename =  inputField.text()
+        filePath = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
+        if filename == '':
+            self.interface.program.dump_to_file(filePath, "testprogram.pkl")
+        else:
+             self.interface.program.dump_to_file(filePath, str(filename) + '.pkl')   
+        inputField.clear()     
+
+    def addProgramUtilityActions(self):
+        self.lowerProgramMenu.saveButton.pressed.connect(self.saveProgram)
+        self.lowerProgramMenu.resetButton.pressed.connect(partial(self.program_creation_widget.clear, self.interface))      
+
     def announceWorkerDeath(self):
         rospy.logdebug("RIP Worker!")
 
@@ -490,7 +538,7 @@ class ProgramCreationButtons(QWidget):
         self.controlButtons = []
         self.controlButtonLayout = QGridLayout(self.controlButtonWidget)
         self.controlButtonLayout.setAlignment(Qt.AlignRight)
-        labels = ["Freeze", "Initialize\nprogram", "Relax", "Relax\nfingers", "Relax\nonly arm", "Relax\nonly wrist"]
+        labels = ["Initialize\nprogram", "Freeze", "Relax", "Relax\nfingers", "Relax\nonly arm", "Relax\nonly wrist"]
         for i in range(len(labels)):
             button = QExpandingPushButton(labels[i], self)
             button.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed))
@@ -510,6 +558,21 @@ class LowerProgramMenu(QWidget):
         self.layout.setAlignment(Qt.AlignLeft)    
         self.stateWidget = PandaStateWidget(self)
         self.layout.addWidget(self.stateWidget)
+        self.layout.addWidget(QVerticalLine())
+        self.addProgramUtilities()
+
+    def addProgramUtilities(self):
+        self.programUtilities = QWidget()
+        self.utilitiesLayout = QHBoxLayout(self.programUtilities)
+        self.saveButton = QPushButton("Save Program")
+        self.inputField = QLineEdit()
+        self.inputField.setPlaceholderText("Enter name for saved file")
+        self.resetButton = QPushButton("Reset Program")
+        self.saveButton.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.utilitiesLayout.addWidget(self.saveButton)
+        self.utilitiesLayout.addWidget(self.inputField)
+        self.utilitiesLayout.addWidget(self.resetButton) 
+        self.layout.addWidget(self.programUtilities)   
         
 
 class PandaProgramWidget(QGroupBox):
@@ -552,14 +615,14 @@ class PandaProgramWidget(QGroupBox):
 
         # Add primitive Widgets
         for primitive in program.primitives:
-            self.addPrimitiveWidget(primitive)
+            self.addPrimitiveWidget(primitive, self.parent().interpreter)
 
-    def addPrimitiveWidget(self, primitive):
+    def addPrimitiveWidget(self, primitive, interpreter):
         primitive_widget = PandaPrimitiveWidget(self.program_widget, primitive)
         self.primitive_widget_list.append(primitive_widget)
         self.program_widget_layout.addWidget(primitive_widget)
 
-        program_length = self.parent().interpreter.loaded_program.get_program_length()
+        program_length = interpreter.loaded_program.get_program_length()
         if self.program_widget.width() < (H_SPACING + PRIMITIVE_WIDTH)*program_length:
             self.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*program_length, V_SPACING +
                                             PRIMITIVE_HEIGHT)
@@ -569,10 +632,12 @@ class PandaProgramWidget(QGroupBox):
             primitive_widget.updateWidget()
         self.update()
 
-    def clear(self):
+    def clear(self, interface=None):
         for primitive_widget in self.primitive_widget_list:
             primitive_widget.setParent(None)
         self.primitive_widget_list = []
+        if interface != None:
+            interface.program.primitives = []
         self.update()        
 
     def sizeHint(self):
