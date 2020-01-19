@@ -104,38 +104,46 @@ class PandaPBDInterface(object):
             self.relaxed = True    
 
     def relax_only_arm(self):
-        req = EnableTeachingRequest()
-        req.ft_threshold_multiplier = self.default_parameters['kinesthestic_ft_threshold']
-        req.teaching = 2
+        if not self.robotless_debug:
+            req = EnableTeachingRequest()
+            req.ft_threshold_multiplier = self.default_parameters['kinesthestic_ft_threshold']
+            req.teaching = 2
 
-        try:
-            res = self.kinesthetic_client(req)
-        except rospy.ServiceException:
-            rospy.logerr('Cannot contact Kinesthetic Teaching client!')
-            self.last_pose = None
-            return False
+            try:
+                res = self.kinesthetic_client(req)
+            except rospy.ServiceException:
+                rospy.logerr('Cannot contact Kinesthetic Teaching client!')
+                self.last_pose = None
+                return False
 
-        if res.success:
-            self.last_pose = res.ee_pose
-            self.relaxed = True
-        return True
+            if res.success:
+                self.last_pose = res.ee_pose
+                self.relaxed = True
+            return True
+        else:
+            self.last_pose = np.array([0, 0, 0])
+            self.relaxed = True    
 
     def relax_only_wrist(self):
-        req = EnableTeachingRequest()
-        req.ft_threshold_multiplier = self.default_parameters['kinesthestic_ft_threshold']
-        req.teaching = 3
+        if not self.robotless_debug:
+            req = EnableTeachingRequest()
+            req.ft_threshold_multiplier = self.default_parameters['kinesthestic_ft_threshold']
+            req.teaching = 3
 
-        try:
-            res = self.kinesthetic_client(req)
-        except rospy.ServiceException:
-            rospy.logerr('Cannot contact Kinesthetic Teaching client!')
-            self.last_pose = None
-            return False
+            try:
+                res = self.kinesthetic_client(req)
+            except rospy.ServiceException:
+                rospy.logerr('Cannot contact Kinesthetic Teaching client!')
+                self.last_pose = None
+                return False
 
-        if res.success:
-            self.last_pose = res.ee_pose
-            self.relaxed = True
-        return True
+            if res.success:
+                self.last_pose = res.ee_pose
+                self.relaxed = True
+            return True
+        else:
+            self.last_pose = np.array([0, 0, 0])
+            self.relaxed = True     
 
     def relax_finger(self):
         temp_program = pp.PandaProgram()
