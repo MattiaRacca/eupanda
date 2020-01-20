@@ -445,6 +445,8 @@ class EUPWidget(QWidget):
     def addPrimitive(self, primitive, fn):
         fn()
         self.program_creation_widget.addPrimitiveWidget(primitive, interpreter=self.interpreter)
+        self.program_creation_widget.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*self.interface.program.get_program_length(),
+                                        V_SPACING + PRIMITIVE_HEIGHT)
         self.program_creation_widget.updateWidget()
 
     def saveProgram(self):
