@@ -75,7 +75,8 @@ class PandaPBDInterface(object):
             self.last_pose = np.array([0, 0, 0])
             self.last_gripper_width = 0.05
             self.program.save_arm_state(self.last_pose)   
-            self.program.save_gripper_state(pp.GripperState(self.last_gripper_width, 0.0))     
+            self.program.save_gripper_state(pp.GripperState(self.last_gripper_width, 0.0))
+        self.program.initialized = True         
 
     def gripper_state_callback(self, msg):
         last_gripper_width = msg.position[0] + msg.position[1]

@@ -314,6 +314,9 @@ class EUPWidget(QWidget):
         self.tuningGUIUpdate.emit(ready_primitive)
         QApplication.restoreOverrideCursor()
 
+        #self.checkForInitialization()
+        self.checkEUPState()
+
         if self.last_interface_state == pp.PandaRobotStatus.ERROR or \
                 self.last_interface_state == pp.PandaRobotStatus.BUSY:
             for key, value in self.interpreter_command_dict.items():
@@ -416,7 +419,7 @@ class EUPWidget(QWidget):
             self.state_machine = EUPStateMachine.STARTUP
         if (self.state_machine == EUPStateMachine.EXECUTION_ERROR or
             self.state_machine == EUPStateMachine.REVERTING_ERROR) and success:
-            self.state_machine = EUPStateMachine.OPERATIONAL
+            self.state_machine = EUPStateMachine.OPERATIONAL    
         self.updatePandaWidgets()
 
     def addControlButtonActions(self):
@@ -429,7 +432,8 @@ class EUPWidget(QWidget):
             self.program_creation_buttons.controlButtons[5]: self.interface.relax_only_wrist
         } 
         for k,v in controlActions.items():
-            k.pressed.connect(v)   
+            k.pressed.connect(v) 
+            k.pressed.connect(self.updatePandaWidgets)  
 
     def addPrimitiveButtonActions(self):
         primitiveActions = {
@@ -461,7 +465,29 @@ class EUPWidget(QWidget):
 
     def addProgramUtilityActions(self):
         self.lowerProgramMenu.saveButton.pressed.connect(self.saveProgram)
-        self.lowerProgramMenu.resetButton.pressed.connect(partial(self.program_creation_widget.clear, self.interface))      
+        self.lowerProgramMenu.resetButton.pressed.connect(partial(self.program_creation_widget.clear, self.interface))
+        self.lowerProgramMenu.resetButton.pressed.connect(self.updatePandaWidgets)      
+
+    def checkForInitialization(self):
+        for controlButton in self.program_creation_buttons.controlButtons[1:]:
+            controlButton.setEnabled(self.interface.program.initialized)
+
+        for primitiveButton in self.program_creation_buttons.primitiveButtons:
+            primitiveButton.setEnabled(self.interface.program.initialized) 
+
+    def checkEUPState(self):
+        state = self.state_machine in [EUPStateMachine.STARTUP, EUPStateMachine.OPERATIONAL]
+        if state == False:
+            rospy.loginfo("Program creation buttons disabled while the state machine is busy or in error state")
+        else:
+            rospy.loginfo("Program creation buttons enabled")    
+        for controlButton in self.program_creation_buttons.controlButtons:
+            controlButton.setEnabled(state)
+
+        for primitiveButton in self.program_creation_buttons.primitiveButtons:
+            primitiveButton.setEnabled(state)
+        self.checkForInitialization()    
+
 
     def announceWorkerDeath(self):
         rospy.logdebug("RIP Worker!")
@@ -571,6 +597,9 @@ class LowerProgramMenu(QWidget):
         self.inputField.setPlaceholderText("Enter name for saved file")
         self.resetButton = QPushButton("Reset Program")
         self.saveButton.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.resetButton.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        #self.saveButton.setFont(EUPWidget.font)
+        #self.resetButton.setFont(EUPWidget.font)
         self.utilitiesLayout.addWidget(self.saveButton)
         self.utilitiesLayout.addWidget(self.inputField)
         self.utilitiesLayout.addWidget(self.resetButton) 
@@ -639,7 +668,7 @@ class PandaProgramWidget(QGroupBox):
             primitive_widget.setParent(None)
         self.primitive_widget_list = []
         if interface != None:
-            interface.program.primitives = []
+            interface.program = pp.PandaProgram("A Panda Program")
         self.update()        
 
     def sizeHint(self):
