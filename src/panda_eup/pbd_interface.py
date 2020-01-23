@@ -18,6 +18,7 @@ class PandaPBDInterface(object):
         self.last_pose = None
         self.last_gripper_width = None
         self.relaxed = False
+        self.frozen = False
 
         self.default_parameters = {'kinesthestic_ft_threshold': 5.0,
                                    'move_to_ee_default_position_speed': 0.07,
@@ -98,11 +99,13 @@ class PandaPBDInterface(object):
             if res.success:
                 self.last_pose = res.ee_pose
                 self.relaxed = True
+                self.frozen = False
             return True
 
         else:
             self.last_pose = np.array([0, 0, 0])
-            self.relaxed = True    
+            self.relaxed = True
+            self.frozen = False    
 
     def relax_only_arm(self):
         if not self.robotless_debug:
@@ -120,10 +123,12 @@ class PandaPBDInterface(object):
             if res.success:
                 self.last_pose = res.ee_pose
                 self.relaxed = True
+                self.frozen = False
             return True
         else:
             self.last_pose = np.array([0, 0, 0])
-            self.relaxed = True    
+            self.relaxed = True   
+            self.frozen = False 
 
     def relax_only_wrist(self):
         if not self.robotless_debug:
@@ -141,10 +146,12 @@ class PandaPBDInterface(object):
             if res.success:
                 self.last_pose = res.ee_pose
                 self.relaxed = True
+                self.frozen = False
             return True
         else:
             self.last_pose = np.array([0, 0, 0])
-            self.relaxed = True     
+            self.relaxed = True
+            self.frozen = False     
 
     def relax_finger(self):
         temp_program = pp.PandaProgram()
@@ -174,11 +181,13 @@ class PandaPBDInterface(object):
             if res.success:
                 self.last_pose = res.ee_pose
                 self.relaxed = False
+                self.frozen = True
             return True
 
         else:
             self.last_pose = np.array([0, 0, 0])
             self.relaxed = False
+            self.frozen = True
 
 
     def insert_move_to_ee(self):

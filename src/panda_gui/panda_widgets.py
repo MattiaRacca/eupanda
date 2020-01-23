@@ -316,6 +316,21 @@ class EUPWidget(QWidget):
 
         #self.checkForInitialization()
         self.checkEUPState()
+        self.checkForRelaxedAndFrozen()
+        self.preventMultipleApplyForceFingers()
+        self.disableSaveAndReset()
+        self.lowerProgramMenu.updateControlStateLabels(self.interface)
+
+        '''
+        Notes:
+        - Should initialization button be disabled after program has been initialized?
+        - Since insert X -methods call freeze() if the robot is relaxed, do we only check for self.relaxed?
+        - Is there ever a situation where you would want more than one UserSync in a row? Maybe disable UserSync if previous primitive is UserSync
+        - When self.relaxed == True, do we disable all relax related buttons?
+        - In addition to robot state, should we show the state or self.relaxed and self.frozen on the GUI?
+        - Do we need a separate indicator for relaxed fingers?
+        - Need clarification on freeze and relaxed states
+        '''
 
         if self.last_interface_state == pp.PandaRobotStatus.ERROR or \
                 self.last_interface_state == pp.PandaRobotStatus.BUSY:
@@ -452,6 +467,7 @@ class EUPWidget(QWidget):
         self.program_creation_widget.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*self.interface.program.get_program_length(),
                                         V_SPACING + PRIMITIVE_HEIGHT)
         self.program_creation_widget.updateWidget()
+        self.updatePandaWidgets()
 
     def saveProgram(self):
         inputField = self.lowerProgramMenu.inputField
@@ -475,6 +491,17 @@ class EUPWidget(QWidget):
         for primitiveButton in self.program_creation_buttons.primitiveButtons:
             primitiveButton.setEnabled(self.interface.program.initialized) 
 
+    def checkForRelaxedAndFrozen(self):
+        if self.interface.frozen == False:
+            for primitiveButton in self.program_creation_buttons.primitiveButtons:
+                primitiveButton.setEnabled(False)
+
+        if self.interface.relaxed:
+            self.program_creation_buttons.controlButtons[2].setEnabled(False)
+
+        if self.interface.frozen:
+            self.program_creation_buttons.controlButtons[1].setEnabled(False)                    
+
     def checkEUPState(self):
         state = self.state_machine in [EUPStateMachine.STARTUP, EUPStateMachine.OPERATIONAL]
         if state == False:
@@ -486,7 +513,22 @@ class EUPWidget(QWidget):
 
         for primitiveButton in self.program_creation_buttons.primitiveButtons:
             primitiveButton.setEnabled(state)
-        self.checkForInitialization()    
+        self.checkForInitialization()
+
+    def preventMultipleApplyForceFingers(self):
+        if len(self.interface.program.primitives) > 0:
+            lastPrimitive = self.interface.program.primitives[-1]
+            if lastPrimitive.__class__.__name__ == "ApplyForceFingers":
+                self.program_creation_buttons.primitiveButtons[4].setEnabled(False)
+
+    def disableSaveAndReset(self):
+        if len(self.interface.program.primitives) == 0:
+            self.lowerProgramMenu.saveButton.setEnabled(False)
+            self.lowerProgramMenu.resetButton.setEnabled(False)      
+        else:
+            self.lowerProgramMenu.saveButton.setEnabled(True)
+            self.lowerProgramMenu.resetButton.setEnabled(True) 
+
 
 
     def announceWorkerDeath(self):
@@ -586,8 +628,60 @@ class LowerProgramMenu(QWidget):
         self.layout.setAlignment(Qt.AlignLeft)    
         self.stateWidget = PandaStateWidget(self)
         self.layout.addWidget(self.stateWidget)
+        self.addControlStateLabels()
         self.layout.addWidget(QVerticalLine())
         self.addProgramUtilities()
+
+    def addControlStateLabels(self):
+        font=QFont()
+        font.setBold(True)
+        font.setPointSize(12)
+
+        self.controlStateWidget = QWidget()
+        self.controlStateLayout = QVBoxLayout(self.controlStateWidget)
+
+        self.frozenLabel = QLabel("Frozen")
+        self.frozenLabel.setFont(font)
+        self.frozenLabel.setAlignment(Qt.AlignCenter)
+
+        self.frozenLabelValue = QLabel("No")
+        self.frozenLabelValue.setFont(font)
+        self.frozenLabelValue.setStyleSheet('color: firebrick')
+        self.frozenLabelValue.setAlignment(Qt.AlignCenter)
+
+        self.relaxedLabel = QLabel("Relaxed")
+        self.relaxedLabel.setFont(font)
+        self.relaxedLabel.setAlignment(Qt.AlignCenter
+        )
+        self.relaxedLabelValue = QLabel("No")
+        self.relaxedLabelValue.setStyleSheet('color: firebrick')
+        self.relaxedLabelValue.setFont(font)
+        self.relaxedLabelValue.setAlignment(Qt.AlignCenter)
+
+        self.controlStateLayout.addWidget(self.frozenLabel)
+        self.controlStateLayout.addWidget(self.frozenLabelValue)
+        self.controlStateLayout.addStretch()
+        self.controlStateLayout.addWidget(self.relaxedLabel)
+        self.controlStateLayout.addWidget(self.relaxedLabelValue)
+
+        self.layout.addWidget(self.controlStateWidget) 
+
+    def updateControlStateLabels(self, interface):
+        if interface.frozen:
+            self.frozenLabelValue.setText("Yes")
+            self.frozenLabelValue.setStyleSheet('color: lightseagreen')
+        else:
+            self.frozenLabelValue.setText("No")
+            self.frozenLabelValue.setStyleSheet('color: firebrick')
+
+        if interface.relaxed:
+            self.relaxedLabelValue.setText("Yes")
+            self.relaxedLabelValue.setStyleSheet('color: lightseagreen')
+        else:
+            self.relaxedLabelValue.setText("No")
+            self.relaxedLabelValue.setStyleSheet('color: firebrick')
+
+
 
     def addProgramUtilities(self):
         self.programUtilities = QWidget()
