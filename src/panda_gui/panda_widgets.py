@@ -2,7 +2,7 @@
 from __future__ import division
 
 from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, \
-QSizePolicy, QGroupBox, QApplication, QStackedWidget, QSlider, QGridLayout, QTabWidget, QLineEdit
+QSizePolicy, QGroupBox, QApplication, QStackedWidget, QSlider, QGridLayout, QTabWidget, QLineEdit, QMessageBox
 from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool, pyqtProperty, QPropertyAnimation
 from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor, QFont, QIcon
 import qt_range_slider.qtRangeSlider as qtRangeSlider
@@ -477,7 +477,20 @@ class EUPWidget(QWidget):
             self.interface.program.dump_to_file(filePath, "testprogram.pkl")
         else:
              self.interface.program.dump_to_file(filePath, str(filename) + '.pkl')   
-        inputField.clear()     
+        inputField.clear()
+        buttonReply = QMessageBox.question(self, 'PyQt5 message', "Load this program for execution?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if buttonReply == QMessageBox.Yes:
+            self.loadNewProgram()
+        
+
+    def loadNewProgram(self):
+        self.interpreter.load_program(self.interface.program)  
+        self.updatePandaWidgets()
+        self.panda_program_widget.clear()
+        for primitive in self.interface.program.primitives:
+            self.panda_program_widget.addPrimitiveWidget(primitive, self.interpreter)
+        self.panda_program_widget.update()    
+        
 
     def addProgramUtilityActions(self):
         self.lowerProgramMenu.saveButton.pressed.connect(self.saveProgram)
