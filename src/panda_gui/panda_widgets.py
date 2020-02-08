@@ -259,6 +259,7 @@ class EUPWidget(QWidget):
         self.updateGUI.connect(self.updatePandaWidgets)  # overall GUI update, triggers the update below
         self.programGUIUpdate.connect(self.panda_program_widget.updateWidget)  # program widget update
         self.robotStateUpdate.connect(self.robot_state_widget.updateWidget)  # robot state widget update
+        self.robotStateUpdate.connect(self.lowerProgramMenu.stateWidget.updateWidget)
         self.tuningGUIUpdate.connect(self.panda_tuning_widget.updateWidget)  # tuning widget update
 
         self.updatePandaWidgets()
