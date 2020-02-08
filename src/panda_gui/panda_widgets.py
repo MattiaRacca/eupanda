@@ -319,7 +319,7 @@ class EUPWidget(QWidget):
         self.checkEUPState()
         self.checkForRelaxedAndFrozen()
         self.preventMultipleApplyForceFingers()
-        self.disableSaveAndReset()
+        self.disableWithEmptyProgram()
         self.lowerProgramMenu.updateControlStateLabels(self.interface)
 
         '''
@@ -462,6 +462,8 @@ class EUPWidget(QWidget):
         for k,v in primitiveActions.items():
             k.pressed.connect(v)
 
+        self.program_creation_buttons.deleteButton.pressed.connect(self.deletePreviousPrimitive)    
+
     def addPrimitive(self, primitive, fn):
         fn()
         self.program_creation_widget.addPrimitiveWidget(primitive, interpreter=self.interpreter)
@@ -492,6 +494,13 @@ class EUPWidget(QWidget):
             self.panda_program_widget.addPrimitiveWidget(primitive, self.interpreter)
         self.panda_program_widget.update()    
         
+    def deletePreviousPrimitive(self):
+        n = len(self.interface.program.primitives) - 1
+        self.interface.program.delete_nth_primitive(n)
+        print(self.interface.program.primitives)
+        self.program_creation_widget.deleteLastPrimitive()
+        self.program_creation_widget.updateWidget()
+        self.updatePandaWidgets()
 
     def addProgramUtilityActions(self):
         self.lowerProgramMenu.saveButton.pressed.connect(self.saveProgram)
@@ -535,13 +544,15 @@ class EUPWidget(QWidget):
             if lastPrimitive.__class__.__name__ == "ApplyForceFingers":
                 self.program_creation_buttons.primitiveButtons[4].setEnabled(False)
 
-    def disableSaveAndReset(self):
+    def disableWithEmptyProgram(self):
         if len(self.interface.program.primitives) == 0:
             self.lowerProgramMenu.saveButton.setEnabled(False)
-            self.lowerProgramMenu.resetButton.setEnabled(False)      
+            self.lowerProgramMenu.resetButton.setEnabled(False)
+            self.program_creation_buttons.deleteButton.setEnabled(False)      
         else:
             self.lowerProgramMenu.saveButton.setEnabled(True)
-            self.lowerProgramMenu.resetButton.setEnabled(True) 
+            self.lowerProgramMenu.resetButton.setEnabled(True)
+            self.program_creation_buttons.deleteButton.setEnabled(True) 
 
 
 
@@ -614,9 +625,25 @@ class ProgramCreationButtons(QWidget):
             button.setIconSize(QSize(80,80))
             self.primitiveButtonLayout.addWidget(button)
             self.primitiveButtons.append(button)
-        self.primitiveVerticalLayout.addWidget(self.primitiveButtonRowWidget)    
+
+        self.deleteButton = QPushButton("Delete\nlast primitive")
+        self.deleteButton.setSizePolicy(QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed))
+        self.deleteButton.setMinimumWidth(150)
+        self.deleteButton.setMinimumHeight(80)
+        self.deleteButton.setFont(EUPWidget.font)
+
+        self.lowerLayoutWidget = QWidget(self)
+        self.lowerLayout = QHBoxLayout(self.lowerLayoutWidget)
+        self.lowerLayout.addWidget(self.deleteButton)
+        self.lowerLayout.setAlignment(Qt.AlignCenter)  
+        self.primitiveVerticalLayout.addWidget(self.primitiveButtonRowWidget)
+        self.primitiveVerticalLayout.addWidget(self.lowerLayoutWidget)
+        #self.primitiveVerticalLayout.addWidget(self.deleteButton)    
         self.layout.addWidget(self.primitiveButtonAreaWidget)    
 
+    def sizeHint(self):
+        return QSize(100, 100)
+        
     def addControlButtons(self):
         self.controlButtonWidget = QWidget(self)
         self.controlButtons = []
@@ -777,7 +804,12 @@ class PandaProgramWidget(QGroupBox):
         self.primitive_widget_list = []
         if interface != None:
             interface.program = pp.PandaProgram("A Panda Program")
-        self.update()        
+        self.update()
+
+    def deleteLastPrimitive(self):
+        primitiveToDelete = self.primitive_widget_list[-1]
+        primitiveToDelete.setParent(None)
+        del self.primitive_widget_list[-1]           
 
     def sizeHint(self):
         return QSize((H_SPACING+PRIMITIVE_WIDTH)*MIN_PRIMITIVE, V_SPACING*3 + PRIMITIVE_HEIGHT)
