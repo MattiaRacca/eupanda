@@ -466,6 +466,12 @@ class EUPWidget(QWidget):
 
     def addPrimitive(self, primitive, fn):
         fn()
+        for item in self.interface.program.primitives:
+            try:
+                print(item.parameter_container.pose)
+            except:
+                print("Error")    
+        #print(self.interface.program.primitives)
         self.program_creation_widget.addPrimitiveWidget(primitive, interpreter=self.interpreter)
         self.program_creation_widget.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*self.interface.program.get_program_length(),
                                         V_SPACING + PRIMITIVE_HEIGHT)
@@ -487,7 +493,10 @@ class EUPWidget(QWidget):
         
 
     def loadNewProgram(self):
-        self.interpreter.load_program(self.interface.program)  
+        self.interpreter.load_program(self.interface.program)
+        self.interpreter.loaded_program.reset_primitives_history()
+        self.state_machine = EUPStateMachine.STARTUP
+        self.last_interface_state = None 
         self.updatePandaWidgets()
         self.panda_program_widget.clear()
         for primitive in self.interface.program.primitives:
@@ -496,11 +505,31 @@ class EUPWidget(QWidget):
         
     def deletePreviousPrimitive(self):
         n = len(self.interface.program.primitives) - 1
+        buttonReply = QMessageBox.question(self, 'PyQt5 message', "Return the robot to previous preconditions?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if buttonReply == QMessageBox.Yes:
+            self.returnPreviousPreconditions(n)
         self.interface.program.delete_nth_primitive(n)
         print(self.interface.program.primitives)
+        for item in self.interface.program.primitives:
+            try:
+                print(item.parameter_container.pose)
+            except:
+                print("Error")
         self.program_creation_widget.deleteLastPrimitive()
         self.program_creation_widget.updateWidget()
         self.updatePandaWidgets()
+
+    def returnPreviousPreconditions(self, primitive_index):
+        revertFunctions = {"MoveToEE": partial(self.interpreter.revert_move_to_ee, primitive_index),
+                           "MoveToContact": partial(self.interpreter.revert_move_to_contact, primitive_index),
+                           "USerSync": partial(self.interpreter.revert_user_sync, primitive_index),
+                           "MoveFingers": partial(self.interpreter.revert_move_fingers, primitive_index),
+                           "ApplyForceFingers": partial(self.interpreter.revert_apply_force_fingers, primitive_index)
+        }
+        name = self.interface.program.primitives[-1].__class__.__name__
+        fn = revertFunctions[name]
+        fn() 
+
 
     def addProgramUtilityActions(self):
         self.lowerProgramMenu.saveButton.pressed.connect(self.saveProgram)

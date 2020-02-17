@@ -9,6 +9,7 @@ from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
 from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest
 from sensor_msgs.msg import JointState
 import numpy as np
+import random
 
 
 class PandaPBDInterface(object):
@@ -73,8 +74,8 @@ class PandaPBDInterface(object):
             if was_relaxed:
                 self.relax()
         else:
-            self.last_pose = np.array([0, 0, 0])
-            self.last_gripper_width = 0.05
+            self.last_pose = np.array([random.random(), random.random(), random.random()])
+            self.last_gripper_width = random.uniform(0, 0.08)
             self.program.save_arm_state(self.last_pose)   
             self.program.save_gripper_state(pp.GripperState(self.last_gripper_width, 0.0))
         self.program.initialized = True         
@@ -103,7 +104,7 @@ class PandaPBDInterface(object):
             return True
 
         else:
-            self.last_pose = np.array([0, 0, 0])
+            self.last_pose = np.array([random.random(), random.random(), random.random()])
             self.relaxed = True
             self.frozen = False    
 
@@ -126,7 +127,7 @@ class PandaPBDInterface(object):
                 self.frozen = False
             return True
         else:
-            self.last_pose = np.array([0, 0, 0])
+            self.last_pose = np.array([random.random(), random.random(), random.random()])
             self.relaxed = True   
             self.frozen = False 
 
@@ -149,7 +150,7 @@ class PandaPBDInterface(object):
                 self.frozen = False
             return True
         else:
-            self.last_pose = np.array([0, 0, 0])
+            self.last_pose = np.array([random.random(), random.random(), random.random()])
             self.relaxed = True
             self.frozen = False     
 
@@ -185,7 +186,7 @@ class PandaPBDInterface(object):
             return True
 
         else:
-            self.last_pose = np.array([0, 0, 0])
+            self.last_pose = np.array([random.random(), random.random(), random.random()])
             self.relaxed = False
             self.frozen = True
 
