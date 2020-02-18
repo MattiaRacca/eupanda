@@ -324,13 +324,8 @@ class EUPWidget(QWidget):
 
         '''
         Notes:
-        - Should initialization button be disabled after program has been initialized?
-        - Since insert X -methods call freeze() if the robot is relaxed, do we only check for self.relaxed?
-        - Is there ever a situation where you would want more than one UserSync in a row? Maybe disable UserSync if previous primitive is UserSync
-        - When self.relaxed == True, do we disable all relax related buttons?
-        - In addition to robot state, should we show the state or self.relaxed and self.frozen on the GUI?
-        - Do we need a separate indicator for relaxed fingers?
-        - Need clarification on freeze and relaxed states
+        - Bug with reverting move fingers after finger grasp
+        - Actions after error recover need to be handled better (relax the robot(?), its possible to end up in a state where initialize program -button is disabled even though the program creation expects it)
         '''
 
         if self.last_interface_state == pp.PandaRobotStatus.ERROR or \
@@ -520,11 +515,11 @@ class EUPWidget(QWidget):
         self.updatePandaWidgets()
 
     def returnPreviousPreconditions(self, primitive_index):
-        revertFunctions = {"MoveToEE": partial(self.interpreter.revert_move_to_ee, primitive_index),
-                           "MoveToContact": partial(self.interpreter.revert_move_to_contact, primitive_index),
-                           "USerSync": partial(self.interpreter.revert_user_sync, primitive_index),
-                           "MoveFingers": partial(self.interpreter.revert_move_fingers, primitive_index),
-                           "ApplyForceFingers": partial(self.interpreter.revert_apply_force_fingers, primitive_index)
+        revertFunctions = {"MoveToEE": partial(self.interpreter.revert_move_to_ee, primitive_index, loadedProgram=False, program=self.interface.program),
+                           "MoveToContact": partial(self.interpreter.revert_move_to_contact, primitive_index, loadedProgram=False, program=self.interface.program),
+                           "UserSync": partial(self.interpreter.revert_user_sync, primitive_index, loadedProgram=False, program=self.interface.program),
+                           "MoveFingers": partial(self.interpreter.revert_move_fingers, primitive_index, loadedProgram=False, program=self.interface.program),
+                           "ApplyForceFingers": partial(self.interpreter.revert_apply_force_fingers, primitive_index, loadedProgram=False, program=self.interface.program)
         }
         name = self.interface.program.primitives[-1].__class__.__name__
         fn = revertFunctions[name]

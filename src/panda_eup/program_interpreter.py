@@ -36,7 +36,6 @@ class PandaProgramInterpreter(object):
         if not self.robotless_debug:
             self.interface_state_subscriber = rospy.Subscriber("/primitive_interface_node/interface_state", Int32,
                                                                self.interface_state_callback)
-
             self.gripper_state_subscriber = rospy.Subscriber("/franka_gripper/joint_states", JointState,
                                                              self.gripper_state_callback)
 
@@ -45,12 +44,10 @@ class PandaProgramInterpreter(object):
             self.move_to_contact_client = actionlib.SimpleActionClient(
                 'primitive_interface_node/move_to_contact_server', MoveToContactAction)
             self.user_sync_client = actionlib.SimpleActionClient('/primitive_interface_node/user_sync_server',
-                                                                 UserSyncAction)
-
+                                                                 UserSyncAction)                                                                                                 
             self.move_to_ee_client.wait_for_server()
             self.move_to_contact_client.wait_for_server()
             self.user_sync_client.wait_for_server()
-
             self.move_fingers_client = rospy.ServiceProxy('/primitive_interface_node/move_fingers', MoveFingers)
             self.apply_force_fingers_client = rospy.ServiceProxy('/primitive_interface_node/apply_force_fingers',
                                                                  ApplyForceFingers)
@@ -73,7 +70,6 @@ class PandaProgramInterpreter(object):
             pp.MoveFingers: self.revert_move_fingers,
             pp.ApplyForceFingers: self.revert_apply_force_fingers
         }
-
     def gripper_state_callback(self, msg):
         last_gripper_width = msg.position[0] + msg.position[1]
         self.last_gripper_width = last_gripper_width if last_gripper_width <= 0.08 else 0.08
@@ -427,9 +423,12 @@ class PandaProgramInterpreter(object):
         return response.success
 
     # REVERT PRIMITIVE CALLBACK
-    def revert_user_sync(self, primitive_index):
+    def revert_user_sync(self, primitive_index, loadedProgram=True, program=None):
         try:
-            pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+            if loadedProgram:
+                pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+            else:
+                pose, gripper_state = program.get_nth_primitive_preconditions(primitive_index)
         except pp.PandaProgramException:
             rospy.logerr('Cannot revert: this primitive does not exist')
             return False
@@ -453,10 +452,13 @@ class PandaProgramInterpreter(object):
         rospy.loginfo('Revert UserSync. S? {} [{}]'.format(str(success), str(state)))
         return success
 
-    def revert_move_to_contact(self, primitive_index):
+    def revert_move_to_contact(self, primitive_index, loadedProgram=True, program=None):
         # TODO: reverting something AFTER a move_to_contact might not be that easy...
         try:
-            pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+            if loadedProgram:
+                pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+            else:
+                pose, gripper_state = program.get_nth_primitive_preconditions(primitive_index)
         except pp.PandaProgramException:
             rospy.logerr('Cannot revert: this primitive does not exist')
             return False
@@ -480,9 +482,12 @@ class PandaProgramInterpreter(object):
         rospy.loginfo('Revert MoveToContact. S? {} [{}]'.format(str(success), str(state)))
         return success
 
-    def revert_move_to_ee(self, primitive_index):
+    def revert_move_to_ee(self, primitive_index, loadedProgram=True, program=None):
         try:
-            pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+            if loadedProgram:
+                pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+            else:
+                pose, gripper_state = program.get_nth_primitive_preconditions(primitive_index)
         except pp.PandaProgramException:
             rospy.logerr('Cannot revert: this primitive does not exist')
             return False
@@ -506,9 +511,12 @@ class PandaProgramInterpreter(object):
         rospy.loginfo('Revert MoveToEE. S? {} [{}]'.format(str(success), str(state)))
         return success
 
-    def revert_move_fingers(self, primitive_index):
+    def revert_move_fingers(self, primitive_index, loadedProgram=True, program=None):
         try:
-            pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+            if loadedProgram:
+                pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+            else:
+                pose, gripper_state = program.get_nth_primitive_preconditions(primitive_index)
         except pp.PandaProgramException:
             rospy.logerr('Cannot revert: this primitive does not exist')
             return False
@@ -550,9 +558,12 @@ class PandaProgramInterpreter(object):
         rospy.loginfo('Revert Move Fingers. S? :' + str(response.success))
         return response.success
 
-    def revert_apply_force_fingers(self, primitive_index):
+    def revert_apply_force_fingers(self, primitive_index, loadedProgram=True, program=None):
         try:
-            pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+            if loadedProgram:
+                pose, gripper_state = self.loaded_program.get_nth_primitive_preconditions(primitive_index)
+            else:
+                pose, gripper_state = program.get_nth_primitive_preconditions(primitive_index)
         except pp.PandaProgramException:
             rospy.logerr('Cannot revert: this primitive does not exist')
             return False
