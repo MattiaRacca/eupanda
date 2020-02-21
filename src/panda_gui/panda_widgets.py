@@ -230,25 +230,25 @@ class EUPWidget(QWidget):
             value[0].setVisible(key is not 'go_to_current_primitive_preconditions')
             value[0].setFont(EUPWidget.font)
 
-        # Put everything together
-        # self.vbox.addWidget(self.panda_program_widget)
-        # self.vbox.addWidget(self.panda_tuning_widget)
-        # self.vbox.addWidget(self.low_buttons)
-        # self.vbox.addWidget(self.tabs)
+        #Add created widgets to run program tab
         self.tabSelection.runProgramTab.layout.addWidget(self.panda_program_widget)
         self.tabSelection.runProgramTab.layout.addWidget(self.panda_tuning_widget)
         self.tabSelection.runProgramTab.layout.addWidget(self.low_buttons)
 
+        # Using PandaProgramWidget again, we create a widget thats lists primitives for the program to be created. 
+        # We also add buttons for program creation and for utilities like saving the program.
         self.program_creation_widget = PandaProgramWidget(self)
         self.program_creation_widget.clear()
         self.program_creation_buttons = ProgramCreationButtons(self)
         self.lowerProgramMenu = LowerProgramMenu(self)
 
+        # Add recently created widgets to create programs tab
         self.tabSelection.createProgramTab.layout.addWidget(self.program_creation_widget)
         self.tabSelection.createProgramTab.layout.addWidget(self.program_creation_buttons)
         self.tabSelection.createProgramTab.layout.addWidget(QHorizontalLine())
         self.tabSelection.createProgramTab.layout.addWidget(self.lowerProgramMenu)
 
+        #Assign actions for each button
         self.addPrimitiveButtonActions()
         self.addProgramUtilityActions()
         self.addControlButtonActions()
@@ -315,11 +315,19 @@ class EUPWidget(QWidget):
         self.tuningGUIUpdate.emit(ready_primitive)
         QApplication.restoreOverrideCursor()
 
-        #self.checkForInitialization()
+        # EUP State is checked and certain buttons are disabled accordingly
         self.checkEUPState()
+        
+        #We disabled frozen- or relaxed-buttons based on which state is active
         self.checkForRelaxedAndFrozen()
+
+        #Disable Finger grasp -primitve if one was added as last primitive (this results in error)
         self.preventMultipleApplyForceFingers()
+
+        #Disable certain buttons if the program is empty such as reseting the program
         self.disableWithEmptyProgram()
+
+        #Labels for the state are updated
         self.lowerProgramMenu.updateControlStateLabels(self.interface)
 
         '''
@@ -434,6 +442,10 @@ class EUPWidget(QWidget):
         self.updatePandaWidgets()
 
     def addControlButtonActions(self):
+        '''
+        These buttons handle the initialization of the robot as well as changnig its state from frozen to relaxed. Here we assign
+        an action for each of them.
+        '''
         controlActions = {
             self.program_creation_buttons.controlButtons[0]: self.interface.initialize_program,
             self.program_creation_buttons.controlButtons[1]: self.interface.freeze,
@@ -447,6 +459,10 @@ class EUPWidget(QWidget):
             k.pressed.connect(self.updatePandaWidgets)  
 
     def addPrimitiveButtonActions(self):
+        '''
+        We assign actions for buttons that are meant for adding new primitives to the program. The button for deleting
+        previous primitive is also handled here.
+        '''
         primitiveActions = {
             self.program_creation_buttons.primitiveButtons[0]: partial(self.addPrimitive, pp.MoveToEE(), self.interface.insert_move_to_ee),
             self.program_creation_buttons.primitiveButtons[1]: partial(self.addPrimitive, pp.MoveToContact(), self.interface.insert_move_to_contact),
@@ -460,13 +476,16 @@ class EUPWidget(QWidget):
         self.program_creation_buttons.deleteButton.pressed.connect(self.deletePreviousPrimitive)    
 
     def addPrimitive(self, primitive, fn):
+        '''
+        Gets primitive and the respective function for adding said primitive to the program as parameters. The primitive is added
+        to the program widget, the geometry of the widget is updated and the UI is updated for button state updates.
+        '''
         fn()
         for item in self.interface.program.primitives:
             try:
                 print(item.parameter_container.pose)
             except:
                 print("Error")    
-        #print(self.interface.program.primitives)
         self.program_creation_widget.addPrimitiveWidget(primitive, interpreter=self.interpreter)
         self.program_creation_widget.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*self.interface.program.get_program_length(),
                                         V_SPACING + PRIMITIVE_HEIGHT)
@@ -474,6 +493,10 @@ class EUPWidget(QWidget):
         self.updatePandaWidgets()
 
     def saveProgram(self):
+        '''
+        The program is saved to resources-folder using the text that was input into the inputfield. The user is then asked
+        whether the recently saved program should be loaded to run program -tab for execution
+        '''
         inputField = self.lowerProgramMenu.inputField
         filename =  inputField.text()
         filePath = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
@@ -488,6 +511,11 @@ class EUPWidget(QWidget):
         
 
     def loadNewProgram(self):
+        '''
+        If the user wants to load the created program to run program -tab, this function is executed. The previous program widget
+        is cleared and updated with primitives of the new program. EUP state machine is reseted to the state STARTUP so we can
+        properly start the program with "Go to start state" -button
+        '''
         self.interpreter.load_program(self.interface.program)
         self.interpreter.loaded_program.reset_primitives_history()
         self.state_machine = EUPStateMachine.STARTUP
@@ -499,22 +527,31 @@ class EUPWidget(QWidget):
         self.panda_program_widget.update()    
         
     def deletePreviousPrimitive(self):
+        '''
+        Deletes previously added primitive and asks the user whether they want to return the robot to the preconditions of the previous primitive.
+        '''
         n = len(self.interface.program.primitives) - 1
         buttonReply = QMessageBox.question(self, 'PyQt5 message', "Return the robot to previous preconditions?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if buttonReply == QMessageBox.Yes:
             self.returnPreviousPreconditions(n)
         self.interface.program.delete_nth_primitive(n)
+        '''
         print(self.interface.program.primitives)
         for item in self.interface.program.primitives:
             try:
                 print(item.parameter_container.pose)
             except:
                 print("Error")
+        '''        
         self.program_creation_widget.deleteLastPrimitive()
         self.program_creation_widget.updateWidget()
         self.updatePandaWidgets()
 
     def returnPreviousPreconditions(self, primitive_index):
+        '''
+        Assign the respective revert-function for each primitive. This function is executed if the user chose to return the robot
+        to previous preconditions after deleting the previous primitive. 
+        '''
         revertFunctions = {"MoveToEE": partial(self.interpreter.revert_move_to_ee, primitive_index, loadedProgram=False, program=self.interface.program),
                            "MoveToContact": partial(self.interpreter.revert_move_to_contact, primitive_index, loadedProgram=False, program=self.interface.program),
                            "UserSync": partial(self.interpreter.revert_user_sync, primitive_index, loadedProgram=False, program=self.interface.program),
@@ -527,11 +564,18 @@ class EUPWidget(QWidget):
 
 
     def addProgramUtilityActions(self):
+        '''
+        We assign reset- and save-buttons to their respective functions.
+        '''
         self.lowerProgramMenu.saveButton.pressed.connect(self.saveProgram)
         self.lowerProgramMenu.resetButton.pressed.connect(partial(self.program_creation_widget.clear, self.interface))
         self.lowerProgramMenu.resetButton.pressed.connect(self.updatePandaWidgets)      
 
     def checkForInitialization(self):
+        '''
+        Disable program creation buttons (both the ones that control the robot and add primitives) except for initialization
+        if the program is not initialized.
+        '''
         for controlButton in self.program_creation_buttons.controlButtons[1:]:
             controlButton.setEnabled(self.interface.program.initialized)
 
@@ -539,6 +583,10 @@ class EUPWidget(QWidget):
             primitiveButton.setEnabled(self.interface.program.initialized) 
 
     def checkForRelaxedAndFrozen(self):
+        '''
+        Depending on the robots state, disable some options to freeze or relax. In addition, prevent the addition
+        of new primitives if the robot is not frozen.
+        '''
         if self.interface.frozen == False:
             for primitiveButton in self.program_creation_buttons.primitiveButtons:
                 primitiveButton.setEnabled(False)
@@ -550,6 +598,9 @@ class EUPWidget(QWidget):
             self.program_creation_buttons.controlButtons[1].setEnabled(False)                    
 
     def checkEUPState(self):
+        '''
+        Disable buttons if robot is busy or in error state.
+        '''
         state = self.state_machine in [EUPStateMachine.STARTUP, EUPStateMachine.OPERATIONAL]
         if state == False:
             rospy.loginfo("Program creation buttons disabled while the state machine is busy or in error state")
@@ -563,12 +614,18 @@ class EUPWidget(QWidget):
         self.checkForInitialization()
 
     def preventMultipleApplyForceFingers(self):
+        '''
+        Prevent the user from applying multiple Finger Grasps in a row, this causes an error.
+        '''
         if len(self.interface.program.primitives) > 0:
             lastPrimitive = self.interface.program.primitives[-1]
             if lastPrimitive.__class__.__name__ == "ApplyForceFingers":
                 self.program_creation_buttons.primitiveButtons[4].setEnabled(False)
 
     def disableWithEmptyProgram(self):
+        '''
+        Disable certain buttons if the program has no primitives.
+        '''
         if len(self.interface.program.primitives) == 0:
             self.lowerProgramMenu.saveButton.setEnabled(False)
             self.lowerProgramMenu.resetButton.setEnabled(False)
@@ -594,6 +651,10 @@ class EUPWidget(QWidget):
 
 
 class TabWidget(QWidget):
+    '''
+    This widget creates the tabs which split the GUI into various different purposes such as running existing programs
+    or creating new ones.
+    '''
 
     def __init__(self, parent):
         super(TabWidget, self).__init__(parent)
@@ -617,6 +678,10 @@ class TabWidget(QWidget):
         self.setLayout(self.layout)
 
 class ProgramCreationButtons(QWidget):
+    '''
+    This widget covers buttons for adding new primitives to the program and also for controlling the robot by for example freezing
+    or relaxing it.
+    '''
     sizePolicy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
 
     def __init__(self, parent):
@@ -631,16 +696,23 @@ class ProgramCreationButtons(QWidget):
         self.addControlButtons()
 
     def addPrimitiveButtons(self):
+        '''
+        Add buttons for adding new primitives. The used icons are found in resources-folder. 
+        '''
         self.primitiveButtonAreaWidget = QWidget(self)
         self.primitiveButtons = []
         self.primitiveVerticalLayout = QVBoxLayout(self.primitiveButtonAreaWidget)
         self.primitiveVerticalLayout.setAlignment(Qt.AlignTop)
+
         label = QLabel("Add primitive for program")
         label.setFont(EUPWidget.font)
+
         self.primitiveVerticalLayout.addWidget(label)
         self.primitiveButtonRowWidget = QWidget(self)
         self.primitiveButtonLayout = QHBoxLayout(self.primitiveButtonRowWidget)
         self.primitiveButtonLayout.setAlignment(Qt.AlignLeft)
+
+        #Iterate through list of all used primitives and create button for each
         primitives = [pp.MoveToEE(), pp.MoveToContact(), pp.UserSync(), pp.MoveFingers(), pp.ApplyForceFingers()]
         for primitive in primitives:
             button = QPushButton('', self)
@@ -650,6 +722,7 @@ class ProgramCreationButtons(QWidget):
             self.primitiveButtonLayout.addWidget(button)
             self.primitiveButtons.append(button)
 
+        #Add button for deleting previous primitive
         self.deleteButton = QPushButton("Delete\nlast primitive")
         self.deleteButton.setSizePolicy(QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed))
         self.deleteButton.setMinimumWidth(150)
@@ -669,6 +742,9 @@ class ProgramCreationButtons(QWidget):
         return QSize(100, 100)
         
     def addControlButtons(self):
+        '''
+        Add buttons for freezing, relaxing the robot.
+        '''
         self.controlButtonWidget = QWidget(self)
         self.controlButtons = []
         self.controlButtonLayout = QGridLayout(self.controlButtonWidget)
@@ -683,6 +759,10 @@ class ProgramCreationButtons(QWidget):
         self.layout.addWidget(self.controlButtonWidget)            
 
 class LowerProgramMenu(QWidget):
+    '''
+    The lower program menu contain buttons for actions like saving program, reseting program, showing current robot state
+    and recovering from error.
+    '''
 
     def __init__(self, parent):
         super(LowerProgramMenu, self).__init__(parent)
@@ -690,7 +770,8 @@ class LowerProgramMenu(QWidget):
 
     def initUI(self):
         self.layout = QHBoxLayout(self)
-        self.layout.setAlignment(Qt.AlignLeft)    
+        self.layout.setAlignment(Qt.AlignLeft)
+        #Reuse same state widget that was used in run program -tab    
         self.stateWidget = PandaStateWidget(self)
         self.layout.addWidget(self.stateWidget)
         self.addControlStateLabels()
@@ -698,6 +779,9 @@ class LowerProgramMenu(QWidget):
         self.addProgramUtilities()
 
     def addControlStateLabels(self):
+        '''
+        Add labels indicating whether the robot is frozen or relaxed.
+        '''
         font=QFont()
         font.setBold(True)
         font.setPointSize(12)
@@ -732,6 +816,9 @@ class LowerProgramMenu(QWidget):
         self.layout.addWidget(self.controlStateWidget) 
 
     def updateControlStateLabels(self, interface):
+        '''
+        Function which is called after the control state is changed.
+        '''
         if interface.frozen:
             self.frozenLabelValue.setText("Yes")
             self.frozenLabelValue.setStyleSheet('color: lightseagreen')
@@ -749,6 +836,9 @@ class LowerProgramMenu(QWidget):
 
 
     def addProgramUtilities(self):
+        '''
+        Add button for saving, reseting and an inputfield so the user can save programs with any name they prefer.
+        '''
         self.programUtilities = QWidget()
         self.utilitiesLayout = QHBoxLayout(self.programUtilities)
         self.saveButton = QPushButton("Save Program")
@@ -823,6 +913,9 @@ class PandaProgramWidget(QGroupBox):
         self.update()
 
     def clear(self, interface=None):
+        '''
+        The program widget is emptied. Primitive widgets are deleted by setting their parent to None.
+        '''
         for primitive_widget in self.primitive_widget_list:
             primitive_widget.setParent(None)
         self.primitive_widget_list = []
@@ -831,6 +924,9 @@ class PandaProgramWidget(QGroupBox):
         self.update()
 
     def deleteLastPrimitive(self):
+        '''
+        Function for deleting the last primitive from the program widget.
+        '''
         primitiveToDelete = self.primitive_widget_list[-1]
         primitiveToDelete.setParent(None)
         del self.primitive_widget_list[-1]           
