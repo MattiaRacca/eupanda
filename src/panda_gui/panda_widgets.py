@@ -256,6 +256,7 @@ class EUPWidget(QWidget):
 
         self.tabSelection.demonstrationsTab.layout.addWidget(self.demo_program_widget)
         self.tabSelection.demonstrationsTab.layout.addWidget(self.demonstrationMenu)
+        self.tabSelection.demonstrationsTab.layout.addWidget(QHorizontalLine())
         self.tabSelection.demonstrationsTab.layout.addWidget(self.lowerDemoMenu)
 
         #Assign actions for each button
@@ -787,6 +788,7 @@ class DemonstrationMenu(QWidget):
         self.buttonWidget = QWidget(self)
         self.buttonLayout = QHBoxLayout(self.buttonWidget)
         self.addButtons()
+        self.layout.addWidget(QVerticalLine())
         self.addGraphWidget()
 
     def addButtons(self):
