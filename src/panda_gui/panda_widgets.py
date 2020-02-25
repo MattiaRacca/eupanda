@@ -27,6 +27,7 @@ from functools import partial
 from enum import Enum
 from datetime import datetime
 import time
+from panda_demos.data_recorder import Datarecorder
 
 # Size of Primitive Widget
 PRIMITIVE_WIDTH = 100
@@ -242,11 +243,20 @@ class EUPWidget(QWidget):
         self.program_creation_buttons = ProgramCreationButtons(self)
         self.lowerProgramMenu = LowerProgramMenu(self)
 
+        self.demo_program_widget = PandaProgramWidget(self)
+        self.demo_program_widget.clear()
+        self.demonstrationMenu = DemonstrationMenu(self)
+        self.lowerDemoMenu = LowerProgramMenu(self)
+
         # Add recently created widgets to create programs tab
         self.tabSelection.createProgramTab.layout.addWidget(self.program_creation_widget)
         self.tabSelection.createProgramTab.layout.addWidget(self.program_creation_buttons)
         self.tabSelection.createProgramTab.layout.addWidget(QHorizontalLine())
         self.tabSelection.createProgramTab.layout.addWidget(self.lowerProgramMenu)
+
+        self.tabSelection.demonstrationsTab.layout.addWidget(self.demo_program_widget)
+        self.tabSelection.demonstrationsTab.layout.addWidget(self.demonstrationMenu)
+        self.tabSelection.demonstrationsTab.layout.addWidget(self.lowerDemoMenu)
 
         #Assign actions for each button
         self.addPrimitiveButtonActions()
@@ -662,17 +672,22 @@ class TabWidget(QWidget):
         self.tabWidget = QTabWidget()
         self.runProgramTab = QWidget()
         self.createProgramTab = QWidget()
+        self.demonstrationsTab = QWidget()
 
         self.tabWidget.addTab(self.runProgramTab,"Run Programs")
         self.tabWidget.addTab(self.createProgramTab,"Create Programs")
+        self.tabWidget.addTab(self.demonstrationsTab,"Demonstrations")
 
         self.runProgramTab.layout = QVBoxLayout(self)
         self.runProgramTab.layout.setAlignment(Qt.AlignTop)
         self.createProgramTab.layout = QVBoxLayout(self)
         self.createProgramTab.layout.setAlignment(Qt.AlignTop)
+        self.demonstrationsTab.layout = QVBoxLayout(self)
+        self.demonstrationsTab.layout.setAlignment(Qt.AlignTop)
 
         self.runProgramTab.setLayout(self.runProgramTab.layout)
         self.createProgramTab.setLayout(self.createProgramTab.layout)
+        self.demonstrationsTab.setLayout(self.demonstrationsTab.layout)
 
         self.layout.addWidget(self.tabWidget)
         self.setLayout(self.layout)
@@ -757,6 +772,56 @@ class ProgramCreationButtons(QWidget):
             self.controlButtonLayout.addWidget(button, i/3, i % 3)
             self.controlButtons.append(button)
         self.layout.addWidget(self.controlButtonWidget)            
+
+class DemonstrationMenu(QWidget):
+
+    def __init__(self, parent):
+        super(DemonstrationMenu, self).__init__(parent)
+        self.initUI()
+        self.recording = False
+        self.recordingThreadpool = QThreadPool()
+
+    def initUI(self):
+        self.layout = QHBoxLayout(self)
+        self.layout.setAlignment(Qt.AlignLeft)
+        self.buttonWidget = QWidget(self)
+        self.buttonLayout = QHBoxLayout(self.buttonWidget)
+        self.addButtons()
+        self.addGraphWidget()
+
+    def addButtons(self):
+        self.demoButtonWidget = QWidget(self)
+        self.demoButtons = []
+        labels = ["Start recording", "Stop recording", "Start demonstration", "Stop demonstration"]
+        for label in labels:
+            button = QExpandingPushButton(label, self)
+            button.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed))
+            button.setFont(EUPWidget.font)
+            self.buttonLayout.addWidget(button)
+            self.demoButtons.append(button)
+        self.demoButtons[2].setVisible(False)
+        self.demoButtons[3].setVisible(False)
+        self.demoButtons[0].pressed.connect(self.startRecording)
+        self.demoButtons[1].pressed.connect(self.stopRecording)         
+        self.layout.addWidget(self.buttonWidget)  
+
+    def addGraphWidget(self):
+        self.datarecorder = Datarecorder(self.parent().interface)
+        self.graphwidget = self.datarecorder.createGraph()
+        self.graphwidget.setBackground('w')
+        testVelocities = self.datarecorder.ee_velocities
+        testTimes = self.datarecorder.time_axis
+        self.graphwidget.setLabel('left', 'Velocity (m/s)', color='black', size=20)
+        self.graphwidget.setLabel('bottom', 'Time (s)', color='black', size=20)
+        self.dataLine = self.graphwidget.plot(testTimes, testVelocities)
+        self.layout.addWidget(self.graphwidget)
+
+    def startRecording(self):
+        self.datarecorder.startRecording(self.dataLine, self.graphwidget)
+
+    def stopRecording(self):
+        self.datarecorder.stopRecording()    
+        
 
 class LowerProgramMenu(QWidget):
     '''
