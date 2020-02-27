@@ -12,6 +12,7 @@ class Datarecorder():
     def __init__(self, interface):
         self.ee_velocities = []
         self.gripper_velocities = []
+        self.gripper_states = []
         self.trajectory_points = []
         self.time_axis = []
         self.recording = False
@@ -65,6 +66,8 @@ class Datarecorder():
                 self.poseRequest()
                 dist = self.calculateDistance()
                 newVelocity = dist/self.timeStep
+                gripperstate = self.last_gripper_width
+                self.gripper_states.append(gripperstate)
             else:    
                 newVelocity = random.uniform(0, 0.25)
             self.ee_velocities.append(newVelocity)
