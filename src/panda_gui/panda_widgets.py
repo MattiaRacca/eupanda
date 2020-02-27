@@ -7,6 +7,7 @@ from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QT
 from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor, QFont, QIcon
 import qt_range_slider.qtRangeSlider as qtRangeSlider
 from panda_gui.gui_elements import QExpandingPushButton, QVerticalLine, FixNumberTicksSlider, QHorizontalLine
+import pyqtgraph as pg
 
 import rospkg
 import rospy
@@ -778,9 +779,11 @@ class DemonstrationMenu(QWidget):
 
     def __init__(self, parent):
         super(DemonstrationMenu, self).__init__(parent)
+        self.datarecorder = Datarecorder(self.parent().interface)
         self.initUI()
         self.recording = False
         self.recordingThreadpool = QThreadPool()
+        
 
     def initUI(self):
         self.layout = QHBoxLayout(self)
@@ -790,36 +793,63 @@ class DemonstrationMenu(QWidget):
         self.addButtons()
         self.layout.addWidget(QVerticalLine())
         self.addGraphWidget()
+        self.addGraphFunctionality()
+        self.addButtonActions()
 
     def addButtons(self):
         self.demoButtonWidget = QWidget(self)
         self.demoButtons = []
-        labels = ["Start recording", "Stop recording", "Start demonstration", "Stop demonstration"]
+        labels = ["Start recording", "Stop recording", "Clear plot", "Start demonstration", "Stop demonstration"]
         for label in labels:
             button = QExpandingPushButton(label, self)
             button.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed))
             button.setFont(EUPWidget.font)
             self.buttonLayout.addWidget(button)
             self.demoButtons.append(button)
-        self.demoButtons[2].setVisible(False)
-        self.demoButtons[3].setVisible(False)
-        self.demoButtons[0].pressed.connect(self.startRecording)
-        self.demoButtons[1].pressed.connect(self.stopRecording)         
+        print(self.demoButtons)             
         self.layout.addWidget(self.buttonWidget)  
 
+    def addButtonActions(self):
+        self.demoButtons[3].setVisible(False)
+        self.demoButtons[4].setVisible(False)
+        self.demoButtons[0].pressed.connect(self.startRecording)
+        self.demoButtons[1].pressed.connect(self.stopRecording) 
+        self.demoButtons[2].pressed.connect(self.clearPlot)
+
     def addGraphWidget(self):
-        self.datarecorder = Datarecorder(self.parent().interface)
-        self.graphwidget = self.datarecorder.createGraph()
-        self.graphwidget.setBackground('w')
-        testVelocities = self.datarecorder.ee_velocities
-        testTimes = self.datarecorder.time_axis
-        self.graphwidget.setLabel('left', 'Velocity (m/s)', color='black', size=20)
-        self.graphwidget.setLabel('bottom', 'Time (s)', color='black', size=20)
-        self.dataLine = self.graphwidget.plot(testTimes, testVelocities)
+        self.graphwidget = QWidget(self)
+        self.graphlayout = QVBoxLayout(self.graphwidget)
+
+        self.velocitygraphwidget = pg.PlotWidget(self)
+        self.velocitygraphwidget.setBackground('w')
+        self.velocitygraphwidget.setLabel('left', 'Velocity (m/s)', color='black', size=20)
+        self.velocitygraphwidget.setLabel('bottom', 'Time (s)', color='black', size=20)
+
+        self.grippergraphwidget = pg.PlotWidget(self)
+        self.grippergraphwidget.setBackground('w')
+        self.grippergraphwidget.setLabel('left', 'Gripper Velocity (m/s)', color='black', size=20)
+        self.grippergraphwidget.setLabel('bottom', 'Time (s)', color='black', size=20)
+
         self.layout.addWidget(self.graphwidget)
 
+    def clearPlot(self):
+        self.datarecorder.clearPlot([self.velocitygraphwidget, self.grippergraphwidget])
+        self.addGraphFunctionality()
+
+    def addGraphFunctionality(self):
+        self.times = self.datarecorder.time_axis
+        
+        self.velocities = self.datarecorder.ee_velocities
+        self.dataLine_v = self.velocitygraphwidget.plot(self.times, self.velocities)
+        self.graphlayout.addWidget(self.velocitygraphwidget)
+
+        self.gripperVelocities = self.datarecorder.gripper_velocities
+        self.dataLine_g = self.grippergraphwidget.plot(self.times, self.gripperVelocities)
+        self.graphlayout.addWidget(self.grippergraphwidget)
+
+
     def startRecording(self):
-        self.datarecorder.startRecording(self.dataLine, self.graphwidget)
+        self.datarecorder.startRecording(self.dataLine_v, self.dataLine_g)
 
     def stopRecording(self):
         self.datarecorder.stopRecording()    
