@@ -5,6 +5,8 @@ from time import sleep
 from panda_pbd.srv import EnableTeaching, EnableTeachingRequest
 import rospy
 import numpy as np
+import pickle
+import os
 
 
 class Datarecorder():
@@ -16,12 +18,12 @@ class Datarecorder():
         self.trajectory_points = []
         self.time_axis = []
         self.recording = False
-        self.recordingThreadpool=QThreadPool()
+        self.recordingThreadpool = QThreadPool()
         self.interface = interface
         self.timeStep = 0.1
         self.pose = None
         self.gripperstate = None
-        
+        self.data = {}
 
     def startRecording(self, dataLine_v, dataLine_g):
         self.worker = RecordingWorker(self.recordData, dataLine_v, dataLine_g)
@@ -29,6 +31,15 @@ class Datarecorder():
 
     def stopRecording(self):
         self.recording = False 
+
+    def saveData(self, path, filename):
+        self.data["ee_velocities"] = self.ee_velocities
+        self.data["gripper_velocities"] = self.gripper_velocities
+        self.data["trajectory_points"] = self.trajectory_points
+        self.data["gripper_states"] = self.gripper_states
+        self.data["time_axis"] = self.time_axis
+        with open(os.path.join(os.path.expanduser(path), filename), 'wb') as f:
+            pickle.dump(self.data, f)
 
     def poseRequest(self):
         req = EnableTeachingRequest()
@@ -48,7 +59,6 @@ class Datarecorder():
         v = abs(self.gripperstate - self.previous_gripper_state)/self.timeStep
         return v
 
-
     def clearPlot(self, graphs):
         for graph in graphs:
             graph.clear()
@@ -64,7 +74,6 @@ class Datarecorder():
         a = np.array([self.pose.pose.position.x, self.pose.pose.position.y, self.pose.pose.position.z])
         b = np.array([self.previous_pose.pose.position.x, self.previous_pose.pose.position.y, self.previous_pose.pose.position.z])
         dist = np.linalg.norm(a - b)
-        print(a, b, dist)
         return dist
 
     def recordData(self, dataLine_v, dataLine_g):
@@ -94,6 +103,7 @@ class Datarecorder():
                     gripperVelocity = 0                    
             else:    
                 newVelocity = random.uniform(0, 0.25)
+                gripperVelocity = random.uniform(0, 0.05)
             self.ee_velocities.append(newVelocity)
             self.gripper_velocities.append(gripperVelocity)
             self.time_axis.append(currTime)

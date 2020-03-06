@@ -248,6 +248,10 @@ class EUPWidget(QWidget):
         self.demo_program_widget.clear()
         self.demonstrationMenu = DemonstrationMenu(self)
         self.lowerDemoMenu = LowerProgramMenu(self)
+        self.demonstrationMenu.lowerDemoMenu = self.lowerDemoMenu
+        self.lowerDemoMenu.saveButton.setText("Save Data")
+        self.lowerDemoMenu.resetButton.setVisible(False)
+        self.lowerDemoMenu.saveButton.pressed.connect(self.demonstrationMenu.saveData)
 
         # Add recently created widgets to create programs tab
         self.tabSelection.createProgramTab.layout.addWidget(self.program_creation_widget)
@@ -522,6 +526,7 @@ class EUPWidget(QWidget):
             self.loadNewProgram()
         
 
+    
     def loadNewProgram(self):
         '''
         If the user wants to load the created program to run program -tab, this function is executed. The previous program widget
@@ -784,7 +789,6 @@ class DemonstrationMenu(QWidget):
         self.recording = False
         self.recordingThreadpool = QThreadPool()
         
-
     def initUI(self):
         self.layout = QHBoxLayout(self)
         self.layout.setAlignment(Qt.AlignLeft)
@@ -808,6 +812,13 @@ class DemonstrationMenu(QWidget):
             self.demoButtons.append(button)
         print(self.demoButtons)             
         self.layout.addWidget(self.buttonWidget)  
+
+    def saveData(self):
+        inputfield = self.lowerDemoMenu.inputField
+        filename = inputfield.text() + '.pkl'
+        path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
+        self.datarecorder.saveData(path, filename)
+        inputfield.clear()
 
     def addButtonActions(self):
         self.demoButtons[3].setVisible(False)
