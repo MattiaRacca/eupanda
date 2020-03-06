@@ -20,7 +20,7 @@ class Datarecorder():
         self.recording = False
         self.recordingThreadpool = QThreadPool()
         self.interface = interface
-        self.timeStep = 0.1
+        self.timeStep = 0.005
         self.pose = None
         self.gripperstate = None
         self.data = {}
@@ -89,6 +89,7 @@ class Datarecorder():
         else:
             currTime = self.time_axis[-1]    
         while self.recording:
+            #print(self.interface.robotless_debug)
             if not self.interface.robotless_debug:
                 self.trajectory_points.append(self.pose)
                 self.gripper_states.append(self.gripperstate)
