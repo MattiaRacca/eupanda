@@ -41,6 +41,11 @@ class Datarecorder():
         with open(os.path.join(os.path.expanduser(path), filename), 'wb') as f:
             pickle.dump(self.data, f)
 
+    def loadData(self, path, filename):
+        with open(os.path.join(os.path.expanduser(path), filename), 'rb') as f:
+            loaded_program = pickle.load(f)
+            return loaded_program        
+
     def poseRequest(self):
         req = EnableTeachingRequest()
         req.ft_threshold_multiplier = self.interface.default_parameters['kinesthestic_ft_threshold']
