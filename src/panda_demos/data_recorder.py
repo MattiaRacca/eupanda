@@ -107,7 +107,7 @@ class Datarecorder():
         self.previous_gripper_state = self.gripperstate
         self.gripperstate = self.interface.last_gripper_width
         if len(self.time_axis_gripper) > 1:
-            v = abs(self.gripperstate - self.previous_gripper_state)/abs(self.time_axis_gripper[-1] - self.time_axis_gripper[-2])
+            v = (self.gripperstate - self.previous_gripper_state)/abs(self.time_axis_gripper[-1] - self.time_axis_gripper[-2])
         else:
             v = 0
         self.gripper_velocities.append(v)        
