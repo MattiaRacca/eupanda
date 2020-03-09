@@ -496,12 +496,7 @@ class EUPWidget(QWidget):
         Gets primitive and the respective function for adding said primitive to the program as parameters. The primitive is added
         to the program widget, the geometry of the widget is updated and the UI is updated for button state updates.
         '''
-        fn()
-        for item in self.interface.program.primitives:
-            try:
-                print(item.parameter_container.pose)
-            except:
-                print("Error")    
+        fn()   
         self.program_creation_widget.addPrimitiveWidget(primitive, interpreter=self.interpreter)
         self.program_creation_widget.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*self.interface.program.get_program_length(),
                                         V_SPACING + PRIMITIVE_HEIGHT)
@@ -809,8 +804,7 @@ class DemonstrationMenu(QWidget):
             button.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed))
             button.setFont(EUPWidget.font)
             self.buttonLayout.addWidget(button)
-            self.demoButtons.append(button)
-        print(self.demoButtons)             
+            self.demoButtons.append(button)            
         self.layout.addWidget(self.buttonWidget)  
 
     def saveData(self):
@@ -848,14 +842,15 @@ class DemonstrationMenu(QWidget):
         self.addGraphFunctionality()
 
     def addGraphFunctionality(self):
-        self.times = self.datarecorder.time_axis
+        self.times_ee = self.datarecorder.time_axis_ee
+        self.times_gripper = self.datarecorder.time_axis_gripper
         
         self.velocities = self.datarecorder.ee_velocities
-        self.dataLine_v = self.velocitygraphwidget.plot(self.times, self.velocities)
+        self.dataLine_v = self.velocitygraphwidget.plot(self.times_ee, self.velocities)
         self.graphlayout.addWidget(self.velocitygraphwidget)
 
         self.gripperVelocities = self.datarecorder.gripper_velocities
-        self.dataLine_g = self.grippergraphwidget.plot(self.times, self.gripperVelocities)
+        self.dataLine_g = self.grippergraphwidget.plot(self.times_gripper, self.gripperVelocities)
         self.graphlayout.addWidget(self.grippergraphwidget)
 
 
