@@ -810,7 +810,7 @@ class DemonstrationMenu(QWidget):
     def saveData(self):
         inputfield = self.lowerDemoMenu.inputField
         filename = inputfield.text() + '.pkl'
-        path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
+        path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources', 'data')
         self.datarecorder.saveData(path, filename)
         inputfield.clear()
 

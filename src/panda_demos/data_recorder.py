@@ -22,7 +22,7 @@ class Datarecorder():
         self.recording = False
         self.recordingThreadpool = QThreadPool()
         self.interface = interface
-        self.rate = 50
+        self.rate = 25
         self.timeStep = rospy.Rate(self.rate)
         self.pose = None
         self.gripperstate = None
@@ -53,17 +53,18 @@ class Datarecorder():
 
     def getListenerValues(self):
         try:
-            trans, rot = self.listener.lookUpTransform("panda_link0", "panda_K", rospy.Time(0)) #Use panda_K or panda_EE for the target frame
+            trans, rot = self.listener.lookupTransform("panda_link0", "panda_K", rospy.Time(0)) #Use panda_K or panda_EE for the target frame
             traj_time = rospy.Time.now()
-            linear, angular = self.listener.lookUpTwist("panda_link0", "panda_K", rospy.Time(0))
+            linear, angular = self.listener.lookupTwist("panda_link0", "panda_K", rospy.Time(0), rospy.Duration(1.0/self.rate))
             vel_time = rospy.Time.now()
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             print("Could not get tf listener values")    
 
         self.trajectory_points.append((trans, rot))
         self.pose = trans
-        self.ee_velocities.append(linear)
-        self.time_axis_ee.append(vel_time)    
+        vel = np.sqrt(np.square(linear[0]) + np.square(linear[1]) + np.square(linear[2])) 
+        self.ee_velocities.append(vel)
+        self.time_axis_ee.append(vel_time.to_sec() - self.start_time.to_sec())    
 
     '''
     def poseRequest(self):
@@ -111,9 +112,10 @@ class Datarecorder():
             v = 0
         self.gripper_velocities.append(v)        
         gripper_time = rospy.Time.now()
-        self.time_axis_gripper.append(gripper_time)
+        self.time_axis_gripper.append(gripper_time.to_sec() - self.start_time.to_sec())
 
     def recordData(self, dataLine_v, dataLine_g):
+        self.start_time = rospy.Time.now()
         self.interface.relax()
         self.recording = True
         if len(self.time_axis_ee) == 0:
