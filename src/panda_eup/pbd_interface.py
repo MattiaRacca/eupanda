@@ -83,6 +83,7 @@ class PandaPBDInterface(object):
     def gripper_state_callback(self, msg):
         last_gripper_width = msg.position[0] + msg.position[1]
         self.last_gripper_width = last_gripper_width if last_gripper_width <= 0.08 else 0.08
+        self.last_gripper_velocity = msg.velocity
 
     def relax(self):
         if not self.robotless_debug:

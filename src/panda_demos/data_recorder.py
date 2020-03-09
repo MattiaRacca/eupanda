@@ -22,8 +22,12 @@ class Datarecorder():
         self.recording = False
         self.recordingThreadpool = QThreadPool()
         self.interface = interface
+<<<<<<< HEAD
         self.rate = 50
         self.timeStep = rospy.Rate(self.rate)
+=======
+        self.timeStep = 0.005
+>>>>>>> c1eda9f909969ba8f8d463803d46c3f72092f2a6
         self.pose = None
         self.gripperstate = None
         self.data = {}
@@ -121,6 +125,7 @@ class Datarecorder():
         else:
             currTime = self.time_axis_ee[-1]    
         while self.recording:
+            #print(self.interface.robotless_debug)
             if not self.interface.robotless_debug:
                 self.gripper_states.append(self.gripperstate)
                 self.getListenerValues()
