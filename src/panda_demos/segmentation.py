@@ -1,32 +1,122 @@
 import numpy as np
-#from scipy.optimize import minimize
+from scipy.optimize import minimize
+import os
+import pickle
 
 class Segmentation():
 
     def __init__(self):
         self.trajectory_points = []
+        self.points_to_segment = []
+        self.time_axis = []
         self.timeStep = 0.1
-        self.normFactor = 3
-        self.penalizingFactor = 10000
+        self.normFactor = 0.2
+        self.penalizingFactor = 10000.0
+        self.L_min = 0.15
+        self.M_min = 10
+        self.d = 0.02
 
     def costFunction(self, a_j):
-        t_ij = a_j[0:3].dot(traj_points - a_j[3:6])
-        prediction = a_j[0:3]*t_ij + a_j[3:6]
-        error = np.linalg.norm(traj_points - prediction)
-        value =  1 - np.exp(np.power((-1)*error/self.normFactor, 2))
-        return sum(sum(value) + self.penalizingFactor)
+        t_ij = (self.points_to_segment - a_j[3:6]).dot(a_j[0:3])
+        size = t_ij.size
+        t_ij = np.reshape(t_ij, (size, 1))
+        prediction = np.dot(t_ij, a_j[0:3].reshape(1, 3)) + a_j[3:6]
+        error = np.linalg.norm(self.points_to_segment[1:] - prediction[:-1], axis=1)
+        value =  1 - np.power(np.exp((-1)*error/self.normFactor), 2)
+        return sum(value) + self.penalizingFactor
+
+    def optimize(self, a_j):
+        result = minimize(self.costFunction, a_j, method='nelder-mead')
+        sample = self.costFunction(np.array(result.x))
+        #sampleprediction = np.dot((self.trajectory_points[100] - result.x[3:6]).dot(result.x[0:3]), result.x[0:3]) + result.x[3:6]
+        #print(sample)
+        #print(self.trajectory_points[100], self.trajectory_points[101], sampleprediction)
+        return result.x
+
+    def downSamplePoints(self):
+        self.downSamplePoints = []
+        self.downSampleIndexes = []
+        self.downSamplePoints.append(self.trajectory_points[0])
+        self.downSampleIndexes.append(0)
+        count = 1
+        for point in self.trajectory_points[1:]:
+            dist = np.linalg.norm(self.downSamplePoints[-1] - point)
+            if 0.95*self.d < dist and dist > 1.05*self.d:
+                self.downSamplePoints.append(point)
+                self.downSampleIndexes.append(count)
+            count += 1    
+        self.trajectory_points = self.downSamplePoints   
 
     def createSegments(self):
         j = 1
         j_start = 1
         j_end = len(self.trajectory_points)
-        L_min = 0.10
-        M_min = 0.05
+        L_c = 0 #cumulative value of L
+        breakpoints = []
+        start, end = None, None
+        done = False
+        self.points_to_segment = self.trajectory_points
 
-        self.traj_points = np.transpose(np.array(self.trajectory_points))
-        #p^(t_ij, a_j) = a_1j*t_ij + a_0j
-        #t_ij = a_1j*(p_i - a_0j)
-        # => p^(t_ij, a_j) = a_1j^2*p_i - a_1j^2*a_0j + a_0j
-        # => nextPoint = a_1j^2*(currentPoint - a_0j) + a_0j
-        # 5 = x^2(3 - y) + y
         a_j_init = np.array([1, 1, 1, 1, 1, 1])
+        a_j = self.optimize(a_j_init)
+        
+        while done == False:
+            for i in range(j, j_end):
+                prediction = np.dot((self.trajectory_points[i - 1] - a_j[3:6]).dot(a_j[0:3]), a_j[0:3]) + a_j[3:6]
+                deviation = np.linalg.norm(self.trajectory_points[i] - prediction)
+                if deviation > self.normFactor and start == None:
+                    start = i
+                elif deviation < self.normFactor and start != None:
+                    end = i
+                    if (end - start) > (self.L_min/self.d):
+                        break
+                    else:
+                        start = None
+
+            if start != None:
+                breakpoints.append(start)
+                self.points_to_segment = self.points_to_segment[(start + 1):]
+                if len(self.points_to_segment) < 2:
+                    done = True
+                    break
+                a_j = self.optimize(a_j)
+                j = start
+            else:
+                done = True    
+        print(breakpoints)                   
+        '''                
+                L_c += deviation
+                if i == j_end - 1:
+                    done = True
+                if L_c > self.L_min or deviation > self.M_min:
+                    break        
+            breakpoints.append(i)
+            L_c = 0
+            self.points_to_segment = self.points_to_segment[i:]
+            if len(self.points_to_segment) > 1:
+                a_j = self.optimize(a_j)
+            else:
+                done = True    
+            j = i
+           
+        for value in breakpoints:
+            print(value, self.time_axis[value]) 
+        '''         
+
+        
+    def loadData(self, path, filename):
+        with open(os.path.join(os.path.expanduser(path), filename), 'rb') as f:
+            loaded_program = pickle.load(f)
+            return loaded_program 
+
+
+if __name__ == '__main__':
+    seg = Segmentation()
+    data = seg.loadData('~/Thesis/src/eupanda/resources/data', '4points_new.pkl')
+    #print(data["time_axis_ee"][30:35])
+    seg.time_axis = data["time_axis_ee"]
+    traj_points = [item[0] for item in data["trajectory_points"]]
+    seg.trajectory_points = np.array(traj_points)
+    seg.downSamplePoints()
+    #seg.optimize(np.array([1, 1, 1, 1, 1, 1])) 
+    seg.createSegments() 

@@ -115,13 +115,13 @@ class Datarecorder():
         self.time_axis_gripper.append(gripper_time.to_sec() - self.start_time.to_sec())
 
     def recordData(self, dataLine_v, dataLine_g):
-        self.start_time = rospy.Time.now()
         self.interface.relax()
         self.recording = True
         if len(self.time_axis_ee) == 0:
             currTime = 0.0
         else:
-            currTime = self.time_axis_ee[-1]    
+            currTime = self.time_axis_ee[-1]
+        self.start_time = rospy.Time.now()        
         while self.recording:
             #print(self.interface.robotless_debug)
             if not self.interface.robotless_debug:
