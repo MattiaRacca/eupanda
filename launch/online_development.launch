@@ -4,7 +4,8 @@
     <param name="range_sliders" type="bool" value="false" />
 
     <param name="program_path" type="string" value="$(find panda_pbd)/resources/" />
-    <param name="program_name" type="string" value="handover.pkl" />
+    <param name="program_name" type="string" value="testpickandplace.pkl" />
+    <param name="robotless_debug" type="bool" value="false" />
 
     <param name="program_logging_path" type="string" value="$(find panda_pbd)/resources/logs/" />
 
