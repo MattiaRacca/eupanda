@@ -571,6 +571,7 @@ class EUPWidget(QWidget):
         Disable program creation buttons (both the ones that control the robot and add primitives) except for initialization
         if the program is not initialized.
         '''
+        self.program_creation_buttons.controlButtons[0].setEnabled(1 - self.interface.program.initialized)
         for controlButton in self.program_creation_buttons.controlButtons[1:]:
             controlButton.setEnabled(self.interface.program.initialized)
 
