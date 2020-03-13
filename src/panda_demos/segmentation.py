@@ -10,7 +10,7 @@ class Segmentation():
         self.points_to_segment = []
         self.time_axis = []
         self.timeStep = 0.1
-        self.normFactor = 0.2
+        self.normFactor = 0.20
         self.penalizingFactor = 10000.0
         self.L_min = 0.15
         self.M_min = 10
@@ -28,9 +28,6 @@ class Segmentation():
     def optimize(self, a_j):
         result = minimize(self.costFunction, a_j, method='nelder-mead')
         sample = self.costFunction(np.array(result.x))
-        #sampleprediction = np.dot((self.trajectory_points[100] - result.x[3:6]).dot(result.x[0:3]), result.x[0:3]) + result.x[3:6]
-        #print(sample)
-        #print(self.trajectory_points[100], self.trajectory_points[101], sampleprediction)
         return result.x
 
     def downSamplePoints(self):
@@ -64,6 +61,7 @@ class Segmentation():
             for i in range(j, j_end):
                 prediction = np.dot((self.trajectory_points[i - 1] - a_j[3:6]).dot(a_j[0:3]), a_j[0:3]) + a_j[3:6]
                 deviation = np.linalg.norm(self.trajectory_points[i] - prediction)
+                print(deviation, i)
                 if deviation > self.normFactor and start == None:
                     start = i
                 elif deviation < self.normFactor and start != None:
@@ -75,15 +73,18 @@ class Segmentation():
 
             if start != None:
                 breakpoints.append(start)
+                print(breakpoints)
                 self.points_to_segment = self.points_to_segment[(start + 1):]
                 if len(self.points_to_segment) < 2:
                     done = True
                     break
-                a_j = self.optimize(a_j)
-                j = start
+                a_j = self.optimize(a_j_init)
+                j = start + 1
+                start = None
             else:
                 done = True    
-        print(breakpoints)                   
+        for value in breakpoints:
+            print(value, self.time_axis[self.downSampleIndexes[value]])                  
         '''                
                 L_c += deviation
                 if i == j_end - 1:
