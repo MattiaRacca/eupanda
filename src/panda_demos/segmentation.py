@@ -11,10 +11,11 @@ class Segmentation():
         self.time_axis = []
         self.timeStep = 0.1
         self.normFactor = 0.20
+        self.devFactor = 0.05
         self.penalizingFactor = 10000.0
         self.L_min = 0.15
         self.M_min = 10
-        self.d = 0.02
+        self.d = 0.005
 
     def costFunction(self, a_j):
         t_ij = (self.points_to_segment - a_j[3:6]).dot(a_j[0:3])
@@ -42,7 +43,7 @@ class Segmentation():
                 self.downSamplePoints.append(point)
                 self.downSampleIndexes.append(count)
             count += 1    
-        self.trajectory_points = self.downSamplePoints   
+        self.trajectory_points = self.downSamplePoints 
 
     def createSegments(self):
         j = 1
@@ -62,14 +63,16 @@ class Segmentation():
                 prediction = np.dot((self.trajectory_points[i - 1] - a_j[3:6]).dot(a_j[0:3]), a_j[0:3]) + a_j[3:6]
                 deviation = np.linalg.norm(self.trajectory_points[i] - prediction)
                 print(deviation, i)
-                if deviation > self.normFactor and start == None:
+                if deviation > self.devFactor and start == None:
                     start = i
-                elif deviation < self.normFactor and start != None:
+                elif deviation < self.devFactor and start != None:
                     end = i
                     if (end - start) > (self.L_min/self.d):
                         break
                     else:
                         start = None
+                if i == j_end - 1:
+                    end = None        
 
             if start != None:
                 breakpoints.append(start)
@@ -80,6 +83,7 @@ class Segmentation():
                 a_j = self.optimize(a_j_init)
                 j = start + 1
                 start = None
+                end = None
             else:
                 done = True    
         for value in breakpoints:
@@ -112,7 +116,7 @@ class Segmentation():
 
 if __name__ == '__main__':
     seg = Segmentation()
-    data = seg.loadData('~/Thesis/src/eupanda/resources/data', '4points_new.pkl')
+    data = seg.loadData('~/Thesis/src/eupanda/resources/data', '4_motions_100hz.pkl')
     #print(data["time_axis_ee"][30:35])
     seg.time_axis = data["time_axis_ee"]
     traj_points = [item[0] for item in data["trajectory_points"]]
