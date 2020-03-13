@@ -22,7 +22,7 @@ class Datarecorder():
         self.recording = False
         self.recordingThreadpool = QThreadPool()
         self.interface = interface
-        self.rate = 25
+        self.rate = 100
         self.timeStep = rospy.Rate(self.rate)
         self.pose = None
         self.gripperstate = None
