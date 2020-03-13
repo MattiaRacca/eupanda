@@ -480,12 +480,7 @@ class EUPWidget(QWidget):
         Gets primitive and the respective function for adding said primitive to the program as parameters. The primitive is added
         to the program widget, the geometry of the widget is updated and the UI is updated for button state updates.
         '''
-        fn()
-        for item in self.interface.program.primitives:
-            try:
-                print(item.parameter_container.pose)
-            except:
-                print("Error")    
+        fn()  
         self.program_creation_widget.addPrimitiveWidget(primitive, interpreter=self.interpreter)
         self.program_creation_widget.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*self.interface.program.get_program_length(),
                                         V_SPACING + PRIMITIVE_HEIGHT)
@@ -983,6 +978,7 @@ class PandaStateWidget(QGroupBox):
     def sendErrorRecover(self):
         msg = ErrorRecoveryActionGoal()
         self.error_recover_publisher.publish(msg)
+        
 
     def updateWidget(self, status):
         self.status_label.setText(status.name)
