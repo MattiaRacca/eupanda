@@ -73,7 +73,6 @@ class Segmentation():
 
             if start != None:
                 breakpoints.append(start)
-                print(breakpoints)
                 self.points_to_segment = self.points_to_segment[(start + 1):]
                 if len(self.points_to_segment) < 2:
                     done = True
