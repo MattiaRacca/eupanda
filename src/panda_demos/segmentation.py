@@ -11,11 +11,11 @@ class Segmentation():
         self.time_axis = []
         self.timeStep = 0.1
         self.normFactor = 0.20
-        self.devFactor = 0.05
+        self.devFactor = 0.10
         self.penalizingFactor = 10000.0
         self.L_min = 0.15
         self.M_min = 10
-        self.d = 0.005
+        self.d = 0.002
 
     def costFunction(self, a_j):
         t_ij = (self.points_to_segment - a_j[3:6]).dot(a_j[0:3])
@@ -62,12 +62,12 @@ class Segmentation():
             for i in range(j, j_end):
                 prediction = np.dot((self.trajectory_points[i - 1] - a_j[3:6]).dot(a_j[0:3]), a_j[0:3]) + a_j[3:6]
                 deviation = np.linalg.norm(self.trajectory_points[i] - prediction)
-                print(deviation, i)
+                print(deviation, i, self.time_axis[self.downSampleIndexes[i]])
                 if deviation > self.devFactor and start == None:
                     start = i
                 elif deviation < self.devFactor and start != None:
                     end = i
-                    if (end - start) > (self.L_min/self.d):
+                    if (end - start) > (self.L_min/(self.d*5)):
                         break
                     else:
                         start = None
