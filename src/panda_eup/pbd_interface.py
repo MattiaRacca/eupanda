@@ -19,7 +19,6 @@ class PandaPBDInterface(object):
         self.last_pose = None
         self.last_gripper_width = None
         self.relaxed = False
-        self.frozen = False
 
         self.default_parameters = {'kinesthestic_ft_threshold': 5.0,
                                    'move_to_ee_default_position_speed': 0.07,
@@ -53,8 +52,10 @@ class PandaPBDInterface(object):
             except rospy.ROSException:
                 rospy.logerr('Cannot contact the Primitive Interface Node!')
 
+        #The interpreter of panda_widgets is used for the tuning and running of existing programs, the interpreter of pbd_interface
+        #is used for actions that are targeted at the program-to-be-created such as moving to previous preconditions when primitives are deleted
         self.interpreter = interpreter.PandaProgramInterpreter(robotless_debug=self.robotless_debug)  # internal interpreter, for execute_now_primitives
-
+        self.interpreter.loaded_program = self.program
         self.freeze()
 
     def initialize_program(self):
@@ -100,13 +101,11 @@ class PandaPBDInterface(object):
             if res.success:
                 self.last_pose = res.ee_pose
                 self.relaxed = True
-                self.frozen = False
             return True
 
         else:
             self.last_pose = np.random.uniform(0, 1, 3)
             self.relaxed = True
-            self.frozen = False    
 
     def relax_only_arm(self):
         if not self.robotless_debug:
@@ -124,12 +123,10 @@ class PandaPBDInterface(object):
             if res.success:
                 self.last_pose = res.ee_pose
                 self.relaxed = True
-                self.frozen = False
             return True
         else:
             self.last_pose = np.random.uniform(0, 1, 3)
             self.relaxed = True   
-            self.frozen = False 
 
     def relax_only_wrist(self):
         if not self.robotless_debug:
@@ -147,12 +144,10 @@ class PandaPBDInterface(object):
             if res.success:
                 self.last_pose = res.ee_pose
                 self.relaxed = True
-                self.frozen = False
             return True
         else:
             self.last_pose = np.random.uniform(0, 1, 3)
-            self.relaxed = True
-            self.frozen = False     
+            self.relaxed = True 
 
     def relax_finger(self):
         temp_program = pp.PandaProgram()
@@ -182,13 +177,11 @@ class PandaPBDInterface(object):
             if res.success:
                 self.last_pose = res.ee_pose
                 self.relaxed = False
-                self.frozen = True
             return True
 
         else:
             self.last_pose = np.random.uniform(0, 1, 3)
             self.relaxed = False
-            self.frozen = True
 
 
     def insert_move_to_ee(self):

@@ -330,12 +330,6 @@ class EUPWidget(QWidget):
         #Labels for the state are updated
         self.lowerProgramMenu.updateControlStateLabels(self.interface)
 
-        '''
-        Notes:
-        - Bug with reverting move fingers after finger grasp
-        - Actions after error recover need to be handled better (relax the robot(?), its possible to end up in a state where initialize program -button is disabled even though the program creation expects it)
-        '''
-
         if self.last_interface_state == pp.PandaRobotStatus.ERROR or \
                 self.last_interface_state == pp.PandaRobotStatus.BUSY:
             for key, value in self.interpreter_command_dict.items():
@@ -481,7 +475,7 @@ class EUPWidget(QWidget):
         to the program widget, the geometry of the widget is updated and the UI is updated for button state updates.
         '''
         fn()  
-        self.program_creation_widget.addPrimitiveWidget(primitive, interpreter=self.interpreter)
+        self.program_creation_widget.addPrimitiveWidget(primitive, interpreter=self.interface.interpreter)
         self.program_creation_widget.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*self.interface.program.get_program_length(),
                                         V_SPACING + PRIMITIVE_HEIGHT)
         self.program_creation_widget.updateWidget()
@@ -547,11 +541,11 @@ class EUPWidget(QWidget):
         Assign the respective revert-function for each primitive. This function is executed if the user chose to return the robot
         to previous preconditions after deleting the previous primitive. 
         '''
-        revertFunctions = {"MoveToEE": partial(self.interpreter.revert_move_to_ee, primitive_index, loadedProgram=False, program=self.interface.program),
-                           "MoveToContact": partial(self.interpreter.revert_move_to_contact, primitive_index, loadedProgram=False, program=self.interface.program),
-                           "UserSync": partial(self.interpreter.revert_user_sync, primitive_index, loadedProgram=False, program=self.interface.program),
-                           "MoveFingers": partial(self.interpreter.revert_move_fingers, primitive_index, loadedProgram=False, program=self.interface.program),
-                           "ApplyForceFingers": partial(self.interpreter.revert_apply_force_fingers, primitive_index, loadedProgram=False, program=self.interface.program)
+        revertFunctions = {"MoveToEE": partial(self.interface.interpreter.revert_move_to_ee, primitive_index),
+                           "MoveToContact": partial(self.interface.interpreter.revert_move_to_contact, primitive_index),
+                           "UserSync": partial(self.interface.interpreter.revert_user_sync, primitive_index),
+                           "MoveFingers": partial(self.interface.interpreter.revert_move_fingers, primitive_index),
+                           "ApplyForceFingers": partial(self.interface.interpreter.revert_apply_force_fingers, primitive_index)
         }
         name = self.interface.program.primitives[-1].__class__.__name__
         fn = revertFunctions[name]
@@ -583,14 +577,12 @@ class EUPWidget(QWidget):
         Depending on the robots state, disable some options to freeze or relax. In addition, prevent the addition
         of new primitives if the robot is not frozen.
         '''
-        if self.interface.frozen == False:
+        if self.interface.relaxed:
+            self.program_creation_buttons.controlButtons[2].setEnabled(False)
             for primitiveButton in self.program_creation_buttons.primitiveButtons:
                 primitiveButton.setEnabled(False)
 
-        if self.interface.relaxed:
-            self.program_creation_buttons.controlButtons[2].setEnabled(False)
-
-        if self.interface.frozen:
+        if not self.interface.relaxed:
             self.program_creation_buttons.controlButtons[1].setEnabled(False)                    
 
     def checkEUPState(self):
@@ -815,7 +807,7 @@ class LowerProgramMenu(QWidget):
         '''
         Function which is called after the control state is changed.
         '''
-        if interface.frozen:
+        if not interface.relaxed:
             self.frozenLabelValue.setText("Yes")
             self.frozenLabelValue.setStyleSheet('color: lightseagreen')
         else:
