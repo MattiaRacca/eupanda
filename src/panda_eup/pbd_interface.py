@@ -51,8 +51,10 @@ class PandaPBDInterface(object):
             except rospy.ROSException:
                 rospy.logerr('Cannot contact the Primitive Interface Node!')
 
-        #The interpreter of panda_widgets is used for the tuning and running of existing programs, the interpreter of pbd_interface
-        #is used for actions that are targeted at the program-to-be-created such as moving to previous preconditions when primitives are deleted
+        # The interpreter of panda_widgets is used for the tuning and running of existing programs
+        # The interpreter of pbd_interface is used for actions that are targeted at the program-to-be-created,
+        # such as moving to previous preconditions when primitives are deleted
+
         self.interpreter = interpreter.PandaProgramInterpreter(robotless_debug=self.robotless_debug)  # internal interpreter, for execute_now_primitives
         self.interpreter.loaded_program = self.program
         self.freeze()
@@ -76,6 +78,9 @@ class PandaPBDInterface(object):
         else:
             self.last_pose = np.random.uniform(0, 1, 3)
             self.last_gripper_width = np.random.uniform(0, 0.08, 1)
+            # During robotless debug, we replace actual values with randomly generated ones
+            # This way, we can still test the functionality of the GUI while not
+            # connected to the robot.
             self.program.save_arm_state(self.last_pose)
             self.program.save_gripper_state(pp.GripperState(self.last_gripper_width, 0.0))
         self.program.initialized = True

@@ -86,7 +86,7 @@ class EUPWidget(QWidget):
         # Creating the interpreter and loading the program
         robotless_debug = rospy.get_param('/robotless_debug') if rospy.has_param('/robotless_debug') else False
         self.interpreter = PandaProgramInterpreter(robotless_debug=robotless_debug)
-        self.interface = PandaPBDInterface(robotless_debug=robotless_debug)
+        self.pbd_interface = PandaPBDInterface(robotless_debug=robotless_debug)
 
         if rospy.has_param('/program_path') and rospy.has_param('/program_name'):
             program_path = rospy.get_param('/program_path')
@@ -318,17 +318,17 @@ class EUPWidget(QWidget):
         # EUP State is checked and certain buttons are disabled accordingly
         self.checkEUPState()
 
-        #We disabled frozen- or relaxed-buttons based on which state is active
+        # We disabled frozen- or relaxed-buttons based on which state is active
         self.checkForRelaxedAndFrozen()
 
-        #Disable Finger grasp -primitve if one was added as last primitive (this results in error)
+        # Disable Finger grasp -primitve if one was added as last primitive (this results in error)
         self.preventMultipleApplyForceFingers()
 
-        #Disable certain buttons if the program is empty such as reseting the program
+        # Disable certain buttons if the program is empty such as reseting the program
         self.disableWithEmptyProgram()
 
-        #Labels for the state are updated
-        self.lowerProgramMenu.updateControlStateLabels(self.interface)
+        # Labels for the state are updated
+        self.lowerProgramMenu.updateControlStateLabels(self.pbd_interface)
 
         if self.last_interface_state == pp.PandaRobotStatus.ERROR or \
                 self.last_interface_state == pp.PandaRobotStatus.BUSY:
@@ -441,12 +441,12 @@ class EUPWidget(QWidget):
         an action for each of them.
         '''
         controlActions = {
-            self.program_creation_buttons.controlButtons[0]: self.interface.initialize_program,
-            self.program_creation_buttons.controlButtons[1]: self.interface.freeze,
-            self.program_creation_buttons.controlButtons[2]: self.interface.relax,
-            self.program_creation_buttons.controlButtons[3]: self.interface.relax_finger,
-            self.program_creation_buttons.controlButtons[4]: self.interface.relax_only_arm,
-            self.program_creation_buttons.controlButtons[5]: self.interface.relax_only_wrist
+            self.program_creation_buttons.controlButtons[0]: self.pbd_interface.initialize_program,
+            self.program_creation_buttons.controlButtons[1]: self.pbd_interface.freeze,
+            self.program_creation_buttons.controlButtons[2]: self.pbd_interface.relax,
+            self.program_creation_buttons.controlButtons[3]: self.pbd_interface.relax_finger,
+            self.program_creation_buttons.controlButtons[4]: self.pbd_interface.relax_only_arm,
+            self.program_creation_buttons.controlButtons[5]: self.pbd_interface.relax_only_wrist
         }
         for k, v in controlActions.items():
             k.pressed.connect(v)
@@ -458,11 +458,11 @@ class EUPWidget(QWidget):
         previous primitive is also handled here.
         '''
         primitiveActions = {
-            self.program_creation_buttons.primitiveButtons[0]: partial(self.addPrimitive, pp.MoveToEE(), self.interface.insert_move_to_ee),
-            self.program_creation_buttons.primitiveButtons[1]: partial(self.addPrimitive, pp.MoveToContact(), self.interface.insert_move_to_contact),
-            self.program_creation_buttons.primitiveButtons[2]: partial(self.addPrimitive, pp.UserSync(), self.interface.insert_user_sync),
-            self.program_creation_buttons.primitiveButtons[3]: partial(self.addPrimitive, pp.MoveFingers(), self.interface.insert_move_fingers),
-            self.program_creation_buttons.primitiveButtons[4]: partial(self.addPrimitive, pp.ApplyForceFingers(), self.interface.insert_apply_force_fingers)
+            self.program_creation_buttons.primitiveButtons[0]: partial(self.addPrimitive, pp.MoveToEE(), self.pbd_interface.insert_move_to_ee),
+            self.program_creation_buttons.primitiveButtons[1]: partial(self.addPrimitive, pp.MoveToContact(), self.pbd_interface.insert_move_to_contact),
+            self.program_creation_buttons.primitiveButtons[2]: partial(self.addPrimitive, pp.UserSync(), self.pbd_interface.insert_user_sync),
+            self.program_creation_buttons.primitiveButtons[3]: partial(self.addPrimitive, pp.MoveFingers(), self.pbd_interface.insert_move_fingers),
+            self.program_creation_buttons.primitiveButtons[4]: partial(self.addPrimitive, pp.ApplyForceFingers(), self.pbd_interface.insert_apply_force_fingers)
         }
         for k, v in primitiveActions.items():
             k.pressed.connect(v)
@@ -475,8 +475,8 @@ class EUPWidget(QWidget):
         to the program widget, the geometry of the widget is updated and the UI is updated for button state updates.
         '''
         fn()
-        self.program_creation_widget.addPrimitiveWidget(primitive, interpreter=self.interface.interpreter)
-        self.program_creation_widget.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH) * self.interface.program.get_program_length(),
+        self.program_creation_widget.addPrimitiveWidget(primitive, interpreter=self.pbd_interface.interpreter)
+        self.program_creation_widget.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH) * self.pbd_interface.program.get_program_length(),
                                         V_SPACING + PRIMITIVE_HEIGHT)
         self.program_creation_widget.updateWidget()
         self.updatePandaWidgets()
@@ -490,9 +490,9 @@ class EUPWidget(QWidget):
         filename = inputField.text()
         filePath = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
         if filename == '':
-            self.interface.program.dump_to_file(filePath, "testprogram.pkl")
+            self.pbd_interface.program.dump_to_file(filePath, "testprogram.pkl")
         else:
-            self.interface.program.dump_to_file(filePath, str(filename) + '.pkl')
+            self.pbd_interface.program.dump_to_file(filePath, str(filename) + '.pkl')
         inputField.clear()
         buttonReply = QMessageBox.question(self, 'PyQt5 message', "Load this program for execution?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if buttonReply == QMessageBox.Yes:
@@ -504,13 +504,13 @@ class EUPWidget(QWidget):
         is cleared and updated with primitives of the new program. EUP state machine is reseted to the state STARTUP so we can
         properly start the program with "Go to start state" -button
         '''
-        self.interpreter.load_program(self.interface.program)
+        self.interpreter.load_program(self.pbd_interface.program)
         self.interpreter.loaded_program.reset_primitives_history()
         self.state_machine = EUPStateMachine.STARTUP
         self.last_interface_state = None
         self.updatePandaWidgets()
         self.panda_program_widget.clear()
-        for primitive in self.interface.program.primitives:
+        for primitive in self.pbd_interface.program.primitives:
             self.panda_program_widget.addPrimitiveWidget(primitive, self.interpreter)
         self.panda_program_widget.update()
 
@@ -518,19 +518,11 @@ class EUPWidget(QWidget):
         '''
         Deletes previously added primitive and asks the user whether they want to return the robot to the preconditions of the previous primitive.
         '''
-        n = len(self.interface.program.primitives) - 1
+        n = len(self.pbd_interface.program.primitives) - 1
         buttonReply = QMessageBox.question(self, 'PyQt5 message', "Return the robot to previous preconditions?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if buttonReply == QMessageBox.Yes:
             self.returnPreviousPreconditions(n)
-        self.interface.program.delete_nth_primitive(n)
-        '''
-        print(self.interface.program.primitives)
-        for item in self.interface.program.primitives:
-            try:
-                print(item.parameter_container.pose)
-            except:
-                print("Error")
-        '''
+        self.pbd_interface.program.delete_nth_primitive(n)
         self.program_creation_widget.deleteLastPrimitive()
         self.program_creation_widget.updateWidget()
         self.updatePandaWidgets()
@@ -540,13 +532,13 @@ class EUPWidget(QWidget):
         Assign the respective revert-function for each primitive. This function is executed if the user chose to return the robot
         to previous preconditions after deleting the previous primitive. 
         '''
-        revertFunctions = {"MoveToEE": partial(self.interface.interpreter.revert_move_to_ee, primitive_index),
-                           "MoveToContact": partial(self.interface.interpreter.revert_move_to_contact, primitive_index),
-                           "UserSync": partial(self.interface.interpreter.revert_user_sync, primitive_index),
-                           "MoveFingers": partial(self.interface.interpreter.revert_move_fingers, primitive_index),
-                           "ApplyForceFingers": partial(self.interface.interpreter.revert_apply_force_fingers, primitive_index)
+        revertFunctions = {"MoveToEE": partial(self.pbd_interface.interpreter.revert_move_to_ee, primitive_index),
+                           "MoveToContact": partial(self.pbd_interface.interpreter.revert_move_to_contact, primitive_index),
+                           "UserSync": partial(self.pbd_interface.interpreter.revert_user_sync, primitive_index),
+                           "MoveFingers": partial(self.pbd_interface.interpreter.revert_move_fingers, primitive_index),
+                           "ApplyForceFingers": partial(self.pbd_interface.interpreter.revert_apply_force_fingers, primitive_index)
         }
-        name = self.interface.program.primitives[-1].__class__.__name__
+        name = self.pbd_interface.program.primitives[-1].__class__.__name__
         fn = revertFunctions[name]
         fn()
 
@@ -555,7 +547,7 @@ class EUPWidget(QWidget):
         We assign reset- and save-buttons to their respective functions.
         '''
         self.lowerProgramMenu.saveButton.pressed.connect(self.saveProgram)
-        self.lowerProgramMenu.resetButton.pressed.connect(partial(self.program_creation_widget.clear, self.interface))
+        self.lowerProgramMenu.resetButton.pressed.connect(partial(self.program_creation_widget.clear, self.pbd_interface))
         self.lowerProgramMenu.resetButton.pressed.connect(self.updatePandaWidgets)
 
     def checkForInitialization(self):
@@ -563,24 +555,24 @@ class EUPWidget(QWidget):
         Disable program creation buttons (both the ones that control the robot and add primitives) except for initialization
         if the program is not initialized.
         '''
-        self.program_creation_buttons.controlButtons[0].setEnabled(1 - self.interface.program.initialized)
+        self.program_creation_buttons.controlButtons[0].setEnabled(1 - self.pbd_interface.program.initialized)
         for controlButton in self.program_creation_buttons.controlButtons[1:]:
-            controlButton.setEnabled(self.interface.program.initialized)
+            controlButton.setEnabled(self.pbd_interface.program.initialized)
 
         for primitiveButton in self.program_creation_buttons.primitiveButtons:
-            primitiveButton.setEnabled(self.interface.program.initialized)
+            primitiveButton.setEnabled(self.pbd_interface.program.initialized)
 
     def checkForRelaxedAndFrozen(self):
         '''
         Depending on the robots state, disable some options to freeze or relax. In addition, prevent the addition
         of new primitives if the robot is not frozen.
         '''
-        if self.interface.relaxed:
+        if self.pbd_interface.relaxed:
             self.program_creation_buttons.controlButtons[2].setEnabled(False)
             for primitiveButton in self.program_creation_buttons.primitiveButtons:
                 primitiveButton.setEnabled(False)
 
-        if not self.interface.relaxed:
+        if not self.pbd_interface.relaxed:
             self.program_creation_buttons.controlButtons[1].setEnabled(False)
 
     def checkEUPState(self):
@@ -603,8 +595,8 @@ class EUPWidget(QWidget):
         '''
         Prevent the user from applying multiple Finger Grasps in a row, this causes an error.
         '''
-        if len(self.interface.program.primitives) > 0:
-            lastPrimitive = self.interface.program.primitives[-1]
+        if len(self.pbd_interface.program.primitives) > 0:
+            lastPrimitive = self.pbd_interface.program.primitives[-1]
             if lastPrimitive.__class__.__name__ == "ApplyForceFingers":
                 self.program_creation_buttons.primitiveButtons[4].setEnabled(False)
 
@@ -612,7 +604,7 @@ class EUPWidget(QWidget):
         '''
         Disable certain buttons if the program has no primitives.
         '''
-        if len(self.interface.program.primitives) == 0:
+        if len(self.pbd_interface.program.primitives) == 0:
             self.lowerProgramMenu.saveButton.setEnabled(False)
             self.lowerProgramMenu.resetButton.setEnabled(False)
             self.program_creation_buttons.deleteButton.setEnabled(False)
