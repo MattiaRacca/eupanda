@@ -50,7 +50,6 @@ class PandaPBDInterface(object):
                 self.kinesthetic_client.wait_for_service(5.0)
             except rospy.ROSException:
                 rospy.logerr('Cannot contact the Primitive Interface Node!')
-
         # The interpreter of panda_widgets is used for the tuning and running of existing programs
         # The interpreter of pbd_interface is used for actions that are targeted at the program-to-be-created,
         # such as moving to previous preconditions when primitives are deleted
