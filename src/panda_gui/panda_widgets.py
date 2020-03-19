@@ -3,7 +3,8 @@ from __future__ import division
 
 from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, \
 QSizePolicy, QGroupBox, QApplication, QStackedWidget, QSlider, QGridLayout, QTabWidget, QLineEdit, QMessageBox
-from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool, pyqtProperty, QPropertyAnimation
+from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool, pyqtProperty, \
+QPropertyAnimation
 from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor, QFont, QIcon
 import qt_range_slider.qtRangeSlider as qtRangeSlider
 from panda_gui.gui_elements import QExpandingPushButton, QVerticalLine, FixNumberTicksSlider, QHorizontalLine
@@ -174,6 +175,7 @@ class EUPWidget(QWidget):
         self.vbox.setAlignment(Qt.AlignTop)
         self.tabSelection = TabWidget(self)
         self.vbox.addWidget(self.tabSelection)
+
         # Panda Program Widget on top
         self.panda_program_widget = PandaProgramWidget(self)
 
@@ -191,23 +193,22 @@ class EUPWidget(QWidget):
         self.interpreter_command_dict = {}
         self.interpreter_command_dict['go_to_starting_state'] = [QExpandingPushButton("Go to\n start state", self),
                                                                  partial(self.execute_interpreter_command,
-                                                                         self.interpreter.go_to_starting_state)]
+                                                                 self.interpreter.go_to_starting_state)]
         self.interpreter_command_dict['execute_one_step'] = [QExpandingPushButton("Execute\n one step", self),
                                                              partial(self.execute_interpreter_command,
-                                                                     self.interpreter.execute_one_step)]
+                                                             self.interpreter.execute_one_step)]
         self.interpreter_command_dict['revert_one_step'] = [QExpandingPushButton("Revert\n one step", self),
-                                                                 partial(self.execute_interpreter_command,
-                                                                         self.interpreter.revert_one_step)]
+                                                            partial(self.execute_interpreter_command,
+                                                            self.interpreter.revert_one_step)]
         self.interpreter_command_dict['go_to_current_primitive_preconditions'] = \
             [QExpandingPushButton("Recover from error\n on current primitive", self),
              partial(self.execute_interpreter_command, self.interpreter.go_to_current_primitive_preconditions)]
         self.interpreter_command_dict['execute_rest_of_program'] = [QExpandingPushButton("Execute rest\n of program", self),
-                                                                 partial(self.execute_interpreter_command,
-                                                                         self.interpreter.execute_rest_of_program)]
+                                                                    partial(self.execute_interpreter_command,
+                                                                    self.interpreter.execute_rest_of_program)]
         self.interpreter_command_dict['revert_to_beginning_of_program'] = [QExpandingPushButton("Revert to\n beginning", self),
-                                                                 partial(self.execute_interpreter_command,
-                                                                         self.interpreter.revert_to_beginning_of_program
-                                                                         )]
+                                                                           partial(self.execute_interpreter_command,
+                                                                                   self.interpreter.revert_to_beginning_of_program)]
 
         # Give the partials a __name__ attribute, used in the execute_interpreter_command function
         for key, value in self.interpreter_command_dict.items():
@@ -230,7 +231,7 @@ class EUPWidget(QWidget):
             value[0].setVisible(key is not 'go_to_current_primitive_preconditions')
             value[0].setFont(EUPWidget.font)
 
-        #Add created widgets to run program tab
+        # Add created widgets to run program tab
         self.tabSelection.runProgramTab.layout.addWidget(self.panda_program_widget)
         self.tabSelection.runProgramTab.layout.addWidget(self.panda_tuning_widget)
         self.tabSelection.runProgramTab.layout.addWidget(self.low_buttons)
@@ -248,7 +249,7 @@ class EUPWidget(QWidget):
         self.tabSelection.createProgramTab.layout.addWidget(QHorizontalLine())
         self.tabSelection.createProgramTab.layout.addWidget(self.lowerProgramMenu)
 
-        #Assign actions for each button
+        # Assign actions for each button
         self.addPrimitiveButtonActions()
         self.addProgramUtilityActions()
         self.addControlButtonActions()
@@ -689,7 +690,7 @@ class ProgramCreationButtons(QWidget):
         self.primitiveButtonLayout = QHBoxLayout(self.primitiveButtonRowWidget)
         self.primitiveButtonLayout.setAlignment(Qt.AlignLeft)
 
-        #Iterate through list of all used primitives and create button for each
+        # Iterate through list of all used primitives and create button for each
         primitives = [pp.MoveToEE(), pp.MoveToContact(), pp.UserSync(), pp.MoveFingers(), pp.ApplyForceFingers()]
         for primitive in primitives:
             button = QPushButton('', self)
@@ -699,7 +700,7 @@ class ProgramCreationButtons(QWidget):
             self.primitiveButtonLayout.addWidget(button)
             self.primitiveButtons.append(button)
 
-        #Add button for deleting previous primitive
+        # Add button for deleting previous primitive
         self.deleteButton = QPushButton("Delete\nlast primitive")
         self.deleteButton.setSizePolicy(QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed))
         self.deleteButton.setMinimumWidth(150)
@@ -712,7 +713,6 @@ class ProgramCreationButtons(QWidget):
         self.lowerLayout.setAlignment(Qt.AlignCenter)
         self.primitiveVerticalLayout.addWidget(self.primitiveButtonRowWidget)
         self.primitiveVerticalLayout.addWidget(self.lowerLayoutWidget)
-        #self.primitiveVerticalLayout.addWidget(self.deleteButton)
         self.layout.addWidget(self.primitiveButtonAreaWidget)
 
     def sizeHint(self):
@@ -749,7 +749,7 @@ class LowerProgramMenu(QWidget):
     def initUI(self):
         self.layout = QHBoxLayout(self)
         self.layout.setAlignment(Qt.AlignLeft)
-        #Reuse same state widget that was used in run program -tab
+        # Reuse same state widget that was used in run program -tab
         self.stateWidget = PandaStateWidget(self)
         self.layout.addWidget(self.stateWidget)
         self.addControlStateLabels()
@@ -823,8 +823,6 @@ class LowerProgramMenu(QWidget):
         self.resetButton = QPushButton("Reset Program")
         self.saveButton.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.resetButton.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        #self.saveButton.setFont(EUPWidget.font)
-        #self.resetButton.setFont(EUPWidget.font)
         self.utilitiesLayout.addWidget(self.saveButton)
         self.utilitiesLayout.addWidget(self.inputField)
         self.utilitiesLayout.addWidget(self.resetButton)
