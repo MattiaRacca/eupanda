@@ -3,6 +3,7 @@ import rospy
 from qt_gui.plugin import Plugin
 from panda_gui.panda_widgets import EUPWidget
 
+
 class EUPPlugin(Plugin):
     def __init__(self, context):
         super(EUPPlugin, self).__init__(context)

@@ -11,7 +11,6 @@ from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest
 from sensor_msgs.msg import JointState
 
 
-
 class PandaPBDInterface(object):
     def __init__(self, robotless_debug):
         self.program = pp.PandaProgram('A Panda Program')
@@ -77,9 +76,9 @@ class PandaPBDInterface(object):
         else:
             self.last_pose = np.random.uniform(0, 1, 3)
             self.last_gripper_width = np.random.uniform(0, 0.08, 1)
-            self.program.save_arm_state(self.last_pose)   
+            self.program.save_arm_state(self.last_pose)
             self.program.save_gripper_state(pp.GripperState(self.last_gripper_width, 0.0))
-        self.program.initialized = True         
+        self.program.initialized = True
 
     def gripper_state_callback(self, msg):
         last_gripper_width = msg.position[0] + msg.position[1]
@@ -126,7 +125,7 @@ class PandaPBDInterface(object):
             return True
         else:
             self.last_pose = np.random.uniform(0, 1, 3)
-            self.relaxed = True   
+            self.relaxed = True
 
     def relax_only_wrist(self):
         if not self.robotless_debug:
@@ -147,7 +146,7 @@ class PandaPBDInterface(object):
             return True
         else:
             self.last_pose = np.random.uniform(0, 1, 3)
-            self.relaxed = True 
+            self.relaxed = True
 
     def relax_finger(self):
         temp_program = pp.PandaProgram()
@@ -183,7 +182,6 @@ class PandaPBDInterface(object):
             self.last_pose = np.random.uniform(0, 1, 3)
             self.relaxed = False
 
-
     def insert_move_to_ee(self):
         was_relaxed = self.relaxed
         if was_relaxed:
@@ -202,8 +200,6 @@ class PandaPBDInterface(object):
 
         if was_relaxed:
             self.relax()
-
-
 
     def insert_move_to_contact(self):
         was_relaxed = self.relaxed
@@ -276,7 +272,6 @@ class PandaPBDInterface(object):
 
         if was_relaxed:
             self.relax()
-
 
     def execute_primitive_now(self, primitive):
         temp_program = pp.PandaProgram()
