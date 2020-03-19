@@ -1,11 +1,12 @@
 #!/usr/bin/python
 from __future__ import division
 
-from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, QSizePolicy, QGroupBox, QApplication, QStackedWidget, QSlider, QGridLayout
+from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, \
+QSizePolicy, QGroupBox, QApplication, QStackedWidget, QSlider, QGridLayout, QTabWidget, QLineEdit, QMessageBox
 from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool, pyqtProperty, QPropertyAnimation
-from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor, QFont
+from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor, QFont, QIcon
 import qt_range_slider.qtRangeSlider as qtRangeSlider
-from panda_gui.gui_elements import QExpandingPushButton, QVerticalLine, FixNumberTicksSlider
+from panda_gui.gui_elements import QExpandingPushButton, QVerticalLine, FixNumberTicksSlider, QHorizontalLine
 
 import rospkg
 import rospy
@@ -14,6 +15,7 @@ from franka_control.msg import ErrorRecoveryActionGoal
 
 from panda_eup.program_interpreter import PandaProgramInterpreter
 import panda_eup.panda_primitive as pp
+from panda_eup.pbd_interface import PandaPBDInterface
 
 import pyttsx3
 
@@ -84,6 +86,7 @@ class EUPWidget(QWidget):
         # Creating the interpreter and loading the program
         robotless_debug = rospy.get_param('/robotless_debug') if rospy.has_param('/robotless_debug') else False
         self.interpreter = PandaProgramInterpreter(robotless_debug=robotless_debug)
+        self.pbd_interface = PandaPBDInterface(robotless_debug=robotless_debug)
 
         if rospy.has_param('/program_path') and rospy.has_param('/program_name'):
             program_path = rospy.get_param('/program_path')
@@ -169,7 +172,8 @@ class EUPWidget(QWidget):
         # Create overall layout
         self.vbox = QVBoxLayout(self)
         self.vbox.setAlignment(Qt.AlignTop)
-
+        self.tabSelection = TabWidget(self)
+        self.vbox.addWidget(self.tabSelection)
         # Panda Program Widget on top
         self.panda_program_widget = PandaProgramWidget(self)
 
@@ -226,10 +230,28 @@ class EUPWidget(QWidget):
             value[0].setVisible(key is not 'go_to_current_primitive_preconditions')
             value[0].setFont(EUPWidget.font)
 
-        # Put everything together
-        self.vbox.addWidget(self.panda_program_widget)
-        self.vbox.addWidget(self.panda_tuning_widget)
-        self.vbox.addWidget(self.low_buttons)
+        #Add created widgets to run program tab
+        self.tabSelection.runProgramTab.layout.addWidget(self.panda_program_widget)
+        self.tabSelection.runProgramTab.layout.addWidget(self.panda_tuning_widget)
+        self.tabSelection.runProgramTab.layout.addWidget(self.low_buttons)
+
+        # Using PandaProgramWidget again, we create a widget thats lists primitives for the program to be created.
+        # We also add buttons for program creation and for utilities like saving the program.
+        self.program_creation_widget = PandaProgramWidget(self)
+        self.program_creation_widget.clear()
+        self.program_creation_buttons = ProgramCreationButtons(self)
+        self.lowerProgramMenu = LowerProgramMenu(self)
+
+        # Add recently created widgets to create programs tab
+        self.tabSelection.createProgramTab.layout.addWidget(self.program_creation_widget)
+        self.tabSelection.createProgramTab.layout.addWidget(self.program_creation_buttons)
+        self.tabSelection.createProgramTab.layout.addWidget(QHorizontalLine())
+        self.tabSelection.createProgramTab.layout.addWidget(self.lowerProgramMenu)
+
+        #Assign actions for each button
+        self.addPrimitiveButtonActions()
+        self.addProgramUtilityActions()
+        self.addControlButtonActions()
 
         # Connect update signals
         self.tuningAccepted.connect(partial(self.log_loaded_program, partial_log=True))  # triggers partial logging after parameter tuning
@@ -237,6 +259,7 @@ class EUPWidget(QWidget):
         self.updateGUI.connect(self.updatePandaWidgets)  # overall GUI update, triggers the update below
         self.programGUIUpdate.connect(self.panda_program_widget.updateWidget)  # program widget update
         self.robotStateUpdate.connect(self.robot_state_widget.updateWidget)  # robot state widget update
+        self.robotStateUpdate.connect(self.lowerProgramMenu.stateWidget.updateWidget)
         self.tuningGUIUpdate.connect(self.panda_tuning_widget.updateWidget)  # tuning widget update
 
         self.updatePandaWidgets()
@@ -266,7 +289,7 @@ class EUPWidget(QWidget):
                     self.tuning_timeseries.append(time.time())
 
                 for key, value in range_tuning_targets.items():
-                    self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index).\
+                    self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index). \
                         update_parameter_range(key, value)
                     rospy.loginfo('Saving range {} of a {} primitive: {}'.format(key, \
                                                                                  type(ready_primitive), \
@@ -291,6 +314,21 @@ class EUPWidget(QWidget):
 
         self.tuningGUIUpdate.emit(ready_primitive)
         QApplication.restoreOverrideCursor()
+
+        # EUP State is checked and certain buttons are disabled accordingly
+        self.checkEUPState()
+
+        # We disabled frozen- or relaxed-buttons based on which state is active
+        self.checkForRelaxedAndFrozen()
+
+        # Disable Finger grasp -primitve if one was added as last primitive (this results in error)
+        self.preventMultipleApplyForceFingers()
+
+        # Disable certain buttons if the program is empty such as reseting the program
+        self.disableWithEmptyProgram()
+
+        # Labels for the state are updated
+        self.lowerProgramMenu.updateControlStateLabels(self.pbd_interface)
 
         if self.last_interface_state == pp.PandaRobotStatus.ERROR or \
                 self.last_interface_state == pp.PandaRobotStatus.BUSY:
@@ -361,12 +399,12 @@ class EUPWidget(QWidget):
         if self.state_machine == EUPStateMachine.OPERATIONAL:
             self.state_machine = EUPStateMachine.BUSY
 
-        worker = Worker(command) # Any other args, kwargs are passed to the run function
+        worker = Worker(command)  # Any other args, kwargs are passed to the run function
         worker.signals.result.connect(self.reapInterpreterResults)
         worker.signals.finished.connect(self.announceWorkerDeath)
         worker.signals.progress.connect(self.actOnWorkerUpdate)
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor)) # TODO: Weird bug makes it work only once...
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))  # TODO: Weird bug makes it work only once...
 
         self.threadpool.start(worker)
 
@@ -397,6 +435,184 @@ class EUPWidget(QWidget):
             self.state_machine = EUPStateMachine.OPERATIONAL
         self.updatePandaWidgets()
 
+    def addControlButtonActions(self):
+        '''
+        These buttons handle the initialization of the robot as well as changnig its state from frozen to relaxed. Here we assign
+        an action for each of them.
+        '''
+        controlActions = {
+            self.program_creation_buttons.controlButtons[0]: self.pbd_interface.initialize_program,
+            self.program_creation_buttons.controlButtons[1]: self.pbd_interface.freeze,
+            self.program_creation_buttons.controlButtons[2]: self.pbd_interface.relax,
+            self.program_creation_buttons.controlButtons[3]: self.pbd_interface.relax_finger,
+            self.program_creation_buttons.controlButtons[4]: self.pbd_interface.relax_only_arm,
+            self.program_creation_buttons.controlButtons[5]: self.pbd_interface.relax_only_wrist
+        }
+        for k, v in controlActions.items():
+            k.pressed.connect(v)
+            k.pressed.connect(self.updatePandaWidgets)
+
+    def addPrimitiveButtonActions(self):
+        '''
+        We assign actions for buttons that are meant for adding new primitives to the program. The button for deleting
+        previous primitive is also handled here.
+        '''
+        primitiveActions = {
+            self.program_creation_buttons.primitiveButtons[0]: partial(self.addPrimitive, pp.MoveToEE(), self.pbd_interface.insert_move_to_ee),
+            self.program_creation_buttons.primitiveButtons[1]: partial(self.addPrimitive, pp.MoveToContact(), self.pbd_interface.insert_move_to_contact),
+            self.program_creation_buttons.primitiveButtons[2]: partial(self.addPrimitive, pp.UserSync(), self.pbd_interface.insert_user_sync),
+            self.program_creation_buttons.primitiveButtons[3]: partial(self.addPrimitive, pp.MoveFingers(), self.pbd_interface.insert_move_fingers),
+            self.program_creation_buttons.primitiveButtons[4]: partial(self.addPrimitive, pp.ApplyForceFingers(), self.pbd_interface.insert_apply_force_fingers)
+        }
+        for k, v in primitiveActions.items():
+            k.pressed.connect(v)
+
+        self.program_creation_buttons.deleteButton.pressed.connect(self.deletePreviousPrimitive)
+
+    def addPrimitive(self, primitive, fn):
+        '''
+        Gets primitive and the respective function for adding said primitive to the program as parameters. The primitive is added
+        to the program widget, the geometry of the widget is updated and the UI is updated for button state updates.
+        '''
+        fn()
+        self.program_creation_widget.addPrimitiveWidget(primitive, interpreter=self.pbd_interface.interpreter)
+        self.program_creation_widget.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH) * self.pbd_interface.program.get_program_length(),
+                                        V_SPACING + PRIMITIVE_HEIGHT)
+        self.program_creation_widget.updateWidget()
+        self.updatePandaWidgets()
+
+    def saveProgram(self):
+        '''
+        The program is saved to resources-folder using the text that was input into the inputfield. The user is then asked
+        whether the recently saved program should be loaded to run program -tab for execution
+        '''
+        inputField = self.lowerProgramMenu.inputField
+        filename = inputField.text()
+        filePath = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
+        if filename == '':
+            self.pbd_interface.program.dump_to_file(filePath, "testprogram.pkl")
+        else:
+            self.pbd_interface.program.dump_to_file(filePath, str(filename) + '.pkl')
+        inputField.clear()
+        buttonReply = QMessageBox.question(self, 'PyQt5 message', "Load this program for execution?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if buttonReply == QMessageBox.Yes:
+            self.loadNewProgram()
+
+    def loadNewProgram(self):
+        '''
+        If the user wants to load the created program to run program -tab, this function is executed. The previous program widget
+        is cleared and updated with primitives of the new program. EUP state machine is reseted to the state STARTUP so we can
+        properly start the program with "Go to start state" -button
+        '''
+        self.interpreter.load_program(self.pbd_interface.program)
+        self.interpreter.loaded_program.reset_primitives_history()
+        self.state_machine = EUPStateMachine.STARTUP
+        self.last_interface_state = None
+        self.updatePandaWidgets()
+        self.panda_program_widget.clear()
+        for primitive in self.pbd_interface.program.primitives:
+            self.panda_program_widget.addPrimitiveWidget(primitive, self.interpreter)
+        self.panda_program_widget.update()
+
+    def deletePreviousPrimitive(self):
+        '''
+        Deletes previously added primitive and asks the user whether they want to return the robot to the preconditions of the previous primitive.
+        '''
+        n = len(self.pbd_interface.program.primitives) - 1
+        buttonReply = QMessageBox.question(self, 'PyQt5 message', "Return the robot to previous preconditions?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if buttonReply == QMessageBox.Yes:
+            self.returnPreviousPreconditions(n)
+        self.pbd_interface.program.delete_nth_primitive(n)
+        self.program_creation_widget.deleteLastPrimitive()
+        self.program_creation_widget.updateWidget()
+        self.updatePandaWidgets()
+
+    def returnPreviousPreconditions(self, primitive_index):
+        '''
+        Assign the respective revert-function for each primitive. This function is executed if the user chose to return the robot
+        to previous preconditions after deleting the previous primitive. 
+        '''
+        revertFunctions = {"MoveToEE": partial(self.pbd_interface.interpreter.revert_move_to_ee, primitive_index),
+                           "MoveToContact": partial(self.pbd_interface.interpreter.revert_move_to_contact, primitive_index),
+                           "UserSync": partial(self.pbd_interface.interpreter.revert_user_sync, primitive_index),
+                           "MoveFingers": partial(self.pbd_interface.interpreter.revert_move_fingers, primitive_index),
+                           "ApplyForceFingers": partial(self.pbd_interface.interpreter.revert_apply_force_fingers, primitive_index)
+        }
+        name = self.pbd_interface.program.primitives[-1].__class__.__name__
+        fn = revertFunctions[name]
+        fn()
+
+    def addProgramUtilityActions(self):
+        '''
+        We assign reset- and save-buttons to their respective functions.
+        '''
+        self.lowerProgramMenu.saveButton.pressed.connect(self.saveProgram)
+        self.lowerProgramMenu.resetButton.pressed.connect(partial(self.program_creation_widget.clear, self.pbd_interface))
+        self.lowerProgramMenu.resetButton.pressed.connect(self.updatePandaWidgets)
+
+    def checkForInitialization(self):
+        '''
+        Disable program creation buttons (both the ones that control the robot and add primitives) except for initialization
+        if the program is not initialized.
+        '''
+        self.program_creation_buttons.controlButtons[0].setEnabled(1 - self.pbd_interface.program.initialized)
+        for controlButton in self.program_creation_buttons.controlButtons[1:]:
+            controlButton.setEnabled(self.pbd_interface.program.initialized)
+
+        for primitiveButton in self.program_creation_buttons.primitiveButtons:
+            primitiveButton.setEnabled(self.pbd_interface.program.initialized)
+
+    def checkForRelaxedAndFrozen(self):
+        '''
+        Depending on the robots state, disable some options to freeze or relax. In addition, prevent the addition
+        of new primitives if the robot is not frozen.
+        '''
+        if self.pbd_interface.relaxed:
+            self.program_creation_buttons.controlButtons[2].setEnabled(False)
+            for primitiveButton in self.program_creation_buttons.primitiveButtons:
+                primitiveButton.setEnabled(False)
+
+        if not self.pbd_interface.relaxed:
+            self.program_creation_buttons.controlButtons[1].setEnabled(False)
+
+    def checkEUPState(self):
+        '''
+        Disable buttons if robot is busy or in error state.
+        '''
+        state = self.state_machine in [EUPStateMachine.STARTUP, EUPStateMachine.OPERATIONAL]
+        if state == False:
+            rospy.loginfo("Program creation buttons disabled while the state machine is busy or in error state")
+        else:
+            rospy.loginfo("Program creation buttons enabled")
+        for controlButton in self.program_creation_buttons.controlButtons:
+            controlButton.setEnabled(state)
+
+        for primitiveButton in self.program_creation_buttons.primitiveButtons:
+            primitiveButton.setEnabled(state)
+        self.checkForInitialization()
+
+    def preventMultipleApplyForceFingers(self):
+        '''
+        Prevent the user from applying multiple Finger Grasps in a row, this causes an error.
+        '''
+        if len(self.pbd_interface.program.primitives) > 0:
+            lastPrimitive = self.pbd_interface.program.primitives[-1]
+            if lastPrimitive.__class__.__name__ == "ApplyForceFingers":
+                self.program_creation_buttons.primitiveButtons[4].setEnabled(False)
+
+    def disableWithEmptyProgram(self):
+        '''
+        Disable certain buttons if the program has no primitives.
+        '''
+        if len(self.pbd_interface.program.primitives) == 0:
+            self.lowerProgramMenu.saveButton.setEnabled(False)
+            self.lowerProgramMenu.resetButton.setEnabled(False)
+            self.program_creation_buttons.deleteButton.setEnabled(False)
+        else:
+            self.lowerProgramMenu.saveButton.setEnabled(True)
+            self.lowerProgramMenu.resetButton.setEnabled(True)
+            self.program_creation_buttons.deleteButton.setEnabled(True)
+
     def announceWorkerDeath(self):
         rospy.logdebug("RIP Worker!")
 
@@ -408,6 +624,211 @@ class EUPWidget(QWidget):
 
     def minimumSizeHint(self):
         return QSize(800, 600)
+
+
+class TabWidget(QWidget):
+    '''
+    This widget creates the tabs which split the GUI into various different purposes such as running existing programs
+    or creating new ones.
+    '''
+
+    def __init__(self, parent):
+        super(TabWidget, self).__init__(parent)
+        self.layout = QVBoxLayout()
+        self.tabWidget = QTabWidget()
+        self.runProgramTab = QWidget()
+        self.createProgramTab = QWidget()
+
+        self.tabWidget.addTab(self.runProgramTab, "Run Programs")
+        self.tabWidget.addTab(self.createProgramTab, "Create Programs")
+
+        self.runProgramTab.layout = QVBoxLayout(self)
+        self.runProgramTab.layout.setAlignment(Qt.AlignTop)
+        self.createProgramTab.layout = QVBoxLayout(self)
+        self.createProgramTab.layout.setAlignment(Qt.AlignTop)
+
+        self.runProgramTab.setLayout(self.runProgramTab.layout)
+        self.createProgramTab.setLayout(self.createProgramTab.layout)
+
+        self.layout.addWidget(self.tabWidget)
+        self.setLayout(self.layout)
+
+
+class ProgramCreationButtons(QWidget):
+    '''
+    This widget covers buttons for adding new primitives to the program and also for controlling the robot by for example freezing
+    or relaxing it.
+    '''
+    sizePolicy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
+
+    def __init__(self, parent):
+        super(ProgramCreationButtons, self).__init__(parent)
+        self.initUI()
+
+    def initUI(self):
+        self.setSizePolicy(self.sizePolicy)
+        self.layout = QHBoxLayout(self)
+        self.addPrimitiveButtons()
+        self.layout.addWidget(QVerticalLine())
+        self.addControlButtons()
+
+    def addPrimitiveButtons(self):
+        '''
+        Add buttons for adding new primitives. The used icons are found in resources-folder. 
+        '''
+        self.primitiveButtonAreaWidget = QWidget(self)
+        self.primitiveButtons = []
+        self.primitiveVerticalLayout = QVBoxLayout(self.primitiveButtonAreaWidget)
+        self.primitiveVerticalLayout.setAlignment(Qt.AlignTop)
+
+        label = QLabel("Add primitive for program")
+        label.setFont(EUPWidget.font)
+
+        self.primitiveVerticalLayout.addWidget(label)
+        self.primitiveButtonRowWidget = QWidget(self)
+        self.primitiveButtonLayout = QHBoxLayout(self.primitiveButtonRowWidget)
+        self.primitiveButtonLayout.setAlignment(Qt.AlignLeft)
+
+        #Iterate through list of all used primitives and create button for each
+        primitives = [pp.MoveToEE(), pp.MoveToContact(), pp.UserSync(), pp.MoveFingers(), pp.ApplyForceFingers()]
+        for primitive in primitives:
+            button = QPushButton('', self)
+            imagePath = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources', primitive.__class__.__name__ + '.png')
+            button.setIcon(QIcon(imagePath))
+            button.setIconSize(QSize(80, 80))
+            self.primitiveButtonLayout.addWidget(button)
+            self.primitiveButtons.append(button)
+
+        #Add button for deleting previous primitive
+        self.deleteButton = QPushButton("Delete\nlast primitive")
+        self.deleteButton.setSizePolicy(QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed))
+        self.deleteButton.setMinimumWidth(150)
+        self.deleteButton.setMinimumHeight(80)
+        self.deleteButton.setFont(EUPWidget.font)
+
+        self.lowerLayoutWidget = QWidget(self)
+        self.lowerLayout = QHBoxLayout(self.lowerLayoutWidget)
+        self.lowerLayout.addWidget(self.deleteButton)
+        self.lowerLayout.setAlignment(Qt.AlignCenter)
+        self.primitiveVerticalLayout.addWidget(self.primitiveButtonRowWidget)
+        self.primitiveVerticalLayout.addWidget(self.lowerLayoutWidget)
+        #self.primitiveVerticalLayout.addWidget(self.deleteButton)
+        self.layout.addWidget(self.primitiveButtonAreaWidget)
+
+    def sizeHint(self):
+        return QSize(100, 100)
+
+    def addControlButtons(self):
+        '''
+        Add buttons for freezing, relaxing the robot.
+        '''
+        self.controlButtonWidget = QWidget(self)
+        self.controlButtons = []
+        self.controlButtonLayout = QGridLayout(self.controlButtonWidget)
+        self.controlButtonLayout.setAlignment(Qt.AlignRight)
+        labels = ["Initialize\nprogram", "Freeze", "Relax", "Relax\nfingers", "Relax\nonly arm", "Relax\nonly wrist"]
+        for i in range(len(labels)):
+            button = QExpandingPushButton(labels[i], self)
+            button.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed))
+            button.setFont(EUPWidget.font)
+            self.controlButtonLayout.addWidget(button, i / 3, i % 3)
+            self.controlButtons.append(button)
+        self.layout.addWidget(self.controlButtonWidget)
+
+
+class LowerProgramMenu(QWidget):
+    '''
+    The lower program menu contain buttons for actions like saving program, reseting program, showing current robot state
+    and recovering from error.
+    '''
+
+    def __init__(self, parent):
+        super(LowerProgramMenu, self).__init__(parent)
+        self.initUI()
+
+    def initUI(self):
+        self.layout = QHBoxLayout(self)
+        self.layout.setAlignment(Qt.AlignLeft)
+        #Reuse same state widget that was used in run program -tab
+        self.stateWidget = PandaStateWidget(self)
+        self.layout.addWidget(self.stateWidget)
+        self.addControlStateLabels()
+        self.layout.addWidget(QVerticalLine())
+        self.addProgramUtilities()
+
+    def addControlStateLabels(self):
+        '''
+        Add labels indicating whether the robot is frozen or relaxed.
+        '''
+        font = QFont()
+        font.setBold(True)
+        font.setPointSize(12)
+
+        self.controlStateWidget = QWidget()
+        self.controlStateLayout = QVBoxLayout(self.controlStateWidget)
+
+        self.frozenLabel = QLabel("Frozen")
+        self.frozenLabel.setFont(font)
+        self.frozenLabel.setAlignment(Qt.AlignCenter)
+
+        self.frozenLabelValue = QLabel("No")
+        self.frozenLabelValue.setFont(font)
+        self.frozenLabelValue.setStyleSheet('color: firebrick')
+        self.frozenLabelValue.setAlignment(Qt.AlignCenter)
+
+        self.relaxedLabel = QLabel("Relaxed")
+        self.relaxedLabel.setFont(font)
+        self.relaxedLabel.setAlignment(Qt.AlignCenter
+        )
+        self.relaxedLabelValue = QLabel("No")
+        self.relaxedLabelValue.setStyleSheet('color: firebrick')
+        self.relaxedLabelValue.setFont(font)
+        self.relaxedLabelValue.setAlignment(Qt.AlignCenter)
+
+        self.controlStateLayout.addWidget(self.frozenLabel)
+        self.controlStateLayout.addWidget(self.frozenLabelValue)
+        self.controlStateLayout.addStretch()
+        self.controlStateLayout.addWidget(self.relaxedLabel)
+        self.controlStateLayout.addWidget(self.relaxedLabelValue)
+
+        self.layout.addWidget(self.controlStateWidget)
+
+    def updateControlStateLabels(self, interface):
+        '''
+        Function which is called after the control state is changed.
+        '''
+        if not interface.relaxed:
+            self.frozenLabelValue.setText("Yes")
+            self.frozenLabelValue.setStyleSheet('color: lightseagreen')
+        else:
+            self.frozenLabelValue.setText("No")
+            self.frozenLabelValue.setStyleSheet('color: firebrick')
+
+        if interface.relaxed:
+            self.relaxedLabelValue.setText("Yes")
+            self.relaxedLabelValue.setStyleSheet('color: lightseagreen')
+        else:
+            self.relaxedLabelValue.setText("No")
+            self.relaxedLabelValue.setStyleSheet('color: firebrick')
+
+    def addProgramUtilities(self):
+        '''
+        Add button for saving, reseting and an inputfield so the user can save programs with any name they prefer.
+        '''
+        self.programUtilities = QWidget()
+        self.utilitiesLayout = QHBoxLayout(self.programUtilities)
+        self.saveButton = QPushButton("Save Program")
+        self.inputField = QLineEdit()
+        self.inputField.setPlaceholderText("Enter name for saved file")
+        self.resetButton = QPushButton("Reset Program")
+        self.saveButton.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.resetButton.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        #self.saveButton.setFont(EUPWidget.font)
+        #self.resetButton.setFont(EUPWidget.font)
+        self.utilitiesLayout.addWidget(self.saveButton)
+        self.utilitiesLayout.addWidget(self.inputField)
+        self.utilitiesLayout.addWidget(self.resetButton)
+        self.layout.addWidget(self.programUtilities)
 
 
 class PandaProgramWidget(QGroupBox):
@@ -445,21 +866,21 @@ class PandaProgramWidget(QGroupBox):
         # Add scrolling area
         program = self.parent().interpreter.loaded_program
         self.program_scroll_area.setWidget(self.program_widget)
-        self.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*program.get_program_length(),
+        self.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH) * program.get_program_length(),
                                         V_SPACING + PRIMITIVE_HEIGHT)
 
         # Add primitive Widgets
         for primitive in program.primitives:
-            self.addPrimitiveWidget(primitive)
+            self.addPrimitiveWidget(primitive, self.parent().interpreter)
 
-    def addPrimitiveWidget(self, primitive):
+    def addPrimitiveWidget(self, primitive, interpreter):
         primitive_widget = PandaPrimitiveWidget(self.program_widget, primitive)
         self.primitive_widget_list.append(primitive_widget)
         self.program_widget_layout.addWidget(primitive_widget)
 
-        program_length = self.parent().interpreter.loaded_program.get_program_length()
-        if self.program_widget.width() < (H_SPACING + PRIMITIVE_WIDTH)*program_length:
-            self.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*program_length, V_SPACING +
+        program_length = interpreter.loaded_program.get_program_length()
+        if self.program_widget.width() < (H_SPACING + PRIMITIVE_WIDTH) * program_length:
+            self.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH) * program_length, V_SPACING +
                                             PRIMITIVE_HEIGHT)
 
     def updateWidget(self):
@@ -467,11 +888,30 @@ class PandaProgramWidget(QGroupBox):
             primitive_widget.updateWidget()
         self.update()
 
+    def clear(self, interface=None):
+        '''
+        The program widget is emptied. Primitive widgets are deleted by setting their parent to None.
+        '''
+        for primitive_widget in self.primitive_widget_list:
+            primitive_widget.setParent(None)
+        self.primitive_widget_list = []
+        if interface != None:
+            interface.program = pp.PandaProgram("A Panda Program")
+        self.update()
+
+    def deleteLastPrimitive(self):
+        '''
+        Function for deleting the last primitive from the program widget.
+        '''
+        primitiveToDelete = self.primitive_widget_list[-1]
+        primitiveToDelete.setParent(None)
+        del self.primitive_widget_list[-1]
+
     def sizeHint(self):
-        return QSize((H_SPACING+PRIMITIVE_WIDTH)*MIN_PRIMITIVE, V_SPACING*3 + PRIMITIVE_HEIGHT)
+        return QSize((H_SPACING + PRIMITIVE_WIDTH) * MIN_PRIMITIVE, V_SPACING * 3 + PRIMITIVE_HEIGHT)
 
     def minimumSizeHint(self):
-        return QSize((H_SPACING+PRIMITIVE_WIDTH)*MIN_PRIMITIVE, V_SPACING*3 + PRIMITIVE_HEIGHT)
+        return QSize((H_SPACING + PRIMITIVE_WIDTH) * MIN_PRIMITIVE, V_SPACING * 3 + PRIMITIVE_HEIGHT)
 
 
 class PandaStateWidget(QGroupBox):
@@ -484,7 +924,7 @@ class PandaStateWidget(QGroupBox):
         pp.PandaRobotStatus.ERROR: 'firebrick'
     }
 
-    font=QFont()
+    font = QFont()
     font.setBold(True)
     font.setPointSize(10)
 
@@ -535,14 +975,14 @@ class PandaStateWidget(QGroupBox):
 class PandaPrimitiveWidget(QFrame):
     # static variables
     status_label_dict = {
-        pp.PandaPrimitiveStatus.NEUTRAL:'',
-        pp.PandaPrimitiveStatus.READY:pp.PandaPrimitiveStatus.READY.name,
-        pp.PandaPrimitiveStatus.ERROR:pp.PandaPrimitiveStatus.ERROR.name,
-        pp.PandaPrimitiveStatus.EXECUTING:pp.PandaPrimitiveStatus.EXECUTING.name,
-        pp.PandaPrimitiveStatus.REVERTING:pp.PandaPrimitiveStatus.REVERTING.name,
-        pp.PandaPrimitiveStatus.EXECUTED:''
+        pp.PandaPrimitiveStatus.NEUTRAL: '',
+        pp.PandaPrimitiveStatus.READY: pp.PandaPrimitiveStatus.READY.name,
+        pp.PandaPrimitiveStatus.ERROR: pp.PandaPrimitiveStatus.ERROR.name,
+        pp.PandaPrimitiveStatus.EXECUTING: pp.PandaPrimitiveStatus.EXECUTING.name,
+        pp.PandaPrimitiveStatus.REVERTING: pp.PandaPrimitiveStatus.REVERTING.name,
+        pp.PandaPrimitiveStatus.EXECUTED: ''
     }
-    font=QFont()
+    font = QFont()
     font.setBold(True)
     font.setPointSize(10)
 
@@ -583,7 +1023,7 @@ class PandaPrimitiveWidget(QFrame):
 
         # Animation
         self.animation = QPropertyAnimation(self, 'background_color')
-        self.animation.setDuration(2000) # in ms
+        self.animation.setDuration(2000)  # in ms
         self.animation.setLoopCount(-1)
         self.animation.setStartValue(QColor('ghostwhite'))
         self.animation.setEndValue(QColor('ghostwhite'))
@@ -720,7 +1160,7 @@ class CurrentValueShowingSlider(QWidget):
     valueChanged = pyqtSignal(float)
     rangeChanged = pyqtSignal(float, float)
     LABEL_WIDTH = 100
-    font=QFont()
+    font = QFont()
     font.setBold(True)
     font.setPointSize(11)
 
@@ -736,7 +1176,7 @@ class CurrentValueShowingSlider(QWidget):
         self.measure_unit = measure_unit
         self.available_range = available_range
         self.name = name
-        self.range_slider_enabled=range_slider_enabled
+        self.range_slider_enabled = range_slider_enabled
         self.initUI()
 
     def initUI(self):
@@ -849,6 +1289,7 @@ class Worker(QRunnable):
     :param kwargs: Keywords to pass to the callback function
 
     '''
+
     def __init__(self, fn, *args, **kwargs):
         super(Worker, self).__init__()
 

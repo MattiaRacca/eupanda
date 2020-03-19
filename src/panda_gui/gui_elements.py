@@ -7,6 +7,7 @@ import qt_range_slider.qtRangeSlider as qtRangeSlider
 
 PRIMITIVE_HEIGHT = 120
 
+
 class RangeSliderTestWidget(QWidget):
     def __init__(self, title='RangeSliderTestWidget'):
         super(RangeSliderTestWidget, self).__init__()
@@ -54,7 +55,7 @@ class FixNumberTicksSlider(QSlider):
     doubleValueChanged = pyqtSignal(float)
 
     def __init__(self, lowerbound, upperbound, number_of_ticks=100, *args, **kargs):
-        super(FixNumberTicksSlider, self).__init__( *args, **kargs)
+        super(FixNumberTicksSlider, self).__init__(*args, **kargs)
         self.setMinimum(0)
         self.setMaximum(number_of_ticks)
 
@@ -62,7 +63,7 @@ class FixNumberTicksSlider(QSlider):
         self._upperbound = upperbound
         self._number_of_ticks = number_of_ticks
         self._range = upperbound - lowerbound
-        self._real_step = self._range/self._number_of_ticks
+        self._real_step = self._range / self._number_of_ticks
         self.setStrictBounds([None, None])
 
         self.valueChanged.connect(self.emitDoubleValueChanged)
@@ -87,25 +88,25 @@ class FixNumberTicksSlider(QSlider):
             self._strict_upperbound = strict_upperbound
 
     def emitDoubleValueChanged(self):
-        value = self._lowerbound + float(super(FixNumberTicksSlider, self).value())*self._real_step
+        value = self._lowerbound + float(super(FixNumberTicksSlider, self).value()) * self._real_step
         self.doubleValueChanged.emit(value)
 
     def value(self):
-        return self._lowerbound + float(super(FixNumberTicksSlider, self).value())*self._real_step
+        return self._lowerbound + float(super(FixNumberTicksSlider, self).value()) * self._real_step
 
     def setValue(self, value):
-        super(FixNumberTicksSlider, self).setValue(int((value - self._lowerbound)/self._real_step))
+        super(FixNumberTicksSlider, self).setValue(int((value - self._lowerbound) / self._real_step))
 
     def restrictMove(self):
-        value = self._lowerbound + float(super(FixNumberTicksSlider, self).value())*self._real_step
+        value = self._lowerbound + float(super(FixNumberTicksSlider, self).value()) * self._real_step
         if not(self._strict_lowerbound <= value <= self._strict_upperbound):
             if value >= self._strict_upperbound:
                 value = self._strict_upperbound
             if value <= self._strict_lowerbound:
                 value = self._strict_lowerbound
-            where = int((value - self._lowerbound)/self._real_step)
+            where = int((value - self._lowerbound) / self._real_step)
             super(FixNumberTicksSlider, self).setSliderPosition(where)
-            value = self._lowerbound + float(super(FixNumberTicksSlider, self).value())*self._real_step
+            value = self._lowerbound + float(super(FixNumberTicksSlider, self).value()) * self._real_step
             # TODO: HORRIBLE HACK BECAUSE OF ROUNDINGS. But I don't want to loose time on this
             if not(self._strict_lowerbound <= value <= self._strict_upperbound):
                 super(FixNumberTicksSlider, self).setSliderPosition(where + 1)

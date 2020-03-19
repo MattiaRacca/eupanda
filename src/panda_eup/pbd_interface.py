@@ -2,6 +2,7 @@
 
 import rospy
 import copy
+import numpy as np
 import panda_primitive as pp
 import program_interpreter as interpreter
 from panda_pbd.srv import EnableTeaching, EnableTeachingRequest
@@ -11,9 +12,9 @@ from sensor_msgs.msg import JointState
 
 
 class PandaPBDInterface(object):
-    def __init__(self):
+    def __init__(self, robotless_debug):
         self.program = pp.PandaProgram('A Panda Program')
-
+        self.robotless_debug = robotless_debug
         self.last_pose = None
         self.last_gripper_width = None
         self.relaxed = False
@@ -35,95 +36,121 @@ class PandaPBDInterface(object):
             else:
                 self.default_parameters[parameter_name] = rospy.get_param('~' + parameter_name,
                                                                           self.default_parameters[parameter_name])
+        if not self.robotless_debug:
+            self.gripper_state_subscriber = rospy.Subscriber("/franka_gripper/joint_states", JointState,
+                                                            self.gripper_state_callback)
 
-        self.gripper_state_subscriber = rospy.Subscriber("/franka_gripper/joint_states", JointState,
-                                                         self.gripper_state_callback)
+            try:
+                self.kinesthetic_client = rospy.ServiceProxy('/primitive_interface_node/kinesthetic_teaching',
+                                                            EnableTeaching)
+            except rospy.ServiceException:
+                rospy.logerr('Cannot create Kinesthetic Teaching client!')
 
-        try:
-            self.kinesthetic_client = rospy.ServiceProxy('/primitive_interface_node/kinesthetic_teaching',
-                                                         EnableTeaching)
-        except rospy.ServiceException:
-            rospy.logerr('Cannot create Kinesthetic Teaching client!')
+            try:
+                self.kinesthetic_client.wait_for_service(5.0)
+            except rospy.ROSException:
+                rospy.logerr('Cannot contact the Primitive Interface Node!')
+        # The interpreter of panda_widgets is used for the tuning and running of existing programs
+        # The interpreter of pbd_interface is used for actions that are targeted at the program-to-be-created,
+        # such as moving to previous preconditions when primitives are deleted
 
-        try:
-            self.kinesthetic_client.wait_for_service(5.0)
-        except rospy.ROSException:
-            rospy.logerr('Cannot contact the Primitive Interface Node!')
-
-        self.interpreter = interpreter.PandaProgramInterpreter()  # internal interpreter, for execute_now_primitives
-
+        self.interpreter = interpreter.PandaProgramInterpreter(robotless_debug=self.robotless_debug)  # internal interpreter, for execute_now_primitives
+        self.interpreter.loaded_program = self.program
         self.freeze()
 
     def initialize_program(self):
         # TODO: maybe enforce some check on the rest of the functions? to check for initialization
-        while self.last_pose is None or self.last_gripper_width is None:
-            rospy.sleep(1.0)
+        if not self.robotless_debug:
+            while self.last_pose is None or self.last_gripper_width is None:
+                rospy.sleep(1.0)
 
-        was_relaxed = self.relaxed
-        if was_relaxed:
-            self.freeze()
+            was_relaxed = self.relaxed
+            if was_relaxed:
+                self.freeze()
 
-        self.program.save_arm_state(self.last_pose)
-        # TODO: assumption here, I am not grasping at the beginning...
-        self.program.save_gripper_state(pp.GripperState(self.last_gripper_width, 0.0))
+            self.program.save_arm_state(self.last_pose)
+            # TODO: assumption here, I am not grasping at the beginning...
+            self.program.save_gripper_state(pp.GripperState(self.last_gripper_width, 0.0))
 
-        if was_relaxed:
-            self.relax()
+            if was_relaxed:
+                self.relax()
+        else:
+            self.last_pose = np.random.uniform(0, 1, 3)
+            self.last_gripper_width = np.random.uniform(0, 0.08, 1)
+            # During robotless debug, we replace actual values with randomly generated ones
+            # This way, we can still test the functionality of the GUI while not
+            # connected to the robot.
+            self.program.save_arm_state(self.last_pose)
+            self.program.save_gripper_state(pp.GripperState(self.last_gripper_width, 0.0))
+        self.program.initialized = True
 
     def gripper_state_callback(self, msg):
         last_gripper_width = msg.position[0] + msg.position[1]
         self.last_gripper_width = last_gripper_width if last_gripper_width <= 0.08 else 0.08
 
     def relax(self):
-        req = EnableTeachingRequest()
-        req.ft_threshold_multiplier = self.default_parameters['kinesthestic_ft_threshold']
-        req.teaching = 1
+        if not self.robotless_debug:
+            req = EnableTeachingRequest()
+            req.ft_threshold_multiplier = self.default_parameters['kinesthestic_ft_threshold']
+            req.teaching = 1
 
-        try:
-            res = self.kinesthetic_client(req)
-        except rospy.ServiceException:
-            rospy.logerr('Cannot contact Kinesthetic Teaching client!')
-            self.last_pose = None
-            return False
+            try:
+                res = self.kinesthetic_client(req)
+            except rospy.ServiceException:
+                rospy.logerr('Cannot contact Kinesthetic Teaching client!')
+                self.last_pose = None
+                return False
 
-        if res.success:
-            self.last_pose = res.ee_pose
+            if res.success:
+                self.last_pose = res.ee_pose
+                self.relaxed = True
+            return True
+
+        else:
+            self.last_pose = np.random.uniform(0, 1, 3)
             self.relaxed = True
-        return True
 
     def relax_only_arm(self):
-        req = EnableTeachingRequest()
-        req.ft_threshold_multiplier = self.default_parameters['kinesthestic_ft_threshold']
-        req.teaching = 2
+        if not self.robotless_debug:
+            req = EnableTeachingRequest()
+            req.ft_threshold_multiplier = self.default_parameters['kinesthestic_ft_threshold']
+            req.teaching = 2
 
-        try:
-            res = self.kinesthetic_client(req)
-        except rospy.ServiceException:
-            rospy.logerr('Cannot contact Kinesthetic Teaching client!')
-            self.last_pose = None
-            return False
+            try:
+                res = self.kinesthetic_client(req)
+            except rospy.ServiceException:
+                rospy.logerr('Cannot contact Kinesthetic Teaching client!')
+                self.last_pose = None
+                return False
 
-        if res.success:
-            self.last_pose = res.ee_pose
+            if res.success:
+                self.last_pose = res.ee_pose
+                self.relaxed = True
+            return True
+        else:
+            self.last_pose = np.random.uniform(0, 1, 3)
             self.relaxed = True
-        return True
 
     def relax_only_wrist(self):
-        req = EnableTeachingRequest()
-        req.ft_threshold_multiplier = self.default_parameters['kinesthestic_ft_threshold']
-        req.teaching = 3
+        if not self.robotless_debug:
+            req = EnableTeachingRequest()
+            req.ft_threshold_multiplier = self.default_parameters['kinesthestic_ft_threshold']
+            req.teaching = 3
 
-        try:
-            res = self.kinesthetic_client(req)
-        except rospy.ServiceException:
-            rospy.logerr('Cannot contact Kinesthetic Teaching client!')
-            self.last_pose = None
-            return False
+            try:
+                res = self.kinesthetic_client(req)
+            except rospy.ServiceException:
+                rospy.logerr('Cannot contact Kinesthetic Teaching client!')
+                self.last_pose = None
+                return False
 
-        if res.success:
-            self.last_pose = res.ee_pose
+            if res.success:
+                self.last_pose = res.ee_pose
+                self.relaxed = True
+            return True
+        else:
+            self.last_pose = np.random.uniform(0, 1, 3)
             self.relaxed = True
-        return True
 
     def relax_finger(self):
         temp_program = pp.PandaProgram()
@@ -139,20 +166,25 @@ class PandaPBDInterface(object):
         return self.interpreter.execute_rest_of_program(one_shot_execution=True)
 
     def freeze(self):
-        req = EnableTeachingRequest()
-        req.teaching = 0
+        if not self.robotless_debug:
+            req = EnableTeachingRequest()
+            req.teaching = 0
 
-        try:
-            res = self.kinesthetic_client(req)
-        except rospy.ServiceException:
-            rospy.logerr('Cannot contact Kinesthetic Teaching client!')
-            self.last_pose = None
-            return False
+            try:
+                res = self.kinesthetic_client(req)
+            except rospy.ServiceException:
+                rospy.logerr('Cannot contact Kinesthetic Teaching client!')
+                self.last_pose = None
+                return False
 
-        if res.success:
-            self.last_pose = res.ee_pose
+            if res.success:
+                self.last_pose = res.ee_pose
+                self.relaxed = False
+            return True
+
+        else:
+            self.last_pose = np.random.uniform(0, 1, 3)
             self.relaxed = False
-        return True
 
     def insert_move_to_ee(self):
         was_relaxed = self.relaxed
@@ -218,7 +250,8 @@ class PandaPBDInterface(object):
         apply_force_fingers_primitive = pp.ApplyForceFingers()
         apply_force_fingers_primitive.set_parameter_container(request)
 
-        self.execute_primitive_now(apply_force_fingers_primitive)
+        if not self.robotless_debug:
+            self.execute_primitive_now(apply_force_fingers_primitive)
 
         self.program.insert_primitive(apply_force_fingers_primitive, [None, pp.GripperState(self.last_gripper_width,
                                                                                             request.force)])
@@ -238,11 +271,11 @@ class PandaPBDInterface(object):
         move_fingers_primitive.set_parameter_container(request)
         self.program.insert_primitive(move_fingers_primitive, [None, pp.GripperState(self.last_gripper_width, 0.0)])
 
-        self.execute_primitive_now(move_fingers_primitive)
+        if not self.robotless_debug:
+            self.execute_primitive_now(move_fingers_primitive)
 
         if was_relaxed:
             self.relax()
-
 
     def execute_primitive_now(self, primitive):
         temp_program = pp.PandaProgram()

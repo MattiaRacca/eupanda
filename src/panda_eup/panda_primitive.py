@@ -272,6 +272,7 @@ class PandaProgram(object):
         self.primitives = []
         self.arm_state_list = []  # list of EE poses
         self.gripper_state_list = []  # list of GripperState
+        self.initialized = False
 
         # dictionary of the effect of primitives on the [arm_state_list, gripper_state_list]
         # e.g., MoveToEE affects the arm pose but not the gripper

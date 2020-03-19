@@ -36,7 +36,6 @@ class PandaProgramInterpreter(object):
         if not self.robotless_debug:
             self.interface_state_subscriber = rospy.Subscriber("/primitive_interface_node/interface_state", Int32,
                                                                self.interface_state_callback)
-
             self.gripper_state_subscriber = rospy.Subscriber("/franka_gripper/joint_states", JointState,
                                                              self.gripper_state_callback)
 
@@ -46,11 +45,9 @@ class PandaProgramInterpreter(object):
                 'primitive_interface_node/move_to_contact_server', MoveToContactAction)
             self.user_sync_client = actionlib.SimpleActionClient('/primitive_interface_node/user_sync_server',
                                                                  UserSyncAction)
-
             self.move_to_ee_client.wait_for_server()
             self.move_to_contact_client.wait_for_server()
             self.user_sync_client.wait_for_server()
-
             self.move_fingers_client = rospy.ServiceProxy('/primitive_interface_node/move_fingers', MoveFingers)
             self.apply_force_fingers_client = rospy.ServiceProxy('/primitive_interface_node/apply_force_fingers',
                                                                  ApplyForceFingers)
