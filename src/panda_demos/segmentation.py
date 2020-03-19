@@ -14,10 +14,10 @@ class Segmentation():
         self.velocities = []
         self.timeStep = 0.1
         self.normFactor = 0.20
-        self.devFactor = 0.06
+        self.devFactor = 0.10
         self.penalizingFactor = 10000.0
         self.L_min = 0.10
-        self.M_min = 10
+        self.M_min = 0.20
         self.d = 0.002
         self.m = int(self.L_min/(self.d * 5))
 
@@ -36,15 +36,15 @@ class Segmentation():
         return result.x
 
     def initialGuess(self, a_j):
-        t_ij = (self.points_to_segment[0] - a_j[3:6]).dot(a_j[0:3])
-        size = t_ij.size
-        t_ij = np.reshape(t_ij, (size, 1))
-        prediction = np.dot(t_ij, a_j[0:3].reshape(1, 3)) + a_j[3:6]
         if len(self.points_to_segment) > self.m:
             point_at_m = self.m
         else:
-            point_at_m = len(self.points_to_segment) - 1    
-        error = np.linalg.norm(self.points_to_segment[point_at_m] - prediction, axis=1)
+            point_at_m = len(self.points_to_segment) - 1
+        t_ij = (self.points_to_segment[0:point_at_m - 1] - a_j[3:6]).dot(a_j[0:3])
+        size = t_ij.size
+        t_ij = np.reshape(t_ij, (size, 1))
+        prediction = np.dot(t_ij, a_j[0:3].reshape(1, 3)) + a_j[3:6]        
+        error = np.linalg.norm(self.points_to_segment[1:point_at_m] - prediction, axis=1)
         value =  1 - np.power(np.exp((-1)*error/self.normFactor), 2)
         return sum(value) + self.penalizingFactor
 
@@ -70,6 +70,8 @@ class Segmentation():
 
     def createSegments(self):
         self.meanVelocity = np.mean(self.velocities)
+        self.maxVelocity = np.max(self.velocities)
+        self.minVelocity = np.min(self.velocities)
         j = 1
         j_start = 1
         j_end = len(self.downSamplePoints)
@@ -86,15 +88,19 @@ class Segmentation():
                 prediction = np.dot((self.points_to_segment[i - 1] - a_j[3:6]).dot(a_j[0:3]), a_j[0:3]) + a_j[3:6]
                 #print(len(self.points_to_segment), i-k, k, i, j_end)
                 deviation = np.linalg.norm(self.points_to_segment[i] - prediction)
-                relativeVelocity = self.velocities[self.downSampleIndexes[i+k]]/self.meanVelocity
-                #print(deviation, i + k, relativeVelocity, self.devFactor*relativeVelocity, start)
+                #relativeVelocity = self.velocities[self.downSampleIndexes[i+k]]/self.meanVelocity
+                #relativeVelocity = relativeVelocity*relativeVelocity
+                relativeVelocity = 2*(self.velocities[self.downSampleIndexes[i+k]] - self.minVelocity / (self.maxVelocity - self.minVelocity))
+                #relativeVelocity = np.sqrt(relativeVelocity)
+                print(deviation, i + k, relativeVelocity, self.devFactor*relativeVelocity, start)
+                if start != None and ((i+k) - start >= self.m) or start != None and deviation > self.M_min:
+                    break
+
                 if deviation > (self.devFactor*relativeVelocity) and start == None:
                     start = i + k
                 elif deviation < (self.devFactor*relativeVelocity):
                     start = None
 
-                if start != None and ((i+k) - start > self.m):
-                    break
 
                 if i == j_end - 1: 
                     break       
@@ -105,7 +111,7 @@ class Segmentation():
                 k = start
                 self.points_to_segment = self.points_to_segment[((start - prev_start) + 1):]
                 #print(start, len(self.points_to_segment))
-                if len(self.points_to_segment) < 2:
+                if len(self.points_to_segment) < 3:
                     done = True
                     break
 
@@ -140,8 +146,7 @@ class Segmentation():
 
 if __name__ == '__main__':
     seg = Segmentation()
-    data = seg.loadData('~/Thesis/src/eupanda/resources/data', 'pickandplace_100hz.pkl')
-    #print(data["time_axis_ee"][30:35])
+    data = seg.loadData('~/Thesis/src/eupanda/resources/data', '4_motions_100hz.pkl')
     seg.time_axis = data["time_axis_ee"]
     seg.velocities = data["ee_velocities"]
     traj_points = [item[0] for item in data["trajectory_points"]]
@@ -160,6 +165,6 @@ if __name__ == '__main__':
     ax.set_zlim(0, 0.5)
     ax.view_init(40, -10)
     fig.show()
-    fig.savefig("segmentpoints_PaP_relativeVel.png")
+    #fig.savefig("segmentpoints_PaP_relativeVel.png")
     while True:
        pass 
