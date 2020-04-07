@@ -62,7 +62,7 @@ class Datarecorder():
 
         self.trajectory_points.append((trans, rot))
         self.pose = trans
-        vel = np.sqrt(np.square(linear[0]) + np.square(linear[1]) + np.square(linear[2])) 
+        vel = np.sqrt(np.square(linear[0]) + np.square(linear[1]) + np.square(linear[2]))
         self.ee_velocities.append(vel)
         self.time_axis_ee.append(vel_time.to_sec() - self.start_time.to_sec())    
 
@@ -115,6 +115,7 @@ class Datarecorder():
         self.time_axis_gripper.append(gripper_time.to_sec() - self.start_time.to_sec())
 
     def recordData(self, dataLine_v, dataLine_g):
+        count = 1
         self.interface.relax()
         self.recording = True
         if len(self.time_axis_ee) == 0:
@@ -125,9 +126,14 @@ class Datarecorder():
         while self.recording:
             #print(self.interface.robotless_debug)
             if not self.interface.robotless_debug:
-                self.gripper_states.append(self.gripperstate)
                 self.getListenerValues()
-                self.getGripperValues()                   
+                #Gripper publish rate appears to be ~5hz, to avoid fecthing gripper values too frequently, we add
+                #variable count to reduce the rate at which gripper values are added
+                if count == int(self.rate/4.5):
+                    self.gripper_states.append(self.gripperstate)
+                    self.getGripperValues()
+                    count = 1
+                count += 1                       
             else:    
                 newVelocity = random.uniform(0, 0.25)
                 gripperVelocity = random.uniform(0, 0.05)
