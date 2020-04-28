@@ -8,7 +8,8 @@ import tf
 import numpy as np
 import pickle
 import os
-
+from pykdl_utils.kdl_kinematics import KDLKinematics
+from urdf_parser_py.urdf import URDF
 
 class Datarecorder():
 
@@ -28,6 +29,8 @@ class Datarecorder():
         self.gripperstate = None
         self.data = {}
         self.listener = tf.TransformListener()
+        self.joint_state_subscriber = rospy.Subscriber("/joint_states", JointState,
+                                                            self.jointStateCallback)
 
     def startRecording(self, dataLine_v, dataLine_g):
         self.worker = RecordingWorker(self.recordData, dataLine_v, dataLine_g)
@@ -50,6 +53,13 @@ class Datarecorder():
         with open(os.path.join(os.path.expanduser(path), filename), 'rb') as f:
             loaded_program = pickle.load(f)
             return loaded_program        
+
+    def jointStateCallback(self, msg):
+        #Get URDF from franka_description
+        pos, vel = msg.position, msg.velocity
+        robot_urdf = URDF.from_xml_string(urdf_str)
+        kdl_kin = KDLKinematics(robot_urdf, "panda_link0", "panda_K")
+        self.pose = kdl_kin.forward(pos)
 
     def getListenerValues(self):
         try:
