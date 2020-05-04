@@ -56,9 +56,10 @@ class Datarecorder():
 
     def jointStateCallback(self, msg):
         #Get URDF from franka_description
+        #urdf_str = 
         pos, vel = msg.position, msg.velocity
         robot_urdf = URDF.from_xml_string(urdf_str)
-        kdl_kin = KDLKinematics(robot_urdf, "panda_link0", "panda_K")
+        kdl_kin = KDLKinematics(robot_urdf, "panda_link0", "panda_link8")
         self.pose = kdl_kin.forward(pos)
 
     def getListenerValues(self):
