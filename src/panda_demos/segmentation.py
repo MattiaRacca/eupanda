@@ -1,170 +1,91 @@
-import numpy as np
-from scipy.optimize import minimize
-import os
-import pickle
-from mpl_toolkits import mplot3d
-import matplotlib.pyplot as plt
+from panda_eup.pbd_interface import PBDInterface
+from panda_eup.panda_primitive import PandaProgram
+from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
+from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest
+import panda_primitive as pp
+from gripper_segmentation import GripperSegmentation
+from trajectory_segmentation import TrajSeg
+
 
 class Segmentation():
 
-    def __init__(self):
-        self.trajectory_points = []
-        self.points_to_segment = []
-        self.time_axis = []
-        self.velocities = []
-        self.timeStep = 0.1
-        self.normFactor = 0.20
-        self.devFactor = 0.10
-        self.penalizingFactor = 10000.0
-        self.L_min = 0.10
-        self.M_min = 0.20
-        self.d = 0.002
-        self.m = int(self.L_min/(self.d * 5))
-
-    def costFunction(self, a_j):
-        t_ij = (self.points_to_segment - a_j[3:6]).dot(a_j[0:3])
-        size = t_ij.size
-        t_ij = np.reshape(t_ij, (size, 1))
-        prediction = np.dot(t_ij, a_j[0:3].reshape(1, 3)) + a_j[3:6]
-        error = np.linalg.norm(self.points_to_segment[1:] - prediction[:-1], axis=1)
-        value =  1 - np.power(np.exp((-1)*error/self.normFactor), 2)
-        return sum(value) + self.penalizingFactor
-
-    def optimize(self, a_j, fn):
-        result = minimize(fn, a_j, method='nelder-mead')
-        #sample = self.costFunction(np.array(result.x))
-        return result.x
-
-    def initialGuess(self, a_j):
-        if len(self.points_to_segment) > self.m:
-            point_at_m = self.m
-        else:
-            point_at_m = len(self.points_to_segment) - 1
-        t_ij = (self.points_to_segment[0:point_at_m - 1] - a_j[3:6]).dot(a_j[0:3])
-        size = t_ij.size
-        t_ij = np.reshape(t_ij, (size, 1))
-        prediction = np.dot(t_ij, a_j[0:3].reshape(1, 3)) + a_j[3:6]        
-        error = np.linalg.norm(self.points_to_segment[1:point_at_m] - prediction, axis=1)
-        value =  1 - np.power(np.exp((-1)*error/self.normFactor), 2)
-        return sum(value) + self.penalizingFactor
-
-    def downSamplePoints(self):
-        self.downSamplePoints = []
-        self.downSampleIndexes = []
-        self.downSamplePoints.append(self.trajectory_points[0])
-        self.downSampleIndexes.append(0)
-        count = 1
-        for point in self.trajectory_points[1:]:
-            dist = np.linalg.norm(self.downSamplePoints[-1] - point)
-            if 0.95*self.d < dist and dist > 1.05*self.d:
-                self.downSamplePoints.append(point)
-                self.downSampleIndexes.append(count)
-            count += 1    
-        #self.trajectory_points = self.downSamplePoints 
-
-    def calculate_aj(self):
-        a_start = np.array([1, 1, 1, 1, 1, 1])
-        a_j_init = self.optimize(a_start, self.initialGuess)
-        a_j = self.optimize(a_j_init, self.costFunction)
-        return a_j_init
+    def __init__(self, interface):
+        self.program = PandaProgram()
+        self.data = None
+        self.interface = interface
 
     def createSegments(self):
-        self.meanVelocity = np.mean(self.velocities)
-        self.maxVelocity = np.max(self.velocities)
-        self.minVelocity = np.min(self.velocities)
-        j = 1
-        j_start = 1
-        j_end = len(self.downSamplePoints)
-        L_c = 0 #cumulative value of L
-        breakpoints = []
-        start, end = None, None
-        done = False
-        k = 0
-        self.points_to_segment = self.downSamplePoints
-        a_j = self.calculate_aj()
+        traj_points = [item[0] for item in self.data["trajectory_points"]]
+        self.trajectory_points = np.array(traj_points)
+        self.gripper_states = self.data["gripper_states"]
+        self.gripper_velocities = self.data["gripper_velocities"]
+        self.time_axis_ee = self.data["time_axis_ee"]
+        self.time_axis_gripper = self.data["time_axis_gripper"]
         
-        while done == False:
-            for i in range(j, j_end):
-                prediction = np.dot((self.points_to_segment[i - 1] - a_j[3:6]).dot(a_j[0:3]), a_j[0:3]) + a_j[3:6]
-                #print(len(self.points_to_segment), i-k, k, i, j_end)
-                deviation = np.linalg.norm(self.points_to_segment[i] - prediction)
-                #relativeVelocity = self.velocities[self.downSampleIndexes[i+k]]/self.meanVelocity
-                #relativeVelocity = relativeVelocity*relativeVelocity
-                relativeVelocity = 2*(self.velocities[self.downSampleIndexes[i+k]] - self.minVelocity / (self.maxVelocity - self.minVelocity))
-                #relativeVelocity = np.sqrt(relativeVelocity)
-                print(deviation, i + k, relativeVelocity, self.devFactor*relativeVelocity, start)
-                if start != None and ((i+k) - start >= self.m) or start != None and deviation > self.M_min:
-                    break
+        gripSeg = Grippersegmentation()
+        gripSeg.trajectory_points = self.trajectory_points
+        gripSeg.gripper_states = self.gripper_states
+        gripSeg.gripper_velocities = self.gripper_velocities
+        gripSeg.time_axis_ee = self.time_axis_ee
+        gripSeg.time_axis_gripper = self.time_axis_gripper
 
-                if deviation > (self.devFactor*relativeVelocity) and start == None:
-                    start = i + k
-                elif deviation < (self.devFactor*relativeVelocity):
-                    start = None
+        trajSeg = TrajSeg()
+
+        ma = gripSeg.moving_average(gripSeg.gripper_velocities)
+        segments = gripSeg.createSegments(ma)
+
+        prevEnd = None
+        for segment in segments:
+            start = segment[0]
+            end = segment[1]
+            if prevEnd != None:
+                self.addGripperAction(prevEnd, start)
+            trajSeg.trajectory_points = self.trajectory_points[start:end]
+            trajSeg.initialize()
+            result = trajSeg.optimize()
+            result = [item+start for item in result]
+            motionStart = start
+            #for point in result:
+
+    def addGripperAction(self, start, end):
+        startwidth = self.gripper_states[start]
+        endwidth = self.gripper_states[end]
+        if endwidth < startwidth:
+            self.addFingerGrasp(endwidth)
+        else:
+            self.addMoveFingers(endwidth)    
+
+    def addFingerGrasp(self, width):
+        request = ApplyForceFingersRequest()
+        request.force = self.interface.default_parameters['apply_force_fingers_default_force']
+
+        apply_force_fingers_primitive = pp.ApplyForceFingers()
+        apply_force_fingers_primitive.set_parameter_container(request)
+        self.program.insert_primitive(apply_force_fingers_primitive, [None, pp.GripperState(width, request.force)])
+
+    def addMoveFingers(self, width):
+        request = MoveFingersRequest()
+        request.width = width
+
+        move_fingers_primitive = pp.MoveFingers()
+        move_fingers_primitive.set_parameter_container(request)
+        self.program.insert_primitive(move_fingers_primitive, [None, pp.GripperState(width, 0.0)])
+
+    def addLinearMotion(self, end):
+        goal = MoveToEEGoal()
+        goal.pose = end
+        goal.position_speed = self.interface.default_parameters['move_to_ee_default_position_speed']
+        goal.rotation_speed = self.interface.default_parameters['move_to_ee_default_rotation_speed']
+
+        move_to_ee_primitive = pp.MoveToEE()
+        move_to_ee_primitive.set_parameter_container(goal)
+        self.interface.program.insert_primitive(move_to_ee_primitive, [goal.pose, None])
 
 
-                if i == j_end - 1: 
-                    break       
-
-            if start != None:
-                breakpoints.append(start)
-                prev_start = k
-                k = start
-                self.points_to_segment = self.points_to_segment[((start - prev_start) + 1):]
-                #print(start, len(self.points_to_segment))
-                if len(self.points_to_segment) < 3:
-                    done = True
-                    break
-
-                a_j = self.calculate_aj()
-                j_end = len(self.points_to_segment)
-                start = None
-            else:
-                done = True 
-        result = []
-        #breakpoints = self.cleanBreakpoints(breakpoints)           
-        for value in breakpoints:
-            print(value, self.time_axis[self.downSampleIndexes[value]]) 
-            result.append(self.downSampleIndexes[value])
-        return result                         
-
-    def cleanBreakpoints(self, breakpoints):
-        finalBreakpoints = []
-        finalBreakpoints.append(breakpoints[0])
-        for value in breakpoints[1:]:
-            point = self.trajectory_points[self.downSampleIndexes[value]]
-            prev_point = self.trajectory_points[self.downSampleIndexes[finalBreakpoints[-1]]]
-            dist = np.linalg.norm(point - prev_point)
-            if dist > 0.05:
-                finalBreakpoints.append(value)
-        return finalBreakpoints        
+    def getPose(self, index):
+        return self.data["trajectory_points"][index]
 
     def loadData(self, path, filename):
         with open(os.path.join(os.path.expanduser(path), filename), 'rb') as f:
             loaded_program = pickle.load(f)
-            return loaded_program 
-
-
-if __name__ == '__main__':
-    seg = Segmentation()
-    data = seg.loadData('~/Thesis/src/eupanda/resources/data', '4_motions_100hz.pkl')
-    seg.time_axis = data["time_axis_ee"]
-    seg.velocities = data["ee_velocities"]
-    traj_points = [item[0] for item in data["trajectory_points"]]
-    seg.trajectory_points = np.array(traj_points)
-    seg.downSamplePoints() 
-    points = seg.createSegments()
-    x = seg.trajectory_points[:, 0]
-    y = seg.trajectory_points[:, 1]
-    z = seg.trajectory_points[:, 2]
-    fig = plt.figure()
-    ax = plt.axes(projection='3d')
-    ax.scatter(x, y, z)
-    ax.plot(x[points], y[points], z[points], markersize=8, marker='d', markerfacecolor='r', linestyle='none')
-    ax.plot([x[0]], [y[0]], [z[0]], markersize=8, marker='o', markerfacecolor='green', linestyle='none')
-    ax.plot([x[-1]], [y[-1]], [z[-1]], markersize=8, marker='o', markerfacecolor='yellow', linestyle='none')
-    ax.set_zlim(0, 0.5)
-    ax.view_init(40, -10)
-    fig.show()
-    #fig.savefig("segmentpoints_PaP_relativeVel.png")
-    while True:
-       pass 
+            return loaded_program                

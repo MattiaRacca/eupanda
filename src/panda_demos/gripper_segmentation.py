@@ -42,7 +42,8 @@ class Grippersegmentation():
         done = False
         start = 0
         fingerGrasp_indices, moveFingers_indices = self.findGripperActions(data)
-        trajSeg = TrajSeg()
+        #trajSeg = TrajSeg()
+        segments = []
         while not done:
             if len(fingerGrasp_indices) == 0 and len(moveFingers_indices) == 0:
                 done = True
@@ -63,6 +64,7 @@ class Grippersegmentation():
             else:
                 idx = len(self.trajectory_points) - 1      
                 points_to_segment = self.trajectory_points[start:]
+            '''
             trajSeg.trajectory_points = np.array(points_to_segment)
             trajSeg.initialize()
             result = trajSeg.optimize()
@@ -72,13 +74,16 @@ class Grippersegmentation():
                 value = start + trajSeg.downSampleIndexes[point]
                 points.append(value)
             points.append(idx)    
+            '''
             #run trajectory_segmentation with points_to_segment
-            print(start, idx)
-            print(result, points)
+            #print(start, idx)
+            #print(result, points)
+            segments.append((start, idx))
             if not done:
                 end_timestamp = self.time_axis_gripper[currentAction[1]]
                 diff = abs(np.array(self.time_axis_ee) - end_timestamp)
                 start = diff.argmin()
+        return segments
 
 if __name__ == '__main__':
     seg = Grippersegmentation()
@@ -91,7 +96,8 @@ if __name__ == '__main__':
     seg.time_axis_ee = data["time_axis_ee"]
     ma = seg.moving_average(seg.gripper_velocities)
     #seg.findGripperActions(ma)
-    seg.createSegments(ma)
+    segments = seg.createSegments(ma)
+    print(segments)
     #ma = seg.gripper_velocities
     count = 0
     for value in ma:
