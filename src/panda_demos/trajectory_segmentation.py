@@ -45,10 +45,11 @@ class TrajSeg():
         N = len(self.points_to_segment)
         initialCosts = []
         for point in range(1, N):
-            d = self.calculateTransitionCost(0, point)
-            initialCosts.append((d, [point]))
+            d, maxd = self.calculateTransitionCost(0, point)
+            initialCosts.append((d, [point], maxd))
         
-        
+        if maxd < 0.10:
+            return initialCosts[-1][1]
         storedCosts = []
         prevCosts = initialCosts
         for i in range(2, len(self.points_to_segment)):
@@ -56,30 +57,23 @@ class TrajSeg():
             for j in range(i, len(self.points_to_segment)):
                 values = []
                 for point in range(i-1, j):
-                    d = self.calculateTransitionCost(point, j)
-                    #print(point)
+                    d, maxd = self.calculateTransitionCost(point, j)
                     cost = d + prevCosts[point - (i-1)][0]
                     indexes = deepcopy(prevCosts[point - (i-1)][1])
+                    if maxd <= prevCosts[point - (i-1)][2]:
+                        maxd = prevCosts[point - (i-1)][2]
                     indexes.append(j)
-                    values.append((cost, indexes))
+                    values.append((cost, indexes, maxd))
                 minValue = min(values) 
                 costs.append(minValue)
             storedCosts.append(costs)
             finalCosts.append(costs[-1])
             prevCosts = costs
-            print(len(prevCosts))
-            combinedCost = costs[-1][0] + self.zeta*len(costs[-1][1])
-            print(combinedCost)
-            if combinedCost > prevCombinedCost:
-                print(prevCombinedCost, prevSolution)
+            if costs[-1][2] < 0.10:
                 break
             else:
-                prevCombinedCost = combinedCost
                 prevSolution = costs[-1][1]
-        result = []
-        for point in prevSolution:
-            result.append(self.downSampleIndexes[point])
-        return result    
+        return costs[-1][1]        
 
     def calculateTransitionCost(self, startIndex, endIndex):
         distances = []
@@ -88,7 +82,10 @@ class TrajSeg():
         for traj_point in self.points_to_segment[startIndex + 1:endIndex]:
             d = np.linalg.norm(np.cross(start-end, start-traj_point))/np.linalg.norm(end-start)
             distances.append(d)
-        return sum(distances)
+        if len(distances) == 0:
+            return 0, 0
+        else:
+            return sum(distances), max(distances)
 
 if __name__ == '__main__':
     seg = TrajSeg()
@@ -97,6 +94,7 @@ if __name__ == '__main__':
     seg.velocities = data["ee_velocities"]
     traj_points = [item[0] for item in data["trajectory_points"]]
     seg.trajectory_points = np.array(traj_points)
-    seg.trajectory_points = seg.trajectory_points[966:1680]
+    #seg.trajectory_points = seg.trajectory_points[966:1680]
     seg.initialize()
-    seg.optimize()
+    res = seg.optimize()
+    print(res)
