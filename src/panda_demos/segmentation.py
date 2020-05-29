@@ -1,18 +1,21 @@
-from panda_eup.pbd_interface import PBDInterface
+from panda_eup.pbd_interface import PandaPBDInterface
 from panda_eup.panda_primitive import PandaProgram
 from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
 from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest
-import panda_primitive as pp
+import panda_eup.panda_primitive as pp
 from gripper_segmentation import GripperSegmentation
 from trajectory_segmentation import TrajSeg
+import os
+import pickle
+import numpy as np
 
 
 class Segmentation():
 
     def __init__(self, interface):
-        self.program = PandaProgram()
         self.data = None
         self.interface = interface
+        self.interface.initialize_program()
 
     def createSegments(self):
         traj_points = [item[0] for item in self.data["trajectory_points"]]
@@ -22,7 +25,7 @@ class Segmentation():
         self.time_axis_ee = self.data["time_axis_ee"]
         self.time_axis_gripper = self.data["time_axis_gripper"]
         
-        gripSeg = Grippersegmentation()
+        gripSeg = GripperSegmentation()
         gripSeg.trajectory_points = self.trajectory_points
         gripSeg.gripper_states = self.gripper_states
         gripSeg.gripper_velocities = self.gripper_velocities
@@ -35,6 +38,7 @@ class Segmentation():
         segments = gripSeg.createSegments(ma)
 
         prevEnd = None
+        motionStart = 0
         for segment in segments:
             start = segment[0]
             end = segment[1]
@@ -44,12 +48,22 @@ class Segmentation():
             trajSeg.initialize()
             result = trajSeg.optimize()
             result = [item+start for item in result]
-            motionStart = start
-            #for point in result:
+            for point in result:
+                endpoint = self.data["trajectory_points"][point]
+                self.addLinearMotion(endpoint)     
+            prevEnd = end    
 
     def addGripperAction(self, start, end):
-        startwidth = self.gripper_states[start]
-        endwidth = self.gripper_states[end]
+        time_start = self.time_axis_ee[start]
+        diff = abs(np.array(self.time_axis_gripper) - time_start)
+        startidx = diff.argmin()
+
+        time_end = self.time_axis_ee[end]
+        diff = abs(np.array(self.time_axis_gripper) - time_end)
+        endidx = diff.argmin()
+
+        startwidth = self.gripper_states[startidx]
+        endwidth = self.gripper_states[endidx]
         if endwidth < startwidth:
             self.addFingerGrasp(endwidth)
         else:
@@ -61,7 +75,7 @@ class Segmentation():
 
         apply_force_fingers_primitive = pp.ApplyForceFingers()
         apply_force_fingers_primitive.set_parameter_container(request)
-        self.program.insert_primitive(apply_force_fingers_primitive, [None, pp.GripperState(width, request.force)])
+        self.interface.program.insert_primitive(apply_force_fingers_primitive, [None, pp.GripperState(width, request.force)])
 
     def addMoveFingers(self, width):
         request = MoveFingersRequest()
@@ -69,7 +83,7 @@ class Segmentation():
 
         move_fingers_primitive = pp.MoveFingers()
         move_fingers_primitive.set_parameter_container(request)
-        self.program.insert_primitive(move_fingers_primitive, [None, pp.GripperState(width, 0.0)])
+        self.interface.program.insert_primitive(move_fingers_primitive, [None, pp.GripperState(width, 0.0)])
 
     def addLinearMotion(self, end):
         goal = MoveToEEGoal()
@@ -88,4 +102,15 @@ class Segmentation():
     def loadData(self, path, filename):
         with open(os.path.join(os.path.expanduser(path), filename), 'rb') as f:
             loaded_program = pickle.load(f)
-            return loaded_program                
+            return loaded_program
+
+    def saveProgram(self, filename):
+        self.interface.program.dump_to_file(filepath='~/Thesis/src/eupanda/resources', filename=filename)
+
+if __name__ == '__main__':
+    interface = PandaPBDInterface(robotless_debug = True)
+    seg = Segmentation(interface)
+    seg.data = seg.loadData("~/Thesis/src/eupanda/resources/data", "PaP_1.pkl")
+    seg.createSegments()
+    print(seg.interface.program.primitives)
+    seg.saveProgram(filename="segmentation_test.pkl")

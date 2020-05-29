@@ -13,12 +13,12 @@ class TrajSeg():
         self.cleanup = False
         
     def initialize(self):
-        self.downSamplePoints()
+        self.downSample()
         self.points_to_segment = self.downSamplePoints
         self.segmentation_points.append(0)
         self.segmentation_points.append(len(self.points_to_segment) - 1)
     
-    def downSamplePoints(self):
+    def downSample(self):
         self.downSamplePoints = []
         self.downSampleIndexes = []
         self.downSamplePoints.append(self.trajectory_points[0])
@@ -49,7 +49,10 @@ class TrajSeg():
             initialCosts.append((d, [point], maxd))
         
         if maxd < 0.10:
-            return initialCosts[-1][1]
+            result = []
+            for point in initialCosts[-1][1]:
+                result.append(self.downSampleIndexes[point])
+            return result 
         storedCosts = []
         prevCosts = initialCosts
         for i in range(2, len(self.points_to_segment)):
@@ -73,7 +76,10 @@ class TrajSeg():
                 break
             else:
                 prevSolution = costs[-1][1]
-        return costs[-1][1]        
+        result = []
+        for point in costs[-1][1]:
+            result.append(self.downSampleIndexes[point])
+        return result         
 
     def calculateTransitionCost(self, startIndex, endIndex):
         distances = []

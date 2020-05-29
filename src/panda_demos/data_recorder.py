@@ -29,7 +29,8 @@ class Datarecorder():
         self.gripperstate = None
         self.data = {}
         self.listener = tf.TransformListener()
-        self.joint_state_subscriber = rospy.Subscriber("/joint_states", JointState,
+        if self.interface.robotless_debug == False:
+            self.joint_state_subscriber = rospy.Subscriber("/joint_states", JointState,
                                                             self.jointStateCallback)
 
     def startRecording(self, dataLine_v, dataLine_g):

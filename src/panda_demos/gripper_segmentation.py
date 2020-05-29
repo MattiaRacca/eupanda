@@ -5,7 +5,7 @@ from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
 from trajectory_segmentation import TrajSeg
 
-class Grippersegmentation():
+class GripperSegmentation():
     
     def __init__(self):
         self.trajectory_points = []
@@ -86,7 +86,7 @@ class Grippersegmentation():
         return segments
 
 if __name__ == '__main__':
-    seg = Grippersegmentation()
+    seg = GripperSegmentation()
     data = seg.loadData("~/Thesis/src/eupanda/resources/data", "PaP_1.pkl")
     traj_points = [item[0] for item in data["trajectory_points"]]
     seg.trajectory_points = np.array(traj_points)
