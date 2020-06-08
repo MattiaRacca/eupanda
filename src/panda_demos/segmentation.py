@@ -104,13 +104,12 @@ class Segmentation():
             loaded_program = pickle.load(f)
             return loaded_program
 
-    def saveProgram(self, filename):
-        self.interface.program.dump_to_file(filepath='~/Thesis/src/eupanda/resources', filename=filename)
+    def saveProgram(self, path, filename):
+        self.interface.program.dump_to_file(filepath=path, filename=filename)
 
 if __name__ == '__main__':
     interface = PandaPBDInterface(robotless_debug = True)
     seg = Segmentation(interface)
     seg.data = seg.loadData("~/Thesis/src/eupanda/resources/data", "PaP_1.pkl")
     seg.createSegments()
-    print(seg.interface.program.primitives)
-    seg.saveProgram(filename="segmentation_test.pkl")
+    seg.saveProgram(path=~'/Thesis/src/eupanda/resources', filename="segmentation_test.pkl")

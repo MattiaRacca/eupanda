@@ -17,6 +17,8 @@ from franka_control.msg import ErrorRecoveryActionGoal
 from panda_eup.program_interpreter import PandaProgramInterpreter
 import panda_eup.panda_primitive as pp
 from panda_eup.pbd_interface import PandaPBDInterface
+from panda_demos.data_recorder import Datarecorder
+from panda_demos.segmentation import Segmentation
 
 import pyttsx3
 
@@ -28,7 +30,7 @@ from functools import partial
 from enum import Enum
 from datetime import datetime
 import time
-from panda_demos.data_recorder import Datarecorder
+
 
 # Size of Primitive Widget
 PRIMITIVE_WIDTH = 100
@@ -780,6 +782,7 @@ class DemonstrationMenu(QWidget):
     def __init__(self, parent):
         super(DemonstrationMenu, self).__init__(parent)
         self.datarecorder = Datarecorder(self.parent().interface)
+        self.seg = Segmentation(self.parent().interface)
         self.initUI()
         self.recording = False
         self.recordingThreadpool = QThreadPool()
@@ -787,25 +790,32 @@ class DemonstrationMenu(QWidget):
     def initUI(self):
         self.layout = QHBoxLayout(self)
         self.layout.setAlignment(Qt.AlignLeft)
+        self.buttonAreaWidget = QWidget(self)
+        self.buttonArea = QVBoxLayout(self.buttonAreaWidget)
         self.buttonWidget = QWidget(self)
         self.buttonLayout = QHBoxLayout(self.buttonWidget)
-        self.addButtons()
+        self.addButtonArea()
         self.layout.addWidget(QVerticalLine())
         self.addGraphWidget()
         self.addGraphFunctionality()
         self.addButtonActions()
 
-    def addButtons(self):
-        self.demoButtonWidget = QWidget(self)
+    def addButtonArea(self):
         self.demoButtons = []
-        labels = ["Start recording", "Stop recording", "Clear plot", "Start demonstration", "Stop demonstration"]
+        labels = ["Start recording", "Stop recording", "Clear plot", "Program\nCreation", "Return to\nrecording", "Create Program"]
         for label in labels:
             button = QExpandingPushButton(label, self)
             button.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed))
             button.setFont(EUPWidget.font)
             self.buttonLayout.addWidget(button)
             self.demoButtons.append(button)            
-        self.layout.addWidget(self.buttonWidget)  
+        self.buttonArea.addWidget(self.buttonWidget)
+        self.dataInputField = QLineEdit()
+        self.dataInputField.setPlaceholderText("Enter filename for data to be used for program creation")
+        self.dataInputField.setVisible(False)
+        self.buttonArea.addWidget(self.dataInputField)
+        self.layout.addWidget(self.buttonAreaWidget)
+
 
     def saveData(self):
         inputfield = self.lowerDemoMenu.inputField
@@ -813,13 +823,18 @@ class DemonstrationMenu(QWidget):
         path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources', 'data')
         self.datarecorder.saveData(path, filename)
         inputfield.clear()
+        return filename
 
     def addButtonActions(self):
-        self.demoButtons[3].setVisible(False)
         self.demoButtons[4].setVisible(False)
+        self.demoButtons[5].setVisible(False)
+        #self.demoButtons[3].setEnabled(False)
         self.demoButtons[0].pressed.connect(self.startRecording)
         self.demoButtons[1].pressed.connect(self.stopRecording) 
         self.demoButtons[2].pressed.connect(self.clearPlot)
+        self.demoButtons[3].pressed.connect(self.enterProgramCreation)
+        self.demoButtons[4].pressed.connect(self.returnToRecording)
+        self.demoButtons[5].pressed.connect(self.createProgram)
 
     def addGraphWidget(self):
         self.graphwidget = QWidget(self)
@@ -853,12 +868,49 @@ class DemonstrationMenu(QWidget):
         self.dataLine_g = self.grippergraphwidget.plot(self.times_gripper, self.gripperVelocities)
         self.graphlayout.addWidget(self.grippergraphwidget)
 
+    def enterProgramCreation(self):
+        self.demoButtons[0].setVisible(False)
+        self.demoButtons[1].setVisible(False)
+        self.demoButtons[2].setVisible(False)
+        self.demoButtons[3].setVisible(False)
+        self.dataInputField.setVisible(True)
+        self.demoButtons[4].setVisible(True)
+        self.demoButtons[5].setVisible(True)
+
+    def returnToRecording(self):
+        self.demoButtons[0].setVisible(True)
+        self.demoButtons[1].setVisible(True)
+        self.demoButtons[2].setVisible(True)
+        self.demoButtons[3].setVisible(True)
+        self.dataInputField.setVisible(False)
+        self.demoButtons[4].setVisible(False)
+        self.demoButtons[5].setVisible(False)
+
+    def createProgram(self):
+        filename = self.dataInputField.text()
+        print(filename)
+        if filename == '':
+            self.seg.data = {}
+            self.seg.data["ee_velocities"] = self.data_recorder.ee_velocities
+            self.seg.data["gripper_velocities"] = self.data_recorder.gripper_velocities
+            self.seg.data["trajectory_points"] = self.data_recorder.trajectory_points
+            self.seg.data["gripper_states"] = self.data_recorder.gripper_states
+            self.seg.data["time_axis_ee"] = self.data_recorder.time_axis_ee
+            self.seg.data["time_axis_gripper"] = self.data_recorder.time_axis_gripper
+        else:
+            path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources', 'data')
+            self.seg.data = self.seg.loadData(path, filename)
+        self.seg.createSegments()
+        resourcepath = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
+        self.seg.saveProgram(path=resourcepath, filename="segmentation_test.pkl")        
+
 
     def startRecording(self):
         self.datarecorder.startRecording(self.dataLine_v, self.dataLine_g)
 
     def stopRecording(self):
-        self.datarecorder.stopRecording()    
+        self.datarecorder.stopRecording()
+        self.demoButtons[3].setEnabled(True)    
         
 
 class LowerProgramMenu(QWidget):
