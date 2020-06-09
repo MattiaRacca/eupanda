@@ -786,7 +786,7 @@ class DemonstrationMenu(QWidget):
         self.initUI()
         self.recording = False
         self.recordingThreadpool = QThreadPool()
-        self.programWidget = self.parent().demo_program_widget
+        self.parent = self.parent()
         
     def initUI(self):
         self.layout = QHBoxLayout(self)
@@ -890,7 +890,7 @@ class DemonstrationMenu(QWidget):
     def createProgram(self):
         self.seg.interface.program.primitives = []
         self.seg.interface.interpreter.program = None
-        self.programWidget.clear()
+        self.parent.demo_program_widget.clear()
         filename = self.dataInputField.text()
         if filename == '':
             self.seg.data = {}
@@ -908,8 +908,23 @@ class DemonstrationMenu(QWidget):
         self.seg.saveProgram(path=resourcepath, filename="segmentation_test.pkl")
         self.seg.interface.interpreter.load_program(self.seg.interface.program)
         for primitive in self.seg.interface.program.primitives:
-            self.programWidget.addPrimitiveWidget(primitive, self.seg.interface.interpreter)
-        self.programWidget.updateWidget()            
+            self.parent.demo_program_widget.addPrimitiveWidget(primitive, self.seg.interface.interpreter)
+        self.parent.demo_program_widget.updateWidget()
+        buttonReply = QMessageBox.question(self, 'PyQt5 message', "Load this program for execution?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if buttonReply == QMessageBox.Yes:
+            self.loadForExecution()
+        
+
+    def loadForExecution(self):
+        self.parent.interpreter.load_program(self.seg.interface.program)
+        self.parent.interpreter.loaded_program.reset_primitives_history()
+        self.parent.state_machine = EUPStateMachine.STARTUP
+        self.parent.last_interface_state = None
+        self.parent.updatePandaWidgets()
+        self.parent.panda_program_widget.clear()
+        for primitive in self.seg.interface.program.primitives:
+            self.parent.panda_program_widget.addPrimitiveWidget(primitive, self.parent.interpreter)
+        self.parent.panda_program_widget.update()            
 
 
     def startRecording(self):
