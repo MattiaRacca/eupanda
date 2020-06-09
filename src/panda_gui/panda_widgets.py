@@ -786,6 +786,7 @@ class DemonstrationMenu(QWidget):
         self.initUI()
         self.recording = False
         self.recordingThreadpool = QThreadPool()
+        self.programWidget = self.parent().demo_program_widget
         
     def initUI(self):
         self.layout = QHBoxLayout(self)
@@ -887,8 +888,10 @@ class DemonstrationMenu(QWidget):
         self.demoButtons[5].setVisible(False)
 
     def createProgram(self):
+        self.seg.interface.program.primitives = []
+        self.seg.interface.interpreter.program = None
+        self.programWidget.clear()
         filename = self.dataInputField.text()
-        print(filename)
         if filename == '':
             self.seg.data = {}
             self.seg.data["ee_velocities"] = self.data_recorder.ee_velocities
@@ -902,7 +905,11 @@ class DemonstrationMenu(QWidget):
             self.seg.data = self.seg.loadData(path, filename)
         self.seg.createSegments()
         resourcepath = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
-        self.seg.saveProgram(path=resourcepath, filename="segmentation_test.pkl")        
+        self.seg.saveProgram(path=resourcepath, filename="segmentation_test.pkl")
+        self.seg.interface.interpreter.load_program(self.seg.interface.program)
+        for primitive in self.seg.interface.program.primitives:
+            self.programWidget.addPrimitiveWidget(primitive, self.seg.interface.interpreter)
+        self.programWidget.updateWidget()            
 
 
     def startRecording(self):
