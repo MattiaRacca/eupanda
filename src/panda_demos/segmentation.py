@@ -18,7 +18,7 @@ class Segmentation():
         self.interface.initialize_program()
 
     def createSegments(self):
-        traj_points = [item[0] for item in self.data["trajectory_points"]]
+        traj_points = [item.pose.position for item in self.data["trajectory_points"]]
         self.trajectory_points = np.array(traj_points)
         self.gripper_states = self.data["gripper_states"]
         self.gripper_velocities = self.data["gripper_velocities"]

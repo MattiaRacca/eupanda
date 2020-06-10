@@ -894,12 +894,12 @@ class DemonstrationMenu(QWidget):
         filename = self.dataInputField.text()
         if filename == '':
             self.seg.data = {}
-            self.seg.data["ee_velocities"] = self.data_recorder.ee_velocities
-            self.seg.data["gripper_velocities"] = self.data_recorder.gripper_velocities
-            self.seg.data["trajectory_points"] = self.data_recorder.trajectory_points
-            self.seg.data["gripper_states"] = self.data_recorder.gripper_states
-            self.seg.data["time_axis_ee"] = self.data_recorder.time_axis_ee
-            self.seg.data["time_axis_gripper"] = self.data_recorder.time_axis_gripper
+            self.seg.data["ee_velocities"] = self.datarecorder.ee_velocities
+            self.seg.data["gripper_velocities"] = self.datarecorder.gripper_velocities
+            self.seg.data["trajectory_points"] = self.datarecorder.trajectory_points
+            self.seg.data["gripper_states"] = self.datarecorder.gripper_states
+            self.seg.data["time_axis_ee"] = self.datarecorder.time_axis_ee
+            self.seg.data["time_axis_gripper"] = self.datarecorder.time_axis_gripper
         else:
             path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources', 'data')
             self.seg.data = self.seg.loadData(path, filename)

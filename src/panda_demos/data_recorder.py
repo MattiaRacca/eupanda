@@ -8,8 +8,9 @@ import tf
 import numpy as np
 import pickle
 import os
-from pykdl_utils.kdl_kinematics import KDLKinematics
+#from pykdl_utils.kdl_kinematics import KDLKinematics
 from urdf_parser_py.urdf import URDF
+from geometry_msgs.msg import PoseStamped
 
 class Datarecorder():
 
@@ -29,9 +30,11 @@ class Datarecorder():
         self.gripperstate = None
         self.data = {}
         self.listener = tf.TransformListener()
+        '''
         if self.interface.robotless_debug == False:
             self.joint_state_subscriber = rospy.Subscriber("/joint_states", JointState,
                                                             self.jointStateCallback)
+        '''
 
     def startRecording(self, dataLine_v, dataLine_g):
         self.worker = RecordingWorker(self.recordData, dataLine_v, dataLine_g)
@@ -64,16 +67,26 @@ class Datarecorder():
         self.pose = kdl_kin.forward(pos)
 
     def getListenerValues(self):
+        goal = PoseStamped()
         try:
             trans, rot = self.listener.lookupTransform("panda_link0", "panda_K", rospy.Time(0)) #Use panda_K or panda_EE for the target frame
             traj_time = rospy.Time.now()
             linear, angular = self.listener.lookupTwist("panda_link0", "panda_K", rospy.Time(0), rospy.Duration(1.0/self.rate))
             vel_time = rospy.Time.now()
+            goal.header.frame_id = "panda_link0"
+            goal.pose.position.x = trans[0]
+            goal.pose.position.y = trans[1]
+            goal.pose.position.z = trans[2]
+
+            goal.pose.orientation.x = rot[0]
+            goal.pose.orientation.y = rot[1]
+            goal.pose.orientation.z = rot[2]
+            goal.pose.orientation.w = rot[3]
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             print("Could not get tf listener values")    
-
-        self.trajectory_points.append((trans, rot))
-        self.pose = trans
+        print(goal)
+        self.trajectory_points.append(goal)
+        #self.pose = goal.pose
         vel = np.sqrt(np.square(linear[0]) + np.square(linear[1]) + np.square(linear[2]))
         self.ee_velocities.append(vel)
         self.time_axis_ee.append(vel_time.to_sec() - self.start_time.to_sec())    
