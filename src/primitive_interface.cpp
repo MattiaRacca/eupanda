@@ -558,7 +558,7 @@ void PrimitiveInterface::moveToContactCallback(const panda_pbd::MoveToContactGoa
     double rotation_speed_target = std::min(max_rotation_speed,
                                             position_speed_target/position_difference.norm()*rotation_difference_angle_axis.angle());
 
-    double time_orientation = rotation_speed_target / rotation_difference_angle_axis.angle();
+    double time_orientation = rotation_difference_angle_axis.angle() / rotation_speed_target;
     expected_time = std::max(time_orientation, time_position);
 
     if (expected_time == time_orientation) {
@@ -728,7 +728,7 @@ void PrimitiveInterface::moveToEECallback(const panda_pbd::MoveToEEGoalConstPtr 
     double rotation_speed_target = std::min(max_rotation_speed,
             position_speed_target/position_difference.norm()*rotation_difference_angle_axis.angle());
 
-    double time_orientation = rotation_speed_target / rotation_difference_angle_axis.angle();
+    double time_orientation = rotation_difference_angle_axis.angle() / rotation_speed_target;
     desired_time = std::max(time_orientation, time_position);
 
     if (desired_time == time_orientation) {
