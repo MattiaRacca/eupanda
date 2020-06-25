@@ -84,7 +84,6 @@ class Datarecorder():
             goal.pose.orientation.w = rot[3]
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             print("Could not get tf listener values")    
-        print(goal)
         self.trajectory_points.append(goal)
         #self.pose = goal.pose
         vel = np.sqrt(np.square(linear[0]) + np.square(linear[1]) + np.square(linear[2]))
