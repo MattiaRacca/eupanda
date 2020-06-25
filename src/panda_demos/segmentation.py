@@ -86,6 +86,7 @@ class Segmentation():
         self.interface.program.insert_primitive(move_fingers_primitive, [None, pp.GripperState(width, 0.0)])
 
     def addLinearMotion(self, end):
+        print(end)
         goal = MoveToEEGoal()
         goal.pose = end
         goal.position_speed = self.interface.default_parameters['move_to_ee_default_position_speed']

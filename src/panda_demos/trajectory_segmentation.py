@@ -19,6 +19,7 @@ class TrajSeg():
         self.segmentation_points.append(len(self.points_to_segment) - 1)
     
     def downSample(self):
+        self.trajectory_points = [np.array([point.x, point.y, point.z]) for point in self.trajectory_points]
         self.downSamplePoints = []
         self.downSampleIndexes = []
         self.downSamplePoints.append(self.trajectory_points[0])
@@ -95,10 +96,10 @@ class TrajSeg():
 
 if __name__ == '__main__':
     seg = TrajSeg()
-    data = seg.loadData("~/Thesis/src/eupanda/resources/data", "PaP_1.pkl")
+    data = seg.loadData("~/Thesis/src/eupanda/resources/data", "PoseStamped_4motions.pkl")
     seg.time_axis = data["time_axis_ee"]
     seg.velocities = data["ee_velocities"]
-    traj_points = [item[0] for item in data["trajectory_points"]]
+    traj_points = [item.pose.position for item in data["trajectory_points"]]
     seg.trajectory_points = np.array(traj_points)
     #seg.trajectory_points = seg.trajectory_points[966:1680]
     seg.initialize()
