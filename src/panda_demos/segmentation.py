@@ -15,12 +15,16 @@ class Segmentation():
     def __init__(self, interface):
         self.data = None
         self.interface = interface
-        self.interface.initialize_program()
+        #self.interface.initialize_program()
 
     def createSegments(self):
         traj_points = [item.pose.position for item in self.data["trajectory_points"]]
         self.trajectory_points = np.array(traj_points)
         self.gripper_states = self.data["gripper_states"]
+        self.ee_velocities = self.data["ee_velocities"]
+        self.interface.program.save_arm_state(self.data["trajectory_points"][0])
+        initial_gripper_state = next(item for item in self.gripper_states if item is not None)
+        self.interface.program.save_gripper_state(pp.GripperState(initial_gripper_state, 0.0))
         self.gripper_velocities = self.data["gripper_velocities"]
         self.time_axis_ee = self.data["time_axis_ee"]
         self.time_axis_gripper = self.data["time_axis_gripper"]
@@ -48,10 +52,18 @@ class Segmentation():
             trajSeg.initialize()
             result = trajSeg.optimize()
             result = [item+start for item in result]
+            prevpoint = start
             for point in result:
+                vel = self.getAverageVelocity(prevpoint, point)
                 endpoint = self.data["trajectory_points"][point]
-                self.addLinearMotion(endpoint)     
+                self.addLinearMotion(endpoint, vel)
+                prevpoint = point     
             prevEnd = end    
+
+    def getAverageVelocity(self, start, end):
+        velocities = self.ee_velocities[start:end]
+        vel = round(np.mean(velocities), 2)
+        return vel
 
     def addGripperAction(self, start, end):
         time_start = self.time_axis_ee[start]
@@ -85,11 +97,11 @@ class Segmentation():
         move_fingers_primitive.set_parameter_container(request)
         self.interface.program.insert_primitive(move_fingers_primitive, [None, pp.GripperState(width, 0.0)])
 
-    def addLinearMotion(self, end):
-        print(end)
+    def addLinearMotion(self, end, vel):
         goal = MoveToEEGoal()
         goal.pose = end
-        goal.position_speed = self.interface.default_parameters['move_to_ee_default_position_speed']
+        #goal.position_speed = self.interface.default_parameters['move_to_ee_default_position_speed']
+        goal.position_speed = vel
         goal.rotation_speed = self.interface.default_parameters['move_to_ee_default_rotation_speed']
 
         move_to_ee_primitive = pp.MoveToEE()
