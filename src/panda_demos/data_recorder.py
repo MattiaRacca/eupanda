@@ -3,6 +3,8 @@ from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QT
 import random
 from time import sleep
 from panda_pbd.srv import EnableTeaching, EnableTeachingRequest
+from panda_pbd.srv import ApplyForceFingersRequest
+import panda_eup.panda_primitive as pp
 import rospy
 import tf
 import numpy as np
@@ -29,6 +31,7 @@ class Datarecorder():
         self.pose = None
         self.gripperstate = None
         self.data = {}
+        self.fingers_relaxed = True
         self.listener = tf.TransformListener()
         '''
         if self.interface.robotless_debug == False:
@@ -138,6 +141,18 @@ class Datarecorder():
         gripper_time = rospy.Time.now()
         self.time_axis_gripper.append(gripper_time.to_sec() - self.start_time.to_sec())
 
+    def executeFingerGrasp(self):
+        request = ApplyForceFingersRequest()
+        request.force = self.interface.default_parameters['apply_force_fingers_default_force']
+
+        apply_force_fingers_primitive = pp.ApplyForceFingers()
+        apply_force_fingers_primitive.set_parameter_container(request)
+
+        if not self.interface.robotless_debug:
+            self.interface.execute_primitive_now(apply_force_fingers_primitive)
+
+        self.fingers_relaxed = False    
+
     def recordData(self, dataLine_v, dataLine_g):
         count = 1
         self.interface.relax()
@@ -157,7 +172,13 @@ class Datarecorder():
                     self.gripper_states.append(self.gripperstate)
                     self.getGripperValues()
                     count = 1
-                count += 1                       
+                count += 1
+                '''
+                if len(self.gripper_velocities) != 0:
+                    print(self.gripper_velocities[-1])
+                    if self.fingers_relaxed == True and self.gripper_velocities[-1] < -0.01:
+                        self.executeFingerGrasp()
+                '''                               
             else:    
                 newVelocity = random.uniform(0, 0.25)
                 gripperVelocity = random.uniform(0, 0.05)

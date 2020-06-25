@@ -803,7 +803,7 @@ class DemonstrationMenu(QWidget):
 
     def addButtonArea(self):
         self.demoButtons = []
-        labels = ["Start recording", "Stop recording", "Clear plot", "Program\nCreation", "Return to\nrecording", "Create Program"]
+        labels = ["Start recording", "Stop recording", "Clear plot", "Program\nCreation", "Relax Fingers", "Return to\nrecording", "Create Program"]
         for label in labels:
             button = QExpandingPushButton(label, self)
             button.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed))
@@ -829,13 +829,15 @@ class DemonstrationMenu(QWidget):
     def addButtonActions(self):
         self.demoButtons[4].setVisible(False)
         self.demoButtons[5].setVisible(False)
+        self.demoButtons[6].setVisible(False)
         #self.demoButtons[3].setEnabled(False)
         self.demoButtons[0].pressed.connect(self.startRecording)
         self.demoButtons[1].pressed.connect(self.stopRecording) 
         self.demoButtons[2].pressed.connect(self.clearPlot)
         self.demoButtons[3].pressed.connect(self.enterProgramCreation)
-        self.demoButtons[4].pressed.connect(self.returnToRecording)
-        self.demoButtons[5].pressed.connect(self.createProgram)
+        self.demoButtons[4].pressed.connect(self.relaxFingers)
+        self.demoButtons[5].pressed.connect(self.returnToRecording)
+        self.demoButtons[6].pressed.connect(self.createProgram)
 
     def addGraphWidget(self):
         self.graphwidget = QWidget(self)
@@ -869,23 +871,28 @@ class DemonstrationMenu(QWidget):
         self.dataLine_g = self.grippergraphwidget.plot(self.times_gripper, self.gripperVelocities)
         self.graphlayout.addWidget(self.grippergraphwidget)
 
+    def relaxFingers(self):
+        self.datarecorder.interface.relax_finger()
+
     def enterProgramCreation(self):
         self.demoButtons[0].setVisible(False)
         self.demoButtons[1].setVisible(False)
         self.demoButtons[2].setVisible(False)
         self.demoButtons[3].setVisible(False)
+        #self.demoButtons[4].setVisible(False)
         self.dataInputField.setVisible(True)
-        self.demoButtons[4].setVisible(True)
         self.demoButtons[5].setVisible(True)
+        self.demoButtons[6].setVisible(True)
 
     def returnToRecording(self):
         self.demoButtons[0].setVisible(True)
         self.demoButtons[1].setVisible(True)
         self.demoButtons[2].setVisible(True)
         self.demoButtons[3].setVisible(True)
+        #self.demoButtons[4].setVisible(True)
         self.dataInputField.setVisible(False)
-        self.demoButtons[4].setVisible(False)
         self.demoButtons[5].setVisible(False)
+        self.demoButtons[6].setVisible(False)
 
     def createProgram(self):
         self.seg.interface.program.primitives = []
