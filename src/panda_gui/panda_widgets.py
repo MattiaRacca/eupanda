@@ -19,6 +19,7 @@ import panda_eup.panda_primitive as pp
 from panda_eup.pbd_interface import PandaPBDInterface
 from panda_demos.data_recorder import Datarecorder
 from panda_demos.segmentation import Segmentation
+from panda_pbd.msg import UserSyncGoal
 
 import pyttsx3
 
@@ -234,9 +235,45 @@ class EUPWidget(QWidget):
             value[0].setVisible(key is not 'go_to_current_primitive_preconditions')
             value[0].setFont(EUPWidget.font)
 
+        self.validationButtons = []
+        self.validationButtonWidget = QWidget()
+        self.validationButtonLayout = QHBoxLayout(self.validationButtonWidget)
+
+        label = QLabel("Add an User Sync\nprimitive to the\ncurrent location")
+        label.setFont(EUPWidget.font)
+        button = QExpandingPushButton("Add User Sync")
+        button.setFont(EUPWidget.font)
+        self.validationButtons.append(button)
+        self.validationButtonLayout.addWidget(label)
+        self.validationButtonLayout.addWidget(button)
+        self.validationButtonLayout.addWidget(QVerticalLine())
+
+        label = QLabel("Combine the current\nLinear Motion with\nthe previous one")
+        label.setFont(EUPWidget.font)
+        button = QExpandingPushButton("Combine")
+        button.setFont(EUPWidget.font)
+        self.validationButtons.append(button)
+        self.validationButtonLayout.addWidget(label)
+        self.validationButtonLayout.addWidget(button)
+        self.validationButtonLayout.addWidget(QVerticalLine())
+
+        label = QLabel("Convert the current\nLinear Motion to\na Push Motion")
+        label.setFont(EUPWidget.font)
+        button = QExpandingPushButton("Convert")
+        button.setFont(EUPWidget.font)
+        self.validationButtons.append(button)
+        self.validationButtonLayout.addWidget(label)
+        self.validationButtonLayout.addWidget(button)
+
+        self.validationButtons[0].pressed.connect(self.add_validation_usersync)
+        self.validationButtons[1].pressed.connect(self.combine_motion_with_previous)
+        #self.validationButtons[2].pressed.connect(self.convert_to_pushmotion)
         #Add created widgets to run program tab
         self.tabSelection.runProgramTab.layout.addWidget(self.panda_program_widget)
         self.tabSelection.runProgramTab.layout.addWidget(self.panda_tuning_widget)
+        self.tabSelection.runProgramTab.layout.addWidget(QHorizontalLine())
+        self.tabSelection.runProgramTab.layout.addWidget(self.validationButtonWidget)
+        self.tabSelection.runProgramTab.layout.addWidget(QHorizontalLine())
         self.tabSelection.runProgramTab.layout.addWidget(self.low_buttons)
 
         # Using PandaProgramWidget again, we create a widget thats lists primitives for the program to be created. 
@@ -348,11 +385,8 @@ class EUPWidget(QWidget):
         #Labels for the state are updated
         self.lowerProgramMenu.updateControlStateLabels(self.interface)
 
-        '''
-        Notes:
-        - Bug with reverting move fingers after finger grasp
-        - Actions after error recover need to be handled better (relax the robot(?), its possible to end up in a state where initialize program -button is disabled even though the program creation expects it)
-        '''
+        self.updateValidationButtons()
+
 
         if self.last_interface_state == pp.PandaRobotStatus.ERROR or \
                 self.last_interface_state == pp.PandaRobotStatus.BUSY:
@@ -522,8 +556,72 @@ class EUPWidget(QWidget):
         if buttonReply == QMessageBox.Yes:
             self.loadNewProgram()
         
+    def updateValidationButtons(self):
+        idx = self.interpreter.next_primitive_index
+        if idx == len(self.interpreter.loaded_program.primitives):
+            self.validationButtons[0].setEnabled(False)
+            self.validationButtons[1].setEnabled(False)
+            self.validationButtons[1].setEnabled(False)
+            return
 
-    
+        if idx == -1:
+            self.validationButtons[0].setEnabled(False)
+        else:
+            self.validationButtons[0].setEnabled(True) 
+        
+        if idx > 0:
+            curPrimitive = self.interpreter.loaded_program.primitives[idx].__class__.__name__
+            prevPrimitive = self.interpreter.loaded_program.primitives[idx - 1].__class__.__name__
+            if curPrimitive == 'MoveToEE' and prevPrimitive == 'MoveToEE':
+                self.validationButtons[1].setEnabled(True)     
+            else:
+                self.validationButtons[1].setEnabled(False)
+        else:
+            self.validationButtons[1].setEnabled(False)
+
+        if idx >= 0 and self.interpreter.loaded_program.primitives[idx].__class__.__name__ == "MoveToEE":
+            self.validationButtons[2].setEnabled(True)
+        else:
+            self.validationButtons[2].setEnabled(False)                    
+
+    def add_validation_usersync(self):
+        idx = self.interpreter.next_primitive_index
+        goal = UserSyncGoal()
+        goal.force_threshold = 5.0
+        user_sync_primitive = pp.UserSync()
+        user_sync_primitive.set_parameter_container(goal)
+        self.interpreter.loaded_program.primitives.insert(idx, user_sync_primitive)
+        #arm_state = self.interpreter.loaded_program.arm_state_list[idx]
+        #gripper_state = self.interpreter.loaded_program.gripper_state_list[idx]
+        self.interpreter.loaded_program.primitives[idx].starting_arm_state_index = idx
+        #self.interpreter.loaded_program.arm_state_list.insert(idx+1, arm_state)
+        self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index = idx
+        #self.interpreter.loaded_program.gripper_state_list.insert(idx+1, gripper_state)
+        self.updateValidationButtons()
+        self.panda_program_widget.clear()
+        for primitive in self.interpreter.loaded_program.primitives:
+            self.panda_program_widget.addPrimitiveWidget(primitive, self.interpreter)
+        self.panda_program_widget.primitive_widget_list[idx].primitive.status = pp.PandaPrimitiveStatus.READY
+        self.panda_program_widget.primitive_widget_list[idx].updateWidget()
+        self.panda_program_widget.primitive_widget_list[idx + 1].primitive.status = pp.PandaPrimitiveStatus.NEUTRAL    
+        self.panda_program_widget.primitive_widget_list[idx + 1].updateWidget()
+        #self.panda_program_widget.updateWidget()   
+        self.updatePandaWidgets()
+
+    def combine_motion_with_previous(self):
+        idx = self.interpreter.next_primitive_index
+        self.interpreter.loaded_program.primitives[idx - 1].parameter_container = self.interpreter.loaded_program.primitives[idx].parameter_container
+        self.interpreter.loaded_program.primitives.pop(idx)
+        self.interpreter.next_primitive_index = idx - 1
+        idx = self.interpreter.next_primitive_index
+        self.updateValidationButtons()
+        self.panda_program_widget.clear()
+        for primitive in self.interpreter.loaded_program.primitives:
+            self.panda_program_widget.addPrimitiveWidget(primitive, self.interpreter)
+        self.panda_program_widget.primitive_widget_list[idx].primitive.status = pp.PandaPrimitiveStatus.READY
+        self.panda_program_widget.primitive_widget_list[idx].updateWidget()
+        self.updatePandaWidgets()   
+
     def loadNewProgram(self):
         '''
         If the user wants to load the created program to run program -tab, this function is executed. The previous program widget
