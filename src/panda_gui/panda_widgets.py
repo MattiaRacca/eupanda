@@ -2,7 +2,7 @@
 from __future__ import division
 
 from PyQt5.QtWidgets import QWidget, QLabel, QFrame, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, \
-QSizePolicy, QGroupBox, QApplication, QStackedWidget, QSlider, QGridLayout, QTabWidget, QLineEdit, QMessageBox
+QSizePolicy, QGroupBox, QApplication, QStackedWidget, QSlider, QGridLayout, QTabWidget, QLineEdit, QMessageBox, QInputDialog
 from PyQt5.QtCore import Qt, QObject, QRunnable, pyqtSignal, pyqtSlot, QSize, QThreadPool, pyqtProperty, QPropertyAnimation
 from PyQt5.QtGui import QColor, QPalette, QPixmap, QCursor, QFont, QIcon
 import qt_range_slider.qtRangeSlider as qtRangeSlider
@@ -19,7 +19,7 @@ import panda_eup.panda_primitive as pp
 from panda_eup.pbd_interface import PandaPBDInterface
 from panda_demos.data_recorder import Datarecorder
 from panda_demos.segmentation import Segmentation
-from panda_pbd.msg import UserSyncGoal
+from panda_pbd.msg import UserSyncGoal, MoveToContactGoal
 
 import pyttsx3
 
@@ -267,7 +267,7 @@ class EUPWidget(QWidget):
 
         self.validationButtons[0].pressed.connect(self.add_validation_usersync)
         self.validationButtons[1].pressed.connect(self.combine_motion_with_previous)
-        #self.validationButtons[2].pressed.connect(self.convert_to_pushmotion)
+        self.validationButtons[2].pressed.connect(self.convert_to_pushmotion)
         #Add created widgets to run program tab
         self.tabSelection.runProgramTab.layout.addWidget(self.panda_program_widget)
         self.tabSelection.runProgramTab.layout.addWidget(self.panda_tuning_widget)
@@ -590,12 +590,14 @@ class EUPWidget(QWidget):
         goal.force_threshold = 5.0
         user_sync_primitive = pp.UserSync()
         user_sync_primitive.set_parameter_container(goal)
+        arm_index = self.interpreter.loaded_program.primitives[idx].starting_arm_state_index
+        gripper_index = self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index
         self.interpreter.loaded_program.primitives.insert(idx, user_sync_primitive)
         #arm_state = self.interpreter.loaded_program.arm_state_list[idx]
         #gripper_state = self.interpreter.loaded_program.gripper_state_list[idx]
-        self.interpreter.loaded_program.primitives[idx].starting_arm_state_index = idx
+        self.interpreter.loaded_program.primitives[idx].starting_arm_state_index = arm_index
         #self.interpreter.loaded_program.arm_state_list.insert(idx+1, arm_state)
-        self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index = idx
+        self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index = gripper_index
         #self.interpreter.loaded_program.gripper_state_list.insert(idx+1, gripper_state)
         self.updateValidationButtons()
         self.panda_program_widget.clear()
@@ -606,10 +608,13 @@ class EUPWidget(QWidget):
         self.panda_program_widget.primitive_widget_list[idx + 1].primitive.status = pp.PandaPrimitiveStatus.NEUTRAL    
         self.panda_program_widget.primitive_widget_list[idx + 1].updateWidget()
         #self.panda_program_widget.updateWidget()   
+        self.saveAfterValidation()
         self.updatePandaWidgets()
 
     def combine_motion_with_previous(self):
         idx = self.interpreter.next_primitive_index
+        #print(self.interpreter.loaded_program.primitives[idx].starting_arm_state_index, self.interpreter.loaded_program.primitives[idx - 1].starting_arm_state_index)
+        #print(self.interpreter.loaded_program.arm_state_list)
         self.interpreter.loaded_program.primitives[idx - 1].parameter_container = self.interpreter.loaded_program.primitives[idx].parameter_container
         self.interpreter.loaded_program.primitives.pop(idx)
         self.interpreter.next_primitive_index = idx - 1
@@ -620,7 +625,48 @@ class EUPWidget(QWidget):
             self.panda_program_widget.addPrimitiveWidget(primitive, self.interpreter)
         self.panda_program_widget.primitive_widget_list[idx].primitive.status = pp.PandaPrimitiveStatus.READY
         self.panda_program_widget.primitive_widget_list[idx].updateWidget()
+        self.saveAfterValidation()
         self.updatePandaWidgets()   
+
+    def convert_to_pushmotion(self):
+        idx = self.interpreter.next_primitive_index
+        currentMotion = self.interpreter.loaded_program.primitives[idx]
+        pose = currentMotion.parameter_container.pose
+        goal = MoveToContactGoal()
+        goal.pose = pose
+        goal.position_speed = self.interface.default_parameters['move_to_contact_default_position_speed']
+        goal.rotation_speed = self.interface.default_parameters['move_to_contact_default_rotation_speed']
+        goal.force_threshold = self.interface.default_parameters['move_to_contact_default_force_threshold']
+        goal.torque_threshold = self.interface.default_parameters['move_to_contact_default_torque_threshold']
+        move_to_contact_primitive = pp.MoveToContact()
+        move_to_contact_primitive.set_parameter_container(goal)
+        original_arm_index = self.interpreter.loaded_program.primitives[idx].starting_arm_state_index
+        original_gripper_index = self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index
+        self.interpreter.loaded_program.primitives[idx] = move_to_contact_primitive
+        #arm_state = self.interpreter.loaded_program.arm_state_list[idx]
+        #gripper_state = self.interpreter.loaded_program.gripper_state_list[idx]
+        self.interpreter.loaded_program.primitives[idx].starting_arm_state_index = original_arm_index
+        #self.interpreter.loaded_program.arm_state_list.insert(idx+1, arm_state)
+        self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index = original_gripper_index
+        #self.interpreter.loaded_program.gripper_state_list.insert(idx+1, gripper_state)
+        self.updateValidationButtons()
+        self.panda_program_widget.clear()
+        for primitive in self.interpreter.loaded_program.primitives:
+            self.panda_program_widget.addPrimitiveWidget(primitive, self.interpreter)
+        self.panda_program_widget.primitive_widget_list[idx].primitive.status = pp.PandaPrimitiveStatus.READY
+        self.panda_program_widget.primitive_widget_list[idx].updateWidget()
+        self.saveAfterValidation()
+        self.updatePandaWidgets()        
+        
+
+    def saveAfterValidation(self):
+        buttonReply = QMessageBox.question(self, 'PyQt5 message', "Would you like to save the modified program?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if buttonReply == QMessageBox.Yes:
+            filename, okPressed = QInputDialog.getText(self, "Save Program","Enter filename for the program:", QLineEdit.Normal, "")
+            if okPressed and filename != '':
+                path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
+                filename = filename + '.pkl'
+                self.interpreter.loaded_program.dump_to_file(filepath=path, filename=filename)
 
     def loadNewProgram(self):
         '''
