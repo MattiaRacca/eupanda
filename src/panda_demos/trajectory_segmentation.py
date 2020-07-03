@@ -44,6 +44,8 @@ class TrajSeg():
         prevCombinedCost = 10000
         prevSolution = []
         N = len(self.points_to_segment)
+        if N < 3:
+            return []
         initialCosts = []
         for point in range(1, N):
             d, maxd = self.calculateTransitionCost(0, point)
