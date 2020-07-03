@@ -63,6 +63,7 @@ class Segmentation():
     def getAverageVelocity(self, start, end):
         velocities = self.ee_velocities[start:end]
         vel = round(np.mean(velocities), 2)
+        vel = min(vel, 0.35) #cap velocity at 0.35 m/s
         return vel
 
     def addGripperAction(self, start, end):
