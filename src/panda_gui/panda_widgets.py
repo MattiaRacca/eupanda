@@ -1061,10 +1061,19 @@ class DemonstrationMenu(QWidget):
         for primitive in self.seg.interface.program.primitives:
             self.parent.demo_program_widget.addPrimitiveWidget(primitive, self.seg.interface.interpreter)
         self.parent.demo_program_widget.updateWidget()
+        self.AskForSaving()
         buttonReply = QMessageBox.question(self, 'PyQt5 message', "Load this program for execution?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if buttonReply == QMessageBox.Yes:
             self.loadForExecution()
         
+    def AskForSaving(self):
+        buttonReply = QMessageBox.question(self, 'PyQt5 message', "Would you like to save the program?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if buttonReply == QMessageBox.Yes:
+            filename, okPressed = QInputDialog.getText(self, "Save Program","Enter filename for the program:", QLineEdit.Normal, "")
+            if okPressed and filename != '':
+                path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
+                filename = filename + '.pkl'
+                self.seg.interface.program.dump_to_file(filepath=path, filename=filename)
 
     def loadForExecution(self):
         self.parent.interpreter.load_program(self.seg.interface.program)
