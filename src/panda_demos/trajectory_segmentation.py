@@ -10,6 +10,7 @@ class TrajSeg():
         self.segmentation_points = []
         self.d = 0.02
         self.zeta = 0.3
+        self.max_deviation = 0.01
         self.cleanup = False
         
     def initialize(self):
@@ -51,7 +52,7 @@ class TrajSeg():
             d, maxd = self.calculateTransitionCost(0, point)
             initialCosts.append((d, [point], maxd))
         
-        if maxd < 0.10:
+        if maxd < self.max_deviation:
             result = []
             for point in initialCosts[-1][1]:
                 result.append(self.downSampleIndexes[point])
@@ -75,7 +76,7 @@ class TrajSeg():
             storedCosts.append(costs)
             finalCosts.append(costs[-1])
             prevCosts = costs
-            if costs[-1][2] < 0.10:
+            if costs[-1][2] < self.max_deviation:
                 break
             else:
                 prevSolution = costs[-1][1]
