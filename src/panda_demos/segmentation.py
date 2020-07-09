@@ -16,6 +16,7 @@ class Segmentation():
         self.data = None
         self.interface = interface
         #self.interface.initialize_program()
+        self.max_deviation = 0.10
 
     def createSegments(self):
         traj_points = [item.pose.position for item in self.data["trajectory_points"]]
@@ -36,7 +37,7 @@ class Segmentation():
         gripSeg.time_axis_ee = self.time_axis_ee
         gripSeg.time_axis_gripper = self.time_axis_gripper
 
-        trajSeg = TrajSeg()
+        trajSeg = TrajSeg(self.max_deviation)
 
         ma = gripSeg.moving_average(gripSeg.gripper_velocities)
         segments = gripSeg.createSegments(ma)

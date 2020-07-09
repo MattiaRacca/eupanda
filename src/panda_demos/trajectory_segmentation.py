@@ -5,12 +5,12 @@ from copy import deepcopy
 
 class TrajSeg():
     
-    def __init__(self):
+    def __init__(self, max_deviation):
         self.trajectory_points = []
         self.segmentation_points = []
         self.d = 0.02
         self.zeta = 0.3
-        self.max_deviation = 0.01
+        self.max_deviation = max_deviation
         self.cleanup = False
         
     def initialize(self):

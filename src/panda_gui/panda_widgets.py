@@ -288,6 +288,13 @@ class EUPWidget(QWidget):
         self.demonstrationMenu = DemonstrationMenu(self)
         self.lowerDemoMenu = LowerProgramMenu(self)
         self.demonstrationMenu.lowerDemoMenu = self.lowerDemoMenu
+        self.regularizationSlider = CurrentValueShowingSlider(self, "regularization",
+                                                              'm',
+                                                              [0.01, 0.15],
+                                                              range_slider_enabled=True, n_ticks=14)   
+        self.regularizationSlider.widget_layout.itemAt(4).widget().setVisible(False)
+        self.regularizationSlider.widget_layout.itemAt(5).widget().setVisible(False)
+        self.regularizationSlider.slider.setValue(0.10)
         self.lowerDemoMenu.saveButton.setText("Save Data")
         self.lowerDemoMenu.resetButton.setVisible(False)
         self.lowerDemoMenu.saveButton.pressed.connect(self.demonstrationMenu.saveData)
@@ -300,6 +307,8 @@ class EUPWidget(QWidget):
 
         self.tabSelection.demonstrationsTab.layout.addWidget(self.demo_program_widget)
         self.tabSelection.demonstrationsTab.layout.addWidget(self.demonstrationMenu)
+        self.tabSelection.demonstrationsTab.layout.addWidget(QHorizontalLine())
+        self.tabSelection.demonstrationsTab.layout.addWidget(self.regularizationSlider)
         self.tabSelection.demonstrationsTab.layout.addWidget(QHorizontalLine())
         self.tabSelection.demonstrationsTab.layout.addWidget(self.lowerDemoMenu)
 
@@ -1041,6 +1050,7 @@ class DemonstrationMenu(QWidget):
     def createProgram(self):
         self.seg.interface.program.primitives = []
         self.seg.interface.interpreter.program = None
+        self.seg.max_deviation = self.parent.regularizationSlider.slider.value()
         self.parent.demo_program_widget.clear()
         filename = self.dataInputField.text()
         if filename == '':
@@ -1529,26 +1539,26 @@ class CurrentValueShowingSlider(QWidget):
         'position_speed': 'Motion Speed',
         'force_threshold': 'Collision Threshold',
         'force': 'Grasp Strength',
-        'width': 'Finger Distance'
+        'width': 'Finger Distance',
+        'regularization': 'Maximum Deviation'
     }
 
-    def __init__(self, parent, name, measure_unit='', available_range=[0.0, 1.0], range_slider_enabled=False):
+    def __init__(self, parent, name, measure_unit='', available_range=[0.0, 1.0], range_slider_enabled=False, n_ticks=50):
         super(CurrentValueShowingSlider, self).__init__(parent)
         self.measure_unit = measure_unit
         self.available_range = available_range
         self.name = name
+        self.n_ticks = n_ticks
         self.range_slider_enabled=range_slider_enabled
         self.initUI()
 
     def initUI(self):
         self.widget_layout = QGridLayout(self)
-        n_ticks = 50
-
-        self.slider = FixNumberTicksSlider(self.available_range[0], self.available_range[1], n_ticks, Qt.Horizontal)
+        self.slider = FixNumberTicksSlider(self.available_range[0], self.available_range[1], self.n_ticks, Qt.Horizontal)
         if self.range_slider_enabled:
             min_value = self.available_range[0]
             max_value = self.available_range[1]
-            step = (max_value - min_value) / n_ticks  # TODO: this should be a parameter
+            step = (max_value - min_value) / self.n_ticks  # TODO: this should be a parameter
             self.range_slider = qtRangeSlider.QHRangeSlider(slider_range=[min_value, max_value, step],
                                                             values=[min_value, max_value])
 
