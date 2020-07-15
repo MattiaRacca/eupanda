@@ -998,12 +998,12 @@ class DemonstrationMenu(QWidget):
 
         self.velocitygraphwidget = pg.PlotWidget(self)
         self.velocitygraphwidget.setBackground('w')
-        self.velocitygraphwidget.setLabel('left', 'Velocity (m/s)', color='black', size=20)
+        self.velocitygraphwidget.setLabel('left', 'v (m/s)', color='black', size=20)
         self.velocitygraphwidget.setLabel('bottom', 'Time (s)', color='black', size=20)
 
         self.grippergraphwidget = pg.PlotWidget(self)
         self.grippergraphwidget.setBackground('w')
-        self.grippergraphwidget.setLabel('left', 'Gripper Velocity (m/s)', color='black', size=20)
+        self.grippergraphwidget.setLabel('left', 'v_g (m/s)', color='black', size=20)
         self.grippergraphwidget.setLabel('bottom', 'Time (s)', color='black', size=20)
 
         self.layout.addWidget(self.graphwidget)
