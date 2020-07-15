@@ -98,7 +98,7 @@ class TrajSeg():
             return sum(distances), max(distances)
 
 if __name__ == '__main__':
-    seg = TrajSeg()
+    seg = TrajSeg(0.10)
     data = seg.loadData("~/Thesis/src/eupanda/resources/data", "PoseStamped_4motions.pkl")
     seg.time_axis = data["time_axis_ee"]
     seg.velocities = data["ee_velocities"]

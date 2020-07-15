@@ -8,6 +8,7 @@ from trajectory_segmentation import TrajSeg
 import os
 import pickle
 import numpy as np
+import time
 
 
 class Segmentation():
@@ -19,6 +20,7 @@ class Segmentation():
         self.max_deviation = 0.10
 
     def createSegments(self):
+        start_time = time.time()
         traj_points = [item.pose.position for item in self.data["trajectory_points"]]
         self.trajectory_points = np.array(traj_points)
         self.gripper_states = self.data["gripper_states"]
@@ -60,6 +62,8 @@ class Segmentation():
                 self.addLinearMotion(endpoint, vel)
                 prevpoint = point     
             prevEnd = end    
+        print("--- %.2f seconds ---" % (time.time() - start_time))
+        print("--- %s primitives ---" % len(self.interface.program.primitives))
 
     def getAverageVelocity(self, start, end):
         velocities = self.ee_velocities[start:end]
