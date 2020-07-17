@@ -290,8 +290,8 @@ class EUPWidget(QWidget):
         self.demonstrationMenu.lowerDemoMenu = self.lowerDemoMenu
         self.regularizationSlider = CurrentValueShowingSlider(self, "regularization",
                                                               'm',
-                                                              [0.01, 0.15],
-                                                              range_slider_enabled=True, n_ticks=14)   
+                                                              [0.01, 0.25],
+                                                              range_slider_enabled=True, n_ticks=24)   
         self.regularizationSlider.widget_layout.itemAt(4).widget().setVisible(False)
         self.regularizationSlider.widget_layout.itemAt(5).widget().setVisible(False)
         self.regularizationSlider.slider.setValue(0.10)

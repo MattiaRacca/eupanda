@@ -46,6 +46,7 @@ class TrajSeg():
         prevSolution = []
         N = len(self.points_to_segment)
         if N < 3:
+            print("No segments returned due to the length of the given trajectory")
             return []
         initialCosts = []
         for point in range(1, N):
@@ -56,6 +57,7 @@ class TrajSeg():
             result = []
             for point in initialCosts[-1][1]:
                 result.append(self.downSampleIndexes[point])
+            print("--- Maximum absolute deviation: %s ---" % maxd)    
             return result 
         storedCosts = []
         prevCosts = initialCosts
@@ -77,6 +79,7 @@ class TrajSeg():
             finalCosts.append(costs[-1])
             prevCosts = costs
             if costs[-1][2] < self.max_deviation:
+                print("--- Maximum absolute deviation: %s ---" % round(costs[-1][2], 3)) 
                 break
             else:
                 prevSolution = costs[-1][1]
