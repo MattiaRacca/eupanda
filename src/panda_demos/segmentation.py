@@ -5,6 +5,7 @@ from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest
 import panda_eup.panda_primitive as pp
 from gripper_segmentation import GripperSegmentation
 from trajectory_segmentation import TrajSeg
+from trajectory_segmentation_old import TrajSeg_greedy
 import os
 import pickle
 import numpy as np
@@ -39,7 +40,8 @@ class Segmentation():
         gripSeg.time_axis_ee = self.time_axis_ee
         gripSeg.time_axis_gripper = self.time_axis_gripper
 
-        trajSeg = TrajSeg(self.max_deviation)
+        #trajSeg = TrajSeg(self.max_deviation)
+        trajSeg = TrajSeg_greedy(self.max_deviation)
 
         ma = gripSeg.moving_average(gripSeg.gripper_velocities)
         segments = gripSeg.createSegments(ma)

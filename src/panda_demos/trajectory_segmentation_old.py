@@ -2,13 +2,13 @@ import numpy as np
 import os
 import pickle
 
-class TrajSeg():
+class TrajSeg_greedy():
     
-    def __init__(self):
+    def __init__(self, max_deviation):
         self.trajectory_points = []
         self.segmentation_points = []
         self.d = 0.02
-        self.zeta = 0.15
+        self.max_deviation = max_deviation
         
     def initialize(self):
         self.downSample()
@@ -17,11 +17,16 @@ class TrajSeg():
         self.segmentation_points.append(len(self.points_to_segment) - 1)
 
     def optimize(self):
+        if len(self.points_to_segment) < 3:
+            return []
         self.points = np.arange(len(self.points_to_segment))
         self.remainingPoints = np.ones(len(self.points_to_segment))
+        #self.remainingPoints[0] = False
+        #self.remainingPoints[-1] = False
         costs = []
         costs.append(10000)
         done = False
+        prevDeleted = None
         prevValue = 0
         for i in range(1, len(self.points) - 1):
             cost = self.calculateTransitionCost(i)
@@ -30,17 +35,33 @@ class TrajSeg():
             
         while not done:
             breakpoints = [item for i,item in enumerate(self.points) if self.remainingPoints[i] == True]
-            totalCost = sum(self.calculatePerformance(breakpoints))
+            distances = self.calculatePerformance(breakpoints)
+            totalCost = sum(distances)
+            maxDev = max(distances)
             numOfPoints = sum(self.remainingPoints) - 2
             value = totalCost
-            if value > prevValue + self.zeta*numOfPoints:
+            if maxDev > self.max_deviation:
                 done = True
+                self.remainingPoints[prevDeleted] = True
+                print("--- Maximum absolute deviation: %s ---" % round(prevMaxDev, 3)) 
                 break
             else:
-                prevValue = value
+                prevValue = value   
             minCostIndex = np.argmin([item for item in costs])
             costs[minCostIndex] = 10**4
             self.remainingPoints[minCostIndex] = False
+            prevDeleted = minCostIndex
+            prevMaxDev = maxDev
+            if all(x==costs[0] for x in costs):
+                done = True
+                breakpoints = [0, len(self.points_to_segment) - 1]
+                lastmaxdev = max(self.calculatePerformance(breakpoints))
+                if lastmaxdev > self.max_deviation:
+                    self.remainingPoints[prevDeleted] = True
+                    print("--- Maximum absolute deviation: %s ---" % round(prevMaxDev, 3))    
+                else:
+                    print("--- Maximum absolute deviation: %s ---" % round(lastmaxdev, 3))
+                break
             diff = self.points - minCostIndex
             a = np.max([item for i, item in enumerate(diff) if item < 0 and self.remainingPoints[i] == True])
             prevIndex = np.where(diff == a)[0].item()
@@ -55,9 +76,9 @@ class TrajSeg():
                 costFollowing = self.calculateTransitionCost(nearestFollowing)
                 costs[nearestFollowing] = costFollowing
 
-        result = [item for i, item in enumerate(self.points) if self.remainingPoints[i] == True]
+        self.remainingPoints = self.remainingPoints[1:]
+        result = [item for i, item in enumerate(self.points[1:]) if self.remainingPoints[i] == True]
         return result        
-        #print(result)
 
     def calculateTransitionCost(self, i):
         distances = []
@@ -74,6 +95,7 @@ class TrajSeg():
         return sum(distances)/len(distances)    
 
     def downSample(self):
+        self.trajectory_points = [np.array([point.x, point.y, point.z]) for point in self.trajectory_points]
         self.downSamplePoints = []
         self.downSampleIndexes = []
         self.downSamplePoints.append(self.trajectory_points[0])
@@ -107,11 +129,11 @@ class TrajSeg():
 
 
 if __name__ == "__main__":
-    seg = TrajSeg()
-    data = seg.loadData("~/Thesis/src/eupanda/resources/data", "PaP_1.pkl")
+    seg = TrajSeg_greedy(0.10)
+    data = seg.loadData("~/Thesis/src/eupanda/resources/data", "MaxDev_3motions.pkl")
     seg.time_axis = data["time_axis_ee"]
     seg.velocities = data["ee_velocities"]
-    traj_points = [item[0] for item in data["trajectory_points"]]
+    traj_points = [item.pose.position for item in data["trajectory_points"]]
     seg.trajectory_points = np.array(traj_points)
     #seg.trajectory_points = seg.trajectory_points[966:1680]
     seg.initialize()

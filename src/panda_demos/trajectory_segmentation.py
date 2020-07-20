@@ -56,7 +56,7 @@ class TrajSeg():
         if maxd < self.max_deviation:
             result = []
             for point in initialCosts[-1][1]:
-                result.append(self.downSampleIndexes[point])
+                result.append(self.downSampleIndexes[point])    
             print("--- Maximum absolute deviation: %s ---" % maxd)    
             return result 
         storedCosts = []
