@@ -78,7 +78,10 @@ class TrajSeg_greedy():
 
         self.remainingPoints = self.remainingPoints[1:]
         result = [item for i, item in enumerate(self.points[1:]) if self.remainingPoints[i] == True]
-        return result        
+        finalPoints = []
+        for point in result:
+            finalPoints.append(self.downSampleIndexes[point])
+        return finalPoints       
 
     def calculateTransitionCost(self, i):
         distances = []
