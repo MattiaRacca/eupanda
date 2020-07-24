@@ -111,7 +111,8 @@ class TrajSeg_greedy():
                 self.downSamplePoints.append(point)
                 self.downSampleIndexes.append(count)
                 distances.append(dist)
-            count += 1    
+            count += 1
+        print("--- Number of Downsampled trajectory points: %s ---" % len(self.downSamplePoints))        
     
     def calculatePerformance(self, breakpoints):
         start = 0

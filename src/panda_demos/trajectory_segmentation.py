@@ -33,7 +33,8 @@ class TrajSeg():
                 self.downSamplePoints.append(point)
                 self.downSampleIndexes.append(count)
                 distances.append(dist)
-            count += 1 
+            count += 1
+        print("--- Number of Downsampled trajectory points: %s ---" % len(self.downSamplePoints))      
     
     def loadData(self, path, filename):
         with open(os.path.join(os.path.expanduser(path), filename), 'rb') as f:
