@@ -19,7 +19,7 @@ import panda_eup.panda_primitive as pp
 from panda_eup.pbd_interface import PandaPBDInterface
 from panda_demos.data_recorder import Datarecorder
 from panda_demos.segmentation import Segmentation
-from panda_pbd.msg import UserSyncGoal, MoveToContactGoal
+from panda_pbd.msg import UserSyncGoal, MoveToContactGoal, MoveToEEGoal
 
 import pyttsx3
 
@@ -257,17 +257,17 @@ class EUPWidget(QWidget):
         self.validationButtonLayout.addWidget(button)
         self.validationButtonLayout.addWidget(QVerticalLine())
 
-        label = QLabel("Convert the current\nLinear Motion to\na Push Motion")
-        label.setFont(EUPWidget.font)
+        self.motionlabel = QLabel("Convert the current\nLinear Motion to\na Push Motion")
+        self.motionlabel.setFont(EUPWidget.font)
         button = QExpandingPushButton("Convert")
         button.setFont(EUPWidget.font)
         self.validationButtons.append(button)
-        self.validationButtonLayout.addWidget(label)
+        self.validationButtonLayout.addWidget(self.motionlabel)
         self.validationButtonLayout.addWidget(button)
 
         self.validationButtons[0].pressed.connect(self.add_validation_usersync)
         self.validationButtons[1].pressed.connect(self.combine_motion_with_previous)
-        self.validationButtons[2].pressed.connect(self.convert_to_pushmotion)
+        self.validationButtons[2].pressed.connect(self.convert_motion)
         #Add created widgets to run program tab
         self.tabSelection.runProgramTab.layout.addWidget(self.panda_program_widget)
         self.tabSelection.runProgramTab.layout.addWidget(self.panda_tuning_widget)
@@ -291,7 +291,7 @@ class EUPWidget(QWidget):
         self.regularizationSlider = CurrentValueShowingSlider(self, "regularization",
                                                               'm',
                                                               [0.01, 0.25],
-                                                              range_slider_enabled=True, n_ticks=24)   
+                                                              range_slider_enabled=self.range_sliders, n_ticks=24)   
         self.regularizationSlider.widget_layout.itemAt(4).widget().setVisible(False)
         self.regularizationSlider.widget_layout.itemAt(5).widget().setVisible(False)
         self.regularizationSlider.slider.setValue(0.10)
@@ -578,9 +578,9 @@ class EUPWidget(QWidget):
         else:
             self.validationButtons[0].setEnabled(True) 
         
+        curPrimitive = self.interpreter.loaded_program.primitives[idx].__class__.__name__
+        prevPrimitive = self.interpreter.loaded_program.primitives[idx - 1].__class__.__name__
         if idx > 0:
-            curPrimitive = self.interpreter.loaded_program.primitives[idx].__class__.__name__
-            prevPrimitive = self.interpreter.loaded_program.primitives[idx - 1].__class__.__name__
             if curPrimitive == 'MoveToEE' and prevPrimitive == 'MoveToEE':
                 self.validationButtons[1].setEnabled(True)     
             else:
@@ -588,7 +588,12 @@ class EUPWidget(QWidget):
         else:
             self.validationButtons[1].setEnabled(False)
 
-        if idx >= 0 and self.interpreter.loaded_program.primitives[idx].__class__.__name__ == "MoveToEE":
+        
+        if idx >= 0 and (curPrimitive == "MoveToEE" or curPrimitive == "MoveToContact"):
+            if curPrimitive == "MoveToEE":
+                self.motionlabel.setText("Convert the current\nLinear Motion to\na Push Motion")
+            else:
+                self.motionlabel.setText("Convert the current\nPush Motion to\na Linear Motion")    
             self.validationButtons[2].setEnabled(True)
         else:
             self.validationButtons[2].setEnabled(False)                    
@@ -637,27 +642,43 @@ class EUPWidget(QWidget):
         self.saveAfterValidation()
         self.updatePandaWidgets()   
 
-    def convert_to_pushmotion(self):
+    def convert_motion(self):
         idx = self.interpreter.next_primitive_index
         currentMotion = self.interpreter.loaded_program.primitives[idx]
-        pose = currentMotion.parameter_container.pose
-        goal = MoveToContactGoal()
-        goal.pose = pose
-        goal.position_speed = self.interface.default_parameters['move_to_contact_default_position_speed']
-        goal.rotation_speed = self.interface.default_parameters['move_to_contact_default_rotation_speed']
-        goal.force_threshold = self.interface.default_parameters['move_to_contact_default_force_threshold']
-        goal.torque_threshold = self.interface.default_parameters['move_to_contact_default_torque_threshold']
-        move_to_contact_primitive = pp.MoveToContact()
-        move_to_contact_primitive.set_parameter_container(goal)
-        original_arm_index = self.interpreter.loaded_program.primitives[idx].starting_arm_state_index
-        original_gripper_index = self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index
-        self.interpreter.loaded_program.primitives[idx] = move_to_contact_primitive
-        #arm_state = self.interpreter.loaded_program.arm_state_list[idx]
-        #gripper_state = self.interpreter.loaded_program.gripper_state_list[idx]
-        self.interpreter.loaded_program.primitives[idx].starting_arm_state_index = original_arm_index
-        #self.interpreter.loaded_program.arm_state_list.insert(idx+1, arm_state)
-        self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index = original_gripper_index
-        #self.interpreter.loaded_program.gripper_state_list.insert(idx+1, gripper_state)
+        if currentMotion.__class__.__name__ == "MoveToEE":
+            pose = currentMotion.parameter_container.pose
+            goal = MoveToContactGoal()
+            goal.pose = pose
+            goal.position_speed = self.interface.default_parameters['move_to_contact_default_position_speed']
+            goal.rotation_speed = self.interface.default_parameters['move_to_contact_default_rotation_speed']
+            goal.force_threshold = self.interface.default_parameters['move_to_contact_default_force_threshold']
+            goal.torque_threshold = self.interface.default_parameters['move_to_contact_default_torque_threshold']
+            move_to_contact_primitive = pp.MoveToContact()
+            move_to_contact_primitive.set_parameter_container(goal)
+            original_arm_index = self.interpreter.loaded_program.primitives[idx].starting_arm_state_index
+            original_gripper_index = self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index
+            self.interpreter.loaded_program.primitives[idx] = move_to_contact_primitive
+            #arm_state = self.interpreter.loaded_program.arm_state_list[idx]
+            #gripper_state = self.interpreter.loaded_program.gripper_state_list[idx]
+            self.interpreter.loaded_program.primitives[idx].starting_arm_state_index = original_arm_index
+            #self.interpreter.loaded_program.arm_state_list.insert(idx+1, arm_state)
+            self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index = original_gripper_index
+            #self.interpreter.loaded_program.gripper_state_list.insert(idx+1, gripper_state)
+        elif currentMotion.__class__.__name__ == "MoveToContact":
+            pose = currentMotion.parameter_container.pose
+            goal = MoveToEEGoal()
+            goal.position_speed = self.interface.default_parameters['move_to_ee_default_position_speed']
+            goal.rotation_speed = self.interface.default_parameters['move_to_ee_default_rotation_speed'] 
+            move_to_ee_primitive = pp.MoveToEE()
+            move_to_ee_primitive.set_parameter_container(goal)
+            original_arm_index = self.interpreter.loaded_program.primitives[idx].starting_arm_state_index
+            original_gripper_index = self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index
+            self.interpreter.loaded_program.primitives[idx] = move_to_ee_primitive
+            self.interpreter.loaded_program.primitives[idx].starting_arm_state_index = original_arm_index
+            self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index = original_gripper_index
+        else:
+            print("Incorrect primitive type")
+            return      
         self.updateValidationButtons()
         self.panda_program_widget.clear()
         for primitive in self.interpreter.loaded_program.primitives:
