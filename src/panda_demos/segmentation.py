@@ -5,11 +5,12 @@ from panda_pbd.srv import MoveFingersRequest, ApplyForceFingersRequest
 import panda_eup.panda_primitive as pp
 from gripper_segmentation import GripperSegmentation
 from trajectory_segmentation import TrajSeg
-from trajectory_segmentation_old import TrajSeg_greedy
+from trajectory_segmentation_greedy import TrajSeg_greedy
 import os
 import pickle
 import numpy as np
 import time
+import rospy
 
 
 class Segmentation():
@@ -19,6 +20,7 @@ class Segmentation():
         self.interface = interface
         #self.interface.initialize_program()
         self.max_deviation = 0.10
+        self.trajseg_type = rospy.get_param('/trajseg_algorithm') if rospy.has_param('/trajseg_algorithm') else 'optimal'
 
     def createSegments(self):
         start_time = time.time()
@@ -40,8 +42,11 @@ class Segmentation():
         gripSeg.time_axis_ee = self.time_axis_ee
         gripSeg.time_axis_gripper = self.time_axis_gripper
 
-        #trajSeg = TrajSeg(self.max_deviation)
-        trajSeg = TrajSeg_greedy(self.max_deviation)
+        if self.trajseg_type == 'greedy':
+            trajSeg = TrajSeg_greedy(self.max_deviation)
+        else:
+            trajSeg = TrajSeg(self.max_deviation)
+        
 
         ma = gripSeg.moving_average(gripSeg.gripper_velocities)
         segments = gripSeg.createSegments(ma)

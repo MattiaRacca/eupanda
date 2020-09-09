@@ -2,10 +2,11 @@
     <param name="robotless_debug" type="bool" value="true" />
     <param name="randomize_parameters" type="bool" value="false" />
     <param name="tts_for_primitives" type="bool" value="false" />
-    <param name="range_sliders" type="bool" value="true" />
-
+    <param name="range_sliders" type="bool" value="false" />
+    <!-- Set the type of trajectory segmentation as 'greedy' or 'optimal'. Default is 'optimal' -->
+    <param name="trajseg_algorithm" type="string" value="optimal" />
     <param name="program_path" type="string" value="$(find panda_pbd)/resources/" />
-    <!-- <param name="program_name" type="string" value="handover.pkl" /> -->
+    <param name="program_name" type="string" value="testvalidation.pkl" />
 
     <param name="program_logging_path" type="string" value="$(find panda_pbd)/resources/logs/" />
 
