@@ -32,7 +32,6 @@ from enum import Enum
 from datetime import datetime
 import time
 
-
 # Size of Primitive Widget
 PRIMITIVE_WIDTH = 100
 PRIMITIVE_HEIGHT = 120
@@ -281,7 +280,7 @@ class EUPWidget(QWidget):
         self.tabSelection.runProgramTab.layout.addWidget(self.low_buttons)
 
         #The following additions are for create programs tab
-        # Using PandaProgramWidget again, we create a widget thats lists primitives for the program to be created. 
+        # Using PandaProgramWidget again, we create a widget thats lists primitives for the program to be created.
         # We also add buttons for program creation and for utilities like saving the program.
         self.program_creation_widget = PandaProgramWidget(self)
         self.program_creation_widget.clear()
@@ -297,7 +296,7 @@ class EUPWidget(QWidget):
         self.regularizationSlider = CurrentValueShowingSlider(self, "regularization",
                                                               'm',
                                                               [0.01, 0.25],
-                                                              range_slider_enabled=self.range_sliders, n_ticks=24)   
+                                                              range_slider_enabled=self.range_sliders, n_ticks=24)
         self.regularizationSlider.widget_layout.itemAt(4).widget().setVisible(False)
         self.regularizationSlider.widget_layout.itemAt(5).widget().setVisible(False)
         self.regularizationSlider.slider.setValue(0.10)
@@ -360,7 +359,7 @@ class EUPWidget(QWidget):
                     self.tuning_timeseries.append(time.time())
 
                 for key, value in range_tuning_targets.items():
-                    self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index).\
+                    self.interpreter.loaded_program.get_nth_primitive(self.interpreter.next_primitive_index). \
                         update_parameter_range(key, value)
                     rospy.loginfo('Saving range {} of a {} primitive: {}'.format(key, \
                                                                                  type(ready_primitive), \
@@ -388,7 +387,7 @@ class EUPWidget(QWidget):
 
         # EUP State is checked and certain buttons are disabled accordingly
         self.checkEUPState()
-        
+
         #We disabled frozen- or relaxed-buttons based on which state is active
         self.checkForRelaxedAndFrozen()
 
@@ -474,12 +473,12 @@ class EUPWidget(QWidget):
         if self.state_machine == EUPStateMachine.OPERATIONAL:
             self.state_machine = EUPStateMachine.BUSY
 
-        worker = Worker(command) # Any other args, kwargs are passed to the run function
+        worker = Worker(command)  # Any other args, kwargs are passed to the run function
         worker.signals.result.connect(self.reapInterpreterResults)
         worker.signals.finished.connect(self.announceWorkerDeath)
         worker.signals.progress.connect(self.actOnWorkerUpdate)
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor)) # TODO: Weird bug makes it work only once...
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))  # TODO: Weird bug makes it work only once...
 
         self.threadpool.start(worker)
 
@@ -507,7 +506,7 @@ class EUPWidget(QWidget):
             self.state_machine = EUPStateMachine.STARTUP
         if (self.state_machine == EUPStateMachine.EXECUTION_ERROR or
             self.state_machine == EUPStateMachine.REVERTING_ERROR) and success:
-            self.state_machine = EUPStateMachine.OPERATIONAL    
+            self.state_machine = EUPStateMachine.OPERATIONAL
         self.updatePandaWidgets()
 
     def addControlButtonActions(self):
@@ -522,10 +521,10 @@ class EUPWidget(QWidget):
             self.program_creation_buttons.controlButtons[3]: self.interface.relax_finger,
             self.program_creation_buttons.controlButtons[4]: self.interface.relax_only_arm,
             self.program_creation_buttons.controlButtons[5]: self.interface.relax_only_wrist
-        } 
-        for k,v in controlActions.items():
-            k.pressed.connect(v) 
-            k.pressed.connect(self.updatePandaWidgets)  
+        }
+        for k, v in controlActions.items():
+            k.pressed.connect(v)
+            k.pressed.connect(self.updatePandaWidgets)
 
     def addPrimitiveButtonActions(self):
         '''
@@ -539,19 +538,19 @@ class EUPWidget(QWidget):
             self.program_creation_buttons.primitiveButtons[3]: partial(self.addPrimitive, pp.MoveFingers(), self.interface.insert_move_fingers),
             self.program_creation_buttons.primitiveButtons[4]: partial(self.addPrimitive, pp.ApplyForceFingers(), self.interface.insert_apply_force_fingers)
         }
-        for k,v in primitiveActions.items():
+        for k, v in primitiveActions.items():
             k.pressed.connect(v)
 
-        self.program_creation_buttons.deleteButton.pressed.connect(self.deletePreviousPrimitive)    
+        self.program_creation_buttons.deleteButton.pressed.connect(self.deletePreviousPrimitive)
 
     def addPrimitive(self, primitive, fn):
         '''
         Gets primitive and the respective function for adding said primitive to the program as parameters. The primitive is added
         to the program widget, the geometry of the widget is updated and the UI is updated for button state updates.
         '''
-        fn()   
+        fn()
         self.program_creation_widget.addPrimitiveWidget(primitive, interpreter=self.interpreter)
-        self.program_creation_widget.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*self.interface.program.get_program_length(),
+        self.program_creation_widget.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH) * self.interface.program.get_program_length(),
                                         V_SPACING + PRIMITIVE_HEIGHT)
         self.program_creation_widget.updateWidget()
         self.updatePandaWidgets()
@@ -562,17 +561,17 @@ class EUPWidget(QWidget):
         whether the recently saved program should be loaded to run program -tab for execution
         '''
         inputField = self.lowerProgramMenu.inputField
-        filename =  inputField.text()
+        filename = inputField.text()
         filePath = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
         if filename == '':
             self.interface.program.dump_to_file(filePath, "testprogram.pkl")
         else:
-             self.interface.program.dump_to_file(filePath, str(filename) + '.pkl')   
+            self.interface.program.dump_to_file(filePath, str(filename) + '.pkl')
         inputField.clear()
         buttonReply = QMessageBox.question(self, 'PyQt5 message', "Load this program for execution?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if buttonReply == QMessageBox.Yes:
             self.loadNewProgram()
-        
+
     def updateValidationButtons(self):
         '''
         Enable adding user sync unless the program has not entered the starting state, allow merging of linear motions if
@@ -588,13 +587,13 @@ class EUPWidget(QWidget):
         if idx == -1:
             self.validationButtons[0].setEnabled(False)
         else:
-            self.validationButtons[0].setEnabled(True) 
-        
+            self.validationButtons[0].setEnabled(True)
+
         curPrimitive = self.interpreter.loaded_program.primitives[idx].__class__.__name__
         prevPrimitive = self.interpreter.loaded_program.primitives[idx - 1].__class__.__name__
         if idx > 0:
             if curPrimitive == 'MoveToEE' and prevPrimitive == 'MoveToEE':
-                self.validationButtons[1].setEnabled(True)     
+                self.validationButtons[1].setEnabled(True)
             else:
                 self.validationButtons[1].setEnabled(False)
         else:
@@ -605,10 +604,10 @@ class EUPWidget(QWidget):
             if curPrimitive == "MoveToEE":
                 self.motionlabel.setText("Convert the current\nLinear Motion to\na Push Motion")
             else:
-                self.motionlabel.setText("Convert the current\nPush Motion to\na Linear Motion")    
+                self.motionlabel.setText("Convert the current\nPush Motion to\na Linear Motion")
             self.validationButtons[2].setEnabled(True)
         else:
-            self.validationButtons[2].setEnabled(False)                    
+            self.validationButtons[2].setEnabled(False)
 
     def add_validation_usersync(self):
         '''
@@ -633,8 +632,8 @@ class EUPWidget(QWidget):
 
         self.panda_program_widget.primitive_widget_list[idx].primitive.status = pp.PandaPrimitiveStatus.READY
         self.panda_program_widget.primitive_widget_list[idx].updateWidget()
-        self.panda_program_widget.primitive_widget_list[idx + 1].primitive.status = pp.PandaPrimitiveStatus.NEUTRAL    
-        self.panda_program_widget.primitive_widget_list[idx + 1].updateWidget()   
+        self.panda_program_widget.primitive_widget_list[idx + 1].primitive.status = pp.PandaPrimitiveStatus.NEUTRAL
+        self.panda_program_widget.primitive_widget_list[idx + 1].updateWidget()
         self.saveAfterValidation()
         self.updatePandaWidgets()
 
@@ -648,7 +647,7 @@ class EUPWidget(QWidget):
         self.interpreter.loaded_program.primitives.pop(idx)
         self.interpreter.next_primitive_index = idx - 1
         idx = self.interpreter.next_primitive_index
-       
+
         self.updateValidationButtons()
         self.panda_program_widget.clear()
         for primitive in self.interpreter.loaded_program.primitives:
@@ -656,7 +655,7 @@ class EUPWidget(QWidget):
         self.panda_program_widget.primitive_widget_list[idx].primitive.status = pp.PandaPrimitiveStatus.READY
         self.panda_program_widget.primitive_widget_list[idx].updateWidget()
         self.saveAfterValidation()
-        self.updatePandaWidgets()   
+        self.updatePandaWidgets()
 
     def convert_motion(self):
         '''
@@ -675,7 +674,7 @@ class EUPWidget(QWidget):
             goal.torque_threshold = self.interface.default_parameters['move_to_contact_default_torque_threshold']
             move_to_contact_primitive = pp.MoveToContact()
             move_to_contact_primitive.set_parameter_container(goal)
-            
+
             original_arm_index = self.interpreter.loaded_program.primitives[idx].starting_arm_state_index
             original_gripper_index = self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index
             self.interpreter.loaded_program.primitives[idx] = move_to_contact_primitive
@@ -686,7 +685,7 @@ class EUPWidget(QWidget):
             pose = currentMotion.parameter_container.pose
             goal = MoveToEEGoal()
             goal.position_speed = self.interface.default_parameters['move_to_ee_default_position_speed']
-            goal.rotation_speed = self.interface.default_parameters['move_to_ee_default_rotation_speed'] 
+            goal.rotation_speed = self.interface.default_parameters['move_to_ee_default_rotation_speed']
             move_to_ee_primitive = pp.MoveToEE()
             move_to_ee_primitive.set_parameter_container(goal)
 
@@ -695,10 +694,10 @@ class EUPWidget(QWidget):
             self.interpreter.loaded_program.primitives[idx] = move_to_ee_primitive
             self.interpreter.loaded_program.primitives[idx].starting_arm_state_index = original_arm_index
             self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index = original_gripper_index
-        
+
         else:
             print("Incorrect primitive type")
-            return     
+            return
 
         self.updateValidationButtons()
         self.panda_program_widget.clear()
@@ -707,15 +706,15 @@ class EUPWidget(QWidget):
         self.panda_program_widget.primitive_widget_list[idx].primitive.status = pp.PandaPrimitiveStatus.READY
         self.panda_program_widget.primitive_widget_list[idx].updateWidget()
         self.saveAfterValidation()
-        self.updatePandaWidgets()        
-        
+        self.updatePandaWidgets()
+
     def saveAfterValidation(self):
         '''
         Ask the user if they want to save the program after the modifications done with validation buttons
         '''
         buttonReply = QMessageBox.question(self, 'PyQt5 message', "Would you like to save the modified program?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if buttonReply == QMessageBox.Yes:
-            filename, okPressed = QInputDialog.getText(self, "Save Program","Enter filename for the program:", QLineEdit.Normal, "")
+            filename, okPressed = QInputDialog.getText(self, "Save Program", "Enter filename for the program:", QLineEdit.Normal, "")
             if okPressed and filename != '':
                 path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
                 filename = filename + '.pkl'
@@ -730,13 +729,13 @@ class EUPWidget(QWidget):
         self.interpreter.load_program(self.interface.program)
         self.interpreter.loaded_program.reset_primitives_history()
         self.state_machine = EUPStateMachine.STARTUP
-        self.last_interface_state = None 
+        self.last_interface_state = None
         self.updatePandaWidgets()
         self.panda_program_widget.clear()
         for primitive in self.interface.program.primitives:
             self.panda_program_widget.addPrimitiveWidget(primitive, self.interpreter)
-        self.panda_program_widget.update()    
-        
+        self.panda_program_widget.update()
+
     def deletePreviousPrimitive(self):
         '''
         Deletes previously added primitive and asks the user whether they want to return the robot to the preconditions of the previous primitive.
@@ -753,7 +752,7 @@ class EUPWidget(QWidget):
                 print(item.parameter_container.pose)
             except:
                 print("Error")
-        '''        
+        '''
         self.program_creation_widget.deleteLastPrimitive()
         self.program_creation_widget.updateWidget()
         self.updatePandaWidgets()
@@ -771,8 +770,7 @@ class EUPWidget(QWidget):
         }
         name = self.interface.program.primitives[-1].__class__.__name__
         fn = revertFunctions[name]
-        fn() 
-
+        fn()
 
     def addProgramUtilityActions(self):
         '''
@@ -780,7 +778,7 @@ class EUPWidget(QWidget):
         '''
         self.lowerProgramMenu.saveButton.pressed.connect(self.saveProgram)
         self.lowerProgramMenu.resetButton.pressed.connect(partial(self.program_creation_widget.clear, self.interface))
-        self.lowerProgramMenu.resetButton.pressed.connect(self.updatePandaWidgets)      
+        self.lowerProgramMenu.resetButton.pressed.connect(self.updatePandaWidgets)
 
     def checkForInitialization(self):
         '''
@@ -791,7 +789,7 @@ class EUPWidget(QWidget):
             controlButton.setEnabled(self.interface.program.initialized)
 
         for primitiveButton in self.program_creation_buttons.primitiveButtons:
-            primitiveButton.setEnabled(self.interface.program.initialized) 
+            primitiveButton.setEnabled(self.interface.program.initialized)
 
     def checkForRelaxedAndFrozen(self):
         '''
@@ -806,7 +804,7 @@ class EUPWidget(QWidget):
             self.program_creation_buttons.controlButtons[2].setEnabled(False)
 
         if self.interface.frozen:
-            self.program_creation_buttons.controlButtons[1].setEnabled(False)                    
+            self.program_creation_buttons.controlButtons[1].setEnabled(False)
 
     def checkEUPState(self):
         '''
@@ -816,7 +814,7 @@ class EUPWidget(QWidget):
         if state == False:
             rospy.loginfo("Program creation buttons disabled while the state machine is busy or in error state")
         else:
-            rospy.loginfo("Program creation buttons enabled")    
+            rospy.loginfo("Program creation buttons enabled")
         for controlButton in self.program_creation_buttons.controlButtons:
             controlButton.setEnabled(state)
 
@@ -840,13 +838,11 @@ class EUPWidget(QWidget):
         if len(self.interface.program.primitives) == 0:
             self.lowerProgramMenu.saveButton.setEnabled(False)
             self.lowerProgramMenu.resetButton.setEnabled(False)
-            self.program_creation_buttons.deleteButton.setEnabled(False)      
+            self.program_creation_buttons.deleteButton.setEnabled(False)
         else:
             self.lowerProgramMenu.saveButton.setEnabled(True)
             self.lowerProgramMenu.resetButton.setEnabled(True)
-            self.program_creation_buttons.deleteButton.setEnabled(True) 
-
-
+            self.program_creation_buttons.deleteButton.setEnabled(True)
 
     def announceWorkerDeath(self):
         rospy.logdebug("RIP Worker!")
@@ -875,9 +871,9 @@ class TabWidget(QWidget):
         self.createProgramTab = QWidget()
         self.demonstrationsTab = QWidget()
 
-        self.tabWidget.addTab(self.runProgramTab,"Run Programs")
-        self.tabWidget.addTab(self.createProgramTab,"Create Programs")
-        self.tabWidget.addTab(self.demonstrationsTab,"Demonstrations")
+        self.tabWidget.addTab(self.runProgramTab, "Run Programs")
+        self.tabWidget.addTab(self.createProgramTab, "Create Programs")
+        self.tabWidget.addTab(self.demonstrationsTab, "Demonstrations")
 
         self.runProgramTab.layout = QVBoxLayout(self)
         self.runProgramTab.layout.setAlignment(Qt.AlignTop)
@@ -892,6 +888,7 @@ class TabWidget(QWidget):
 
         self.layout.addWidget(self.tabWidget)
         self.setLayout(self.layout)
+
 
 class ProgramCreationButtons(QWidget):
     '''
@@ -934,7 +931,7 @@ class ProgramCreationButtons(QWidget):
             button = QPushButton('', self)
             imagePath = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources', primitive.__class__.__name__ + '.png')
             button.setIcon(QIcon(imagePath))
-            button.setIconSize(QSize(80,80))
+            button.setIconSize(QSize(80, 80))
             self.primitiveButtonLayout.addWidget(button)
             self.primitiveButtons.append(button)
 
@@ -948,15 +945,15 @@ class ProgramCreationButtons(QWidget):
         self.lowerLayoutWidget = QWidget(self)
         self.lowerLayout = QHBoxLayout(self.lowerLayoutWidget)
         self.lowerLayout.addWidget(self.deleteButton)
-        self.lowerLayout.setAlignment(Qt.AlignCenter)  
+        self.lowerLayout.setAlignment(Qt.AlignCenter)
         self.primitiveVerticalLayout.addWidget(self.primitiveButtonRowWidget)
         self.primitiveVerticalLayout.addWidget(self.lowerLayoutWidget)
-        #self.primitiveVerticalLayout.addWidget(self.deleteButton)    
-        self.layout.addWidget(self.primitiveButtonAreaWidget)    
+        #self.primitiveVerticalLayout.addWidget(self.deleteButton)
+        self.layout.addWidget(self.primitiveButtonAreaWidget)
 
     def sizeHint(self):
         return QSize(100, 100)
-        
+
     def addControlButtons(self):
         '''
         Add buttons for freezing, relaxing the robot.
@@ -970,9 +967,10 @@ class ProgramCreationButtons(QWidget):
             button = QExpandingPushButton(labels[i], self)
             button.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed))
             button.setFont(EUPWidget.font)
-            self.controlButtonLayout.addWidget(button, i/3, i % 3)
+            self.controlButtonLayout.addWidget(button, i / 3, i % 3)
             self.controlButtons.append(button)
-        self.layout.addWidget(self.controlButtonWidget)            
+        self.layout.addWidget(self.controlButtonWidget)
+
 
 class DemonstrationMenu(QWidget):
     '''
@@ -988,7 +986,7 @@ class DemonstrationMenu(QWidget):
         self.recording = False
         self.recordingThreadpool = QThreadPool()
         self.parent = self.parent()
-        
+
     def initUI(self):
         self.layout = QHBoxLayout(self)
         self.layout.setAlignment(Qt.AlignLeft)
@@ -1008,21 +1006,20 @@ class DemonstrationMenu(QWidget):
         '''
         self.demoButtons = []
         labels = ["Start recording", "Stop recording", "Clear plot", "Program\nCreation", "Relax Fingers", "Return to\nrecording", "Create Program"]
-        
+
         for label in labels:
             button = QExpandingPushButton(label, self)
             button.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed))
             button.setFont(EUPWidget.font)
             self.buttonLayout.addWidget(button)
-            self.demoButtons.append(button)            
-        
+            self.demoButtons.append(button)
+
         self.buttonArea.addWidget(self.buttonWidget)
         self.dataInputField = QLineEdit()
         self.dataInputField.setPlaceholderText("Enter filename for data to be used for program creation")
         self.dataInputField.setVisible(False)
         self.buttonArea.addWidget(self.dataInputField)
         self.layout.addWidget(self.buttonAreaWidget)
-
 
     def saveData(self):
         '''
@@ -1044,7 +1041,7 @@ class DemonstrationMenu(QWidget):
         self.demoButtons[6].setVisible(False)
         #self.demoButtons[3].setEnabled(False)
         self.demoButtons[0].pressed.connect(self.startRecording)
-        self.demoButtons[1].pressed.connect(self.stopRecording) 
+        self.demoButtons[1].pressed.connect(self.stopRecording)
         self.demoButtons[2].pressed.connect(self.clearPlot)
         self.demoButtons[3].pressed.connect(self.enterProgramCreation)
         self.demoButtons[4].pressed.connect(self.relaxFingers)
@@ -1080,7 +1077,7 @@ class DemonstrationMenu(QWidget):
         '''
         self.times_ee = self.datarecorder.time_axis_ee
         self.times_gripper = self.datarecorder.time_axis_gripper
-        
+
         self.velocities = self.datarecorder.ee_velocities
         self.dataLine_v = self.velocitygraphwidget.plot(self.times_ee, self.velocities)
         self.graphlayout.addWidget(self.velocitygraphwidget)
@@ -1140,32 +1137,32 @@ class DemonstrationMenu(QWidget):
             self.seg.data["gripper_states"] = self.datarecorder.gripper_states
             self.seg.data["time_axis_ee"] = self.datarecorder.time_axis_ee
             self.seg.data["time_axis_gripper"] = self.datarecorder.time_axis_gripper
-        
+
         else:
             path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources', 'data')
             self.seg.data = self.seg.loadData(path, filename)
-        
+
         #Execute segmentation, save program, and load program to interpreter
         self.seg.createSegments()
         resourcepath = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
         self.seg.saveProgram(path=resourcepath, filename="segmentation_test.pkl")
         self.seg.interface.interpreter.load_program(self.seg.interface.program)
-        
+
         #Update program widget at the top of the GUI
         for primitive in self.seg.interface.program.primitives:
             self.parent.demo_program_widget.addPrimitiveWidget(primitive, self.seg.interface.interpreter)
         self.parent.demo_program_widget.updateWidget()
-        
+
         #Ask whether the user wants to save the program and load it to run programs tab
         self.AskForSaving()
         buttonReply = QMessageBox.question(self, 'PyQt5 message', "Load this program for execution?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if buttonReply == QMessageBox.Yes:
             self.loadForExecution()
-        
+
     def AskForSaving(self):
         buttonReply = QMessageBox.question(self, 'PyQt5 message', "Would you like to save the program?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if buttonReply == QMessageBox.Yes:
-            filename, okPressed = QInputDialog.getText(self, "Save Program","Enter filename for the program:", QLineEdit.Normal, "")
+            filename, okPressed = QInputDialog.getText(self, "Save Program", "Enter filename for the program:", QLineEdit.Normal, "")
             if okPressed and filename != '':
                 path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
                 filename = filename + '.pkl'
@@ -1183,16 +1180,15 @@ class DemonstrationMenu(QWidget):
         self.parent.panda_program_widget.clear()
         for primitive in self.seg.interface.program.primitives:
             self.parent.panda_program_widget.addPrimitiveWidget(primitive, self.parent.interpreter)
-        self.parent.panda_program_widget.update()            
-
+        self.parent.panda_program_widget.update()
 
     def startRecording(self):
         self.datarecorder.startRecording(self.dataLine_v, self.dataLine_g)
 
     def stopRecording(self):
         self.datarecorder.stopRecording()
-        self.demoButtons[3].setEnabled(True)    
-        
+        self.demoButtons[3].setEnabled(True)
+
 
 class LowerProgramMenu(QWidget):
     '''
@@ -1207,7 +1203,7 @@ class LowerProgramMenu(QWidget):
     def initUI(self):
         self.layout = QHBoxLayout(self)
         self.layout.setAlignment(Qt.AlignLeft)
-        #Reuse same state widget that was used in run program -tab    
+        #Reuse same state widget that was used in run program -tab
         self.stateWidget = PandaStateWidget(self)
         self.layout.addWidget(self.stateWidget)
         self.addControlStateLabels()
@@ -1218,7 +1214,7 @@ class LowerProgramMenu(QWidget):
         '''
         Add labels indicating whether the robot is frozen or relaxed.
         '''
-        font=QFont()
+        font = QFont()
         font.setBold(True)
         font.setPointSize(12)
 
@@ -1249,7 +1245,7 @@ class LowerProgramMenu(QWidget):
         self.controlStateLayout.addWidget(self.relaxedLabel)
         self.controlStateLayout.addWidget(self.relaxedLabelValue)
 
-        self.layout.addWidget(self.controlStateWidget) 
+        self.layout.addWidget(self.controlStateWidget)
 
     def updateControlStateLabels(self, interface):
         '''
@@ -1269,8 +1265,6 @@ class LowerProgramMenu(QWidget):
             self.relaxedLabelValue.setText("No")
             self.relaxedLabelValue.setStyleSheet('color: firebrick')
 
-
-
     def addProgramUtilities(self):
         '''
         Add button for saving, reseting and an inputfield so the user can save programs with any name they prefer.
@@ -1287,9 +1281,9 @@ class LowerProgramMenu(QWidget):
         #self.resetButton.setFont(EUPWidget.font)
         self.utilitiesLayout.addWidget(self.saveButton)
         self.utilitiesLayout.addWidget(self.inputField)
-        self.utilitiesLayout.addWidget(self.resetButton) 
-        self.layout.addWidget(self.programUtilities)   
-        
+        self.utilitiesLayout.addWidget(self.resetButton)
+        self.layout.addWidget(self.programUtilities)
+
 
 class PandaProgramWidget(QGroupBox):
     sizePolicy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
@@ -1326,7 +1320,7 @@ class PandaProgramWidget(QGroupBox):
         # Add scrolling area
         program = self.parent().interpreter.loaded_program
         self.program_scroll_area.setWidget(self.program_widget)
-        self.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*program.get_program_length(),
+        self.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH) * program.get_program_length(),
                                         V_SPACING + PRIMITIVE_HEIGHT)
 
         # Add primitive Widgets
@@ -1339,8 +1333,8 @@ class PandaProgramWidget(QGroupBox):
         self.program_widget_layout.addWidget(primitive_widget)
 
         program_length = interpreter.loaded_program.get_program_length()
-        if self.program_widget.width() < (H_SPACING + PRIMITIVE_WIDTH)*program_length:
-            self.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH)*program_length, V_SPACING +
+        if self.program_widget.width() < (H_SPACING + PRIMITIVE_WIDTH) * program_length:
+            self.program_widget.setGeometry(0, 0, (H_SPACING + PRIMITIVE_WIDTH) * program_length, V_SPACING +
                                             PRIMITIVE_HEIGHT)
 
     def updateWidget(self):
@@ -1365,13 +1359,13 @@ class PandaProgramWidget(QGroupBox):
         '''
         primitiveToDelete = self.primitive_widget_list[-1]
         primitiveToDelete.setParent(None)
-        del self.primitive_widget_list[-1]           
+        del self.primitive_widget_list[-1]
 
     def sizeHint(self):
-        return QSize((H_SPACING+PRIMITIVE_WIDTH)*MIN_PRIMITIVE, V_SPACING*3 + PRIMITIVE_HEIGHT)
+        return QSize((H_SPACING + PRIMITIVE_WIDTH) * MIN_PRIMITIVE, V_SPACING * 3 + PRIMITIVE_HEIGHT)
 
     def minimumSizeHint(self):
-        return QSize((H_SPACING+PRIMITIVE_WIDTH)*MIN_PRIMITIVE, V_SPACING*3 + PRIMITIVE_HEIGHT)
+        return QSize((H_SPACING + PRIMITIVE_WIDTH) * MIN_PRIMITIVE, V_SPACING * 3 + PRIMITIVE_HEIGHT)
 
 
 class PandaStateWidget(QGroupBox):
@@ -1384,7 +1378,7 @@ class PandaStateWidget(QGroupBox):
         pp.PandaRobotStatus.ERROR: 'firebrick'
     }
 
-    font=QFont()
+    font = QFont()
     font.setBold(True)
     font.setPointSize(10)
 
@@ -1435,14 +1429,14 @@ class PandaStateWidget(QGroupBox):
 class PandaPrimitiveWidget(QFrame):
     # static variables
     status_label_dict = {
-        pp.PandaPrimitiveStatus.NEUTRAL:'',
-        pp.PandaPrimitiveStatus.READY:pp.PandaPrimitiveStatus.READY.name,
-        pp.PandaPrimitiveStatus.ERROR:pp.PandaPrimitiveStatus.ERROR.name,
-        pp.PandaPrimitiveStatus.EXECUTING:pp.PandaPrimitiveStatus.EXECUTING.name,
-        pp.PandaPrimitiveStatus.REVERTING:pp.PandaPrimitiveStatus.REVERTING.name,
-        pp.PandaPrimitiveStatus.EXECUTED:''
+        pp.PandaPrimitiveStatus.NEUTRAL: '',
+        pp.PandaPrimitiveStatus.READY: pp.PandaPrimitiveStatus.READY.name,
+        pp.PandaPrimitiveStatus.ERROR: pp.PandaPrimitiveStatus.ERROR.name,
+        pp.PandaPrimitiveStatus.EXECUTING: pp.PandaPrimitiveStatus.EXECUTING.name,
+        pp.PandaPrimitiveStatus.REVERTING: pp.PandaPrimitiveStatus.REVERTING.name,
+        pp.PandaPrimitiveStatus.EXECUTED: ''
     }
-    font=QFont()
+    font = QFont()
     font.setBold(True)
     font.setPointSize(10)
 
@@ -1483,7 +1477,7 @@ class PandaPrimitiveWidget(QFrame):
 
         # Animation
         self.animation = QPropertyAnimation(self, 'background_color')
-        self.animation.setDuration(2000) # in ms
+        self.animation.setDuration(2000)  # in ms
         self.animation.setLoopCount(-1)
         self.animation.setStartValue(QColor('ghostwhite'))
         self.animation.setEndValue(QColor('ghostwhite'))
@@ -1620,7 +1614,7 @@ class CurrentValueShowingSlider(QWidget):
     valueChanged = pyqtSignal(float)
     rangeChanged = pyqtSignal(float, float)
     LABEL_WIDTH = 100
-    font=QFont()
+    font = QFont()
     font.setBold(True)
     font.setPointSize(11)
 
@@ -1638,7 +1632,7 @@ class CurrentValueShowingSlider(QWidget):
         self.available_range = available_range
         self.name = name
         self.n_ticks = n_ticks
-        self.range_slider_enabled=range_slider_enabled
+        self.range_slider_enabled = range_slider_enabled
         self.initUI()
 
     def initUI(self):
@@ -1749,6 +1743,7 @@ class Worker(QRunnable):
     :param kwargs: Keywords to pass to the callback function
 
     '''
+
     def __init__(self, fn, *args, **kwargs):
         super(Worker, self).__init__()
 

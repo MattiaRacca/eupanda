@@ -14,6 +14,7 @@ import os
 from urdf_parser_py.urdf import URDF
 from geometry_msgs.msg import PoseStamped
 
+
 class Datarecorder():
 
     def __init__(self, interface):
@@ -48,7 +49,7 @@ class Datarecorder():
         self.recordingThreadpool.start(self.worker)
 
     def stopRecording(self):
-        self.recording = False 
+        self.recording = False
 
     def saveData(self, path, filename):
         '''
@@ -66,7 +67,7 @@ class Datarecorder():
     def loadData(self, path, filename):
         with open(os.path.join(os.path.expanduser(path), filename), 'rb') as f:
             loaded_program = pickle.load(f)
-            return loaded_program        
+            return loaded_program
 
     '''
     def jointStateCallback(self, msg):
@@ -79,17 +80,17 @@ class Datarecorder():
     '''
 
     def getListenerValues(self):
-        goal = PoseStamped() #PoseStamped format is used for EE position measurements
+        goal = PoseStamped()  # PoseStamped format is used for EE position measurements
         try:
             '''
             lookupTransform is used for ee pose and lookuptwist for ee velocities
             '''
-            trans, rot = self.listener.lookupTransform("panda_link0", "panda_K", rospy.Time(0)) #Use panda_K or panda_EE for the target frame
+            trans, rot = self.listener.lookupTransform("panda_link0", "panda_K", rospy.Time(0))  # Use panda_K or panda_EE for the target frame
             traj_time = rospy.Time.now()
-            
-            linear, angular = self.listener.lookupTwist("panda_link0", "panda_K", rospy.Time(0), rospy.Duration(1.0/self.rate))
+
+            linear, angular = self.listener.lookupTwist("panda_link0", "panda_K", rospy.Time(0), rospy.Duration(1.0 / self.rate))
             vel_time = rospy.Time.now()
-            
+
             goal.header.frame_id = "panda_link0"
 
             goal.pose.position.x = trans[0]
@@ -102,13 +103,13 @@ class Datarecorder():
             goal.pose.orientation.w = rot[3]
 
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-            print("Could not get tf listener values")    
+            print("Could not get tf listener values")
         self.trajectory_points.append(goal)
         #Calculate velocity from its components
         vel = np.sqrt(np.square(linear[0]) + np.square(linear[1]) + np.square(linear[2]))
         self.ee_velocities.append(vel)
-        self.time_axis_ee.append(vel_time.to_sec() - self.start_time.to_sec())    
-        
+        self.time_axis_ee.append(vel_time.to_sec() - self.start_time.to_sec())
+
     def clearPlot(self, graphs):
         '''
         This method is used for emptying the plots of demonstrations-tab
@@ -120,9 +121,9 @@ class Datarecorder():
         self.time_axis_ee = []
         self.time_axis_gripper = []
         self.trajectory_points = []
-        self.gripper_states = [] 
+        self.gripper_states = []
         self.previous_gripper_state = None
-        self.previous_pose = None              
+        self.previous_pose = None
 
     def getGripperValues(self):
         '''
@@ -134,10 +135,10 @@ class Datarecorder():
         Gripper velocity is calculated based on the change in gripper state and the timestamps of these measurements
         '''
         if len(self.time_axis_gripper) > 1:
-            v = (self.gripperstate - self.previous_gripper_state)/abs(self.time_axis_gripper[-1] - self.time_axis_gripper[-2])
+            v = (self.gripperstate - self.previous_gripper_state) / abs(self.time_axis_gripper[-1] - self.time_axis_gripper[-2])
         else:
             v = 0
-        self.gripper_velocities.append(v)        
+        self.gripper_velocities.append(v)
         gripper_time = rospy.Time.now()
         self.time_axis_gripper.append(gripper_time.to_sec() - self.start_time.to_sec())
 
@@ -155,7 +156,7 @@ class Datarecorder():
         if not self.interface.robotless_debug:
             self.interface.execute_primitive_now(apply_force_fingers_primitive)
 
-        self.fingers_relaxed = False    
+        self.fingers_relaxed = False
 
     def recordData(self, dataLine_v, dataLine_g):
         count = 1
@@ -165,13 +166,13 @@ class Datarecorder():
             currTime = 0.0
         else:
             currTime = self.time_axis_ee[-1]
-        self.start_time = rospy.Time.now()        
+        self.start_time = rospy.Time.now()
         while self.recording:
             if not self.interface.robotless_debug:
                 self.getListenerValues()
                 #Gripper publish rate appears to be ~5hz, to avoid fecthing gripper values too frequently, we add
                 #variable count to reduce the rate at which gripper values are added
-                if count == int(self.rate/4.5):
+                if count == int(self.rate / 4.5):
                     self.gripper_states.append(self.gripperstate)
                     self.getGripperValues()
                     count = 1
@@ -181,18 +182,19 @@ class Datarecorder():
                     print(self.gripper_velocities[-1])
                     if self.fingers_relaxed == True and self.gripper_velocities[-1] < -0.01:
                         self.executeFingerGrasp()
-                '''                               
-            else:    
+                '''
+            else:
                 newVelocity = random.uniform(0, 0.25)
                 gripperVelocity = random.uniform(0, 0.05)
                 self.ee_velocities.append(newVelocity)
                 self.gripper_velocities.append(gripperVelocity)
                 self.time_axis_ee.append(currTime)
                 self.time_axis_gripper.append(currTime)
-                currTime += float(1.0/self.rate)
+                currTime += float(1.0 / self.rate)
             dataLine_v.setData(self.time_axis_ee, self.ee_velocities)
             dataLine_g.setData(self.time_axis_gripper, self.gripper_velocities)
             self.timeStep.sleep()
+
 
 class RecordingWorker(QRunnable):
     def __init__(self, fn, *args, **kwargs):
@@ -201,7 +203,7 @@ class RecordingWorker(QRunnable):
         # Store constructor arguments (re-used for processing)
         self.fn = fn
         self.args = args
-        self.kwargs = kwargs 
+        self.kwargs = kwargs
 
     @pyqtSlot()
     def run(self):
@@ -213,6 +215,4 @@ class RecordingWorker(QRunnable):
         try:
             result = self.fn(*self.args, **self.kwargs)
         except Exception as e:
-            print(e)              
-            
-            
+            print(e)

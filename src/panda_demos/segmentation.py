@@ -18,69 +18,68 @@ class Segmentation():
     def __init__(self, interface):
         self.data = None
         self.interface = interface
-        self.max_deviation = 0.10 #Maximum allowed deviation with default value 0.10, this can get changed using a GUI slider
+        self.max_deviation = 0.10  # Maximum allowed deviation with default value 0.10, this can get changed using a GUI slider
         #Get the desired trajectory segmentation algorithm from a rosparam value, options 'greedy' and 'optimal'
         self.trajseg_type = rospy.get_param('/trajseg_algorithm') if rospy.has_param('/trajseg_algorithm') else 'optimal'
 
     def createSegments(self):
-        start_time = time.time() #get time for calculating runtime of algorithm
-        
+        start_time = time.time()  # get time for calculating runtime of algorithm
+
         #Load recorded data
         traj_points = [item.pose.position for item in self.data["trajectory_points"]]
         self.trajectory_points = np.array(traj_points)
         self.gripper_states = self.data["gripper_states"]
         self.ee_velocities = self.data["ee_velocities"]
-        
+
         #Save initial states for EE and gripper
         self.interface.program.save_arm_state(self.data["trajectory_points"][0])
         initial_gripper_state = next(item for item in self.gripper_states if item is not None)
         self.interface.program.save_gripper_state(pp.GripperState(initial_gripper_state, 0.0))
-        
+
         self.gripper_velocities = self.data["gripper_velocities"]
         self.time_axis_ee = self.data["time_axis_ee"]
         self.time_axis_gripper = self.data["time_axis_gripper"]
-        
+
         gripSeg = GripperSegmentation()
         gripSeg.trajectory_points = self.trajectory_points
         gripSeg.gripper_states = self.gripper_states
         gripSeg.gripper_velocities = self.gripper_velocities
         gripSeg.time_axis_ee = self.time_axis_ee
         gripSeg.time_axis_gripper = self.time_axis_gripper
-        
+
         #Choose trajectory segmentation algorithm based on given rosparam
         if self.trajseg_type == 'greedy':
             trajSeg = TrajSeg_greedy(self.max_deviation)
         else:
             trajSeg = TrajSeg(self.max_deviation)
-        
 
-        ma = gripSeg.moving_average(gripSeg.gripper_velocities) #Moving average filtering
-        segments = gripSeg.createSegments(ma) #Return proposed segments as (starting index, ending index)
+        ma = gripSeg.moving_average(gripSeg.gripper_velocities)  # Moving average filtering
+        segments = gripSeg.createSegments(ma)  # Return proposed segments as (starting index, ending index)
 
         prevEnd = None
         motionStart = 0
-        
+
         for segment in segments:
-            start = segment[0] #Starting index of the segment
-            end = segment[1] #Ending index of the segment
-            
+            start = segment[0]  # Starting index of the segment
+            end = segment[1]  # Ending index of the segment
+
             if prevEnd != None:
                 self.addGripperAction(prevEnd, start)
-            
+
             trajSeg.trajectory_points = self.trajectory_points[start:end]
             trajSeg.initialize()
-            result = trajSeg.optimize() #Perform trajectory segmentation from point start to point end
-            result = [item+start for item in result] #Adjust indexes to match the iindexes of full trajectory
+            result = trajSeg.optimize()  # Perform trajectory segmentation from point start to point end
+            result = [item + start for item in result]  # Adjust indexes to match the iindexes of full trajectory
             prevpoint = start
-            
+
             for point in result:
-                vel = self.getAverageVelocity(prevpoint, point) #Calculate average velocity of the segment
+                vel = self.getAverageVelocity(prevpoint, point)  # Calculate average velocity of the segment
                 endpoint = self.data["trajectory_points"][point]
-                self.addLinearMotion(endpoint, vel) #Add Linear Motion -primitive with goal point endpoint and velocity vel
-                prevpoint = point     
+                self.addLinearMotion(endpoint, vel)  # Add Linear Motion -primitive with goal point endpoint and velocity vel
+                prevpoint = point
             prevEnd = end
 
-        #Print runtime and number of trajectory points after downsampling        
+        #Print runtime and number of trajectory points after downsampling
         print("--- %.2f seconds ---" % (time.time() - start_time))
         print("--- %s primitives ---" % len(self.interface.program.primitives))
 
@@ -90,7 +89,7 @@ class Segmentation():
         '''
         velocities = self.ee_velocities[start:end]
         vel = round(np.mean(velocities), 2)
-        vel = min(vel, 0.35) #cap velocity at 0.35 m/s
+        vel = min(vel, 0.35)  # cap velocity at 0.35 m/s
         return vel
 
     def addGripperAction(self, start, end):
@@ -110,7 +109,7 @@ class Segmentation():
         if endwidth < startwidth:
             self.addFingerGrasp(endwidth)
         else:
-            self.addMoveFingers(endwidth)    
+            self.addMoveFingers(endwidth)
 
     def addFingerGrasp(self, width):
         '''
@@ -148,7 +147,6 @@ class Segmentation():
         move_to_ee_primitive.set_parameter_container(goal)
         self.interface.program.insert_primitive(move_to_ee_primitive, [goal.pose, None])
 
-
     def getPose(self, index):
         return self.data["trajectory_points"][index]
 
@@ -161,7 +159,7 @@ class Segmentation():
         self.interface.program.dump_to_file(filepath=path, filename=filename)
 
 if __name__ == '__main__':
-    interface = PandaPBDInterface(robotless_debug = True)
+    interface = PandaPBDInterface(robotless_debug=True)
     seg = Segmentation(interface)
     seg.data = seg.loadData("~/Thesis/src/eupanda/resources/data", "PaP_1.pkl")
     seg.createSegments()

@@ -2,13 +2,14 @@ import numpy as np
 import os
 import pickle
 
+
 class TrajSeg_greedy():
-    
+
     def __init__(self, max_deviation):
         self.trajectory_points = []
-        self.d = 0.02 #distance threshold for downsampling
-        self.max_deviation = max_deviation #Maximum allowed deviation
-        
+        self.d = 0.02  # distance threshold for downsampling
+        self.max_deviation = max_deviation  # Maximum allowed deviation
+
     def initialize(self):
         self.downSample()
         self.points_to_segment = self.downSamplePoints
@@ -29,37 +30,37 @@ class TrajSeg_greedy():
         for i in range(1, len(self.points) - 1):
             cost = self.calculateTransitionCost(i)
             costs.append(cost)
-        costs.append(10000)    
-            
+        costs.append(10000)
+
         while not done:
-            breakpoints = [item for i,item in enumerate(self.points) if self.remainingPoints[i] == True] #List of current segmentation points
-            distances = self.calculatePerformance(breakpoints) #Calculate deviation for each trajectory point from the proposed trajectory
+            breakpoints = [item for i, item in enumerate(self.points) if self.remainingPoints[i] == True]  # List of current segmentation points
+            distances = self.calculatePerformance(breakpoints)  # Calculate deviation for each trajectory point from the proposed trajectory
             totalCost = sum(distances)
             maxDev = max(distances)
             numOfPoints = sum(self.remainingPoints) - 2
-            
+
             #Compared the current maximum deviation with maximum allowed deviation, and end the algorithm if maximum allowed deviation is exceeded.
             if maxDev > self.max_deviation:
                 done = True
                 self.remainingPoints[prevDeleted] = True
-                print("--- Maximum absolute deviation: %s ---" % round(prevMaxDev, 3)) 
+                print("--- Maximum absolute deviation: %s ---" % round(prevMaxDev, 3))
                 break
-            
-            minCostIndex = np.argmin([item for item in costs]) #find index for item with minimum transition cost
-            costs[minCostIndex] = 10**4
+
+            minCostIndex = np.argmin([item for item in costs])  # find index for item with minimum transition cost
+            costs[minCostIndex] = 10 ** 4
             self.remainingPoints[minCostIndex] = False
             #Save the index of previously deleted segmentation point and the maximum absolute deviation with that segmentation point
             prevDeleted = minCostIndex
             prevMaxDev = maxDev
-            
+
             #Stop execution if all segmentation points have been removed
-            if all(x==costs[0] for x in costs):
+            if all(x == costs[0] for x in costs):
                 done = True
                 breakpoints = [0, len(self.points_to_segment) - 1]
                 lastmaxdev = max(self.calculatePerformance(breakpoints))
                 if lastmaxdev > self.max_deviation:
                     self.remainingPoints[prevDeleted] = True
-                    print("--- Maximum absolute deviation: %s ---" % round(prevMaxDev, 3))    
+                    print("--- Maximum absolute deviation: %s ---" % round(prevMaxDev, 3))
                 else:
                     print("--- Maximum absolute deviation: %s ---" % round(lastmaxdev, 3))
                 break
@@ -72,12 +73,12 @@ class TrajSeg_greedy():
             a = np.min([item for i, item in enumerate(diff) if item > 0 and self.remainingPoints[i] == True])
             folIndex = np.where(diff == a)[0].item()
             nearestFollowing = self.points[folIndex]
-            
+
             #Calculate transition cost again for previous and following segmentation point
             if nearestPrevious > 0:
                 costPrevious = self.calculateTransitionCost(nearestPrevious)
                 costs[nearestPrevious] = costPrevious
-            if nearestFollowing < len(self.points_to_segment) - 1:    
+            if nearestFollowing < len(self.points_to_segment) - 1:
                 costFollowing = self.calculateTransitionCost(nearestFollowing)
                 costs[nearestFollowing] = costFollowing
 
@@ -87,7 +88,7 @@ class TrajSeg_greedy():
         finalPoints = []
         for point in result:
             finalPoints.append(self.downSampleIndexes[point])
-        return finalPoints       
+        return finalPoints
 
     def calculateTransitionCost(self, i):
         '''
@@ -103,9 +104,9 @@ class TrajSeg_greedy():
         startpoint = self.points_to_segment[startIndex]
         endpoint = self.points_to_segment[endIndex]
         for traj_point in self.points_to_segment[startIndex + 1:endIndex]:
-            d = np.linalg.norm(np.cross(startpoint-endpoint, startpoint-traj_point))/np.linalg.norm(endpoint-startpoint)
+            d = np.linalg.norm(np.cross(startpoint - endpoint, startpoint - traj_point)) / np.linalg.norm(endpoint - startpoint)
             distances.append(d)
-        return sum(distances)/len(distances)    
+        return sum(distances) / len(distances)
 
     def downSample(self):
         '''
@@ -118,18 +119,18 @@ class TrajSeg_greedy():
         self.downSampleIndexes.append(0)
         distances = []
         count = 1
-        
+
         for point in self.trajectory_points[1:]:
             dist = np.linalg.norm(self.downSamplePoints[-1] - point)
             #Set limit at 0.85*self.d to allow some error
-            if dist > 0.85*self.d:
+            if dist > 0.85 * self.d:
                 self.downSamplePoints.append(point)
                 self.downSampleIndexes.append(count)
                 distances.append(dist)
             count += 1
-        
-        print("--- Number of Downsampled trajectory points: %s ---" % len(self.downSamplePoints))        
-    
+
+        print("--- Number of Downsampled trajectory points: %s ---" % len(self.downSamplePoints))
+
     def calculatePerformance(self, breakpoints):
         '''
         Calculate deviation for each trajectory point from the proposed trajectory that is formed using the segmenation points of array breakpoints
@@ -141,7 +142,7 @@ class TrajSeg_greedy():
             startpoint = self.points_to_segment[start]
             endpoint = self.points_to_segment[point]
             for traj_point in self.points_to_segment[start:point]:
-                d = np.linalg.norm(np.cross(startpoint-endpoint, startpoint-traj_point))/np.linalg.norm(endpoint-startpoint)
+                d = np.linalg.norm(np.cross(startpoint - endpoint, startpoint - traj_point)) / np.linalg.norm(endpoint - startpoint)
                 distances.append(d)
             start = point
         return distances
@@ -149,7 +150,7 @@ class TrajSeg_greedy():
     def loadData(self, path, filename):
         with open(os.path.join(os.path.expanduser(path), filename), 'rb') as f:
             loaded_program = pickle.load(f)
-            return loaded_program       
+            return loaded_program
 
 
 if __name__ == "__main__":
