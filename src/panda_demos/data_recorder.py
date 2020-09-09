@@ -17,6 +17,7 @@ from geometry_msgs.msg import PoseStamped
 class Datarecorder():
 
     def __init__(self, interface):
+        #Create arrays for each recorded metric as well as the timestamps of ee and gripper measurements
         self.ee_velocities = []
         self.gripper_velocities = []
         self.gripper_states = []
@@ -40,6 +41,9 @@ class Datarecorder():
         '''
 
     def startRecording(self, dataLine_v, dataLine_g):
+        '''
+        Starts a pyqt worker for the recording of the data
+        '''
         self.worker = RecordingWorker(self.recordData, dataLine_v, dataLine_g)
         self.recordingThreadpool.start(self.worker)
 
@@ -47,6 +51,9 @@ class Datarecorder():
         self.recording = False 
 
     def saveData(self, path, filename):
+        '''
+        Saves and dumps recorded data to a pickle file
+        '''
         self.data["ee_velocities"] = self.ee_velocities
         self.data["gripper_velocities"] = self.gripper_velocities
         self.data["trajectory_points"] = self.trajectory_points
@@ -61,6 +68,7 @@ class Datarecorder():
             loaded_program = pickle.load(f)
             return loaded_program        
 
+    '''
     def jointStateCallback(self, msg):
         #Get URDF from franka_description
         #urdf_str = 
@@ -68,15 +76,22 @@ class Datarecorder():
         robot_urdf = URDF.from_xml_string(urdf_str)
         kdl_kin = KDLKinematics(robot_urdf, "panda_link0", "panda_link8")
         self.pose = kdl_kin.forward(pos)
+    '''
 
     def getListenerValues(self):
-        goal = PoseStamped()
+        goal = PoseStamped() #PoseStamped format is used for EE position measurements
         try:
+            '''
+            lookupTransform is used for ee pose and lookuptwist for ee velocities
+            '''
             trans, rot = self.listener.lookupTransform("panda_link0", "panda_K", rospy.Time(0)) #Use panda_K or panda_EE for the target frame
             traj_time = rospy.Time.now()
+            
             linear, angular = self.listener.lookupTwist("panda_link0", "panda_K", rospy.Time(0), rospy.Duration(1.0/self.rate))
             vel_time = rospy.Time.now()
+            
             goal.header.frame_id = "panda_link0"
+
             goal.pose.position.x = trans[0]
             goal.pose.position.y = trans[1]
             goal.pose.position.z = trans[2]
@@ -85,32 +100,19 @@ class Datarecorder():
             goal.pose.orientation.y = rot[1]
             goal.pose.orientation.z = rot[2]
             goal.pose.orientation.w = rot[3]
+
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             print("Could not get tf listener values")    
         self.trajectory_points.append(goal)
-        #self.pose = goal.pose
+        #Calculate velocity from its components
         vel = np.sqrt(np.square(linear[0]) + np.square(linear[1]) + np.square(linear[2]))
         self.ee_velocities.append(vel)
         self.time_axis_ee.append(vel_time.to_sec() - self.start_time.to_sec())    
-
-    '''
-    def poseRequest(self):
-        req = EnableTeachingRequest()
-        req.ft_threshold_multiplier = self.interface.default_parameters['kinesthestic_ft_threshold']
-        req.teaching = 1
-
-        try:
-            res = self.interface.kinesthetic_client(req)
-        except rospy.ServiceException:
-            rospy.logerr('Cannot contact Kinesthetic Teaching client!')
-            self.pose = None
-
-        if res.success:
-            self.pose = res.ee_pose       
-    '''
         
-
     def clearPlot(self, graphs):
+        '''
+        This method is used for emptying the plots of demonstrations-tab
+        '''
         for graph in graphs:
             graph.clear()
         self.ee_velocities = []
@@ -122,17 +124,15 @@ class Datarecorder():
         self.previous_gripper_state = None
         self.previous_pose = None              
 
-    '''
-    def calculateDistance(self):
-        a = np.array([self.pose.pose.position.x, self.pose.pose.position.y, self.pose.pose.position.z])
-        b = np.array([self.previous_pose.pose.position.x, self.previous_pose.pose.position.y, self.previous_pose.pose.position.z])
-        dist = np.linalg.norm(a - b)
-        return dist
-    '''
-
     def getGripperValues(self):
+        '''
+        Gripper values are received from the gripper-state subscriber of pbd_interface
+        '''
         self.previous_gripper_state = self.gripperstate
         self.gripperstate = self.interface.last_gripper_width
+        '''
+        Gripper velocity is calculated based on the change in gripper state and the timestamps of these measurements
+        '''
         if len(self.time_axis_gripper) > 1:
             v = (self.gripperstate - self.previous_gripper_state)/abs(self.time_axis_gripper[-1] - self.time_axis_gripper[-2])
         else:
@@ -142,6 +142,10 @@ class Datarecorder():
         self.time_axis_gripper.append(gripper_time.to_sec() - self.start_time.to_sec())
 
     def executeFingerGrasp(self):
+        '''
+        This method is only used if Finger Grasp should be executed during the recording of the data when negative velocity of the gripper is detected.
+        By default, this is not done.
+        '''
         request = ApplyForceFingersRequest()
         request.force = self.interface.default_parameters['apply_force_fingers_default_force']
 
@@ -163,7 +167,6 @@ class Datarecorder():
             currTime = self.time_axis_ee[-1]
         self.start_time = rospy.Time.now()        
         while self.recording:
-            #print(self.interface.robotless_debug)
             if not self.interface.robotless_debug:
                 self.getListenerValues()
                 #Gripper publish rate appears to be ~5hz, to avoid fecthing gripper values too frequently, we add
@@ -207,7 +210,6 @@ class RecordingWorker(QRunnable):
         '''
 
         # Retrieve args/kwargs here; and fire processing using them
-        #result = self.fn(*self.args, **self.kwargs)
         try:
             result = self.fn(*self.args, **self.kwargs)
         except Exception as e:

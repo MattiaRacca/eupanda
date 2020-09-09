@@ -235,6 +235,9 @@ class EUPWidget(QWidget):
             value[0].setVisible(key is not 'go_to_current_primitive_preconditions')
             value[0].setFont(EUPWidget.font)
 
+        #Validation buttons represent the buttons that allow the user to do slight modifications to the program
+        #in the tuning-tab, including adding user synchronizations, merging linear motions and converting
+        #linear motion to push motion and vice versa
         self.validationButtons = []
         self.validationButtonWidget = QWidget()
         self.validationButtonLayout = QHBoxLayout(self.validationButtonWidget)
@@ -265,6 +268,7 @@ class EUPWidget(QWidget):
         self.validationButtonLayout.addWidget(self.motionlabel)
         self.validationButtonLayout.addWidget(button)
 
+        #Assign each button to its respective function
         self.validationButtons[0].pressed.connect(self.add_validation_usersync)
         self.validationButtons[1].pressed.connect(self.combine_motion_with_previous)
         self.validationButtons[2].pressed.connect(self.convert_motion)
@@ -276,6 +280,7 @@ class EUPWidget(QWidget):
         self.tabSelection.runProgramTab.layout.addWidget(QHorizontalLine())
         self.tabSelection.runProgramTab.layout.addWidget(self.low_buttons)
 
+        #The following additions are for create programs tab
         # Using PandaProgramWidget again, we create a widget thats lists primitives for the program to be created. 
         # We also add buttons for program creation and for utilities like saving the program.
         self.program_creation_widget = PandaProgramWidget(self)
@@ -283,6 +288,7 @@ class EUPWidget(QWidget):
         self.program_creation_buttons = ProgramCreationButtons(self)
         self.lowerProgramMenu = LowerProgramMenu(self)
 
+        #These widgets are for the demonstrations tab
         self.demo_program_widget = PandaProgramWidget(self)
         self.demo_program_widget.clear()
         self.demonstrationMenu = DemonstrationMenu(self)
@@ -305,6 +311,7 @@ class EUPWidget(QWidget):
         self.tabSelection.createProgramTab.layout.addWidget(QHorizontalLine())
         self.tabSelection.createProgramTab.layout.addWidget(self.lowerProgramMenu)
 
+        #Add demonstration widgets to their respective tab
         self.tabSelection.demonstrationsTab.layout.addWidget(self.demo_program_widget)
         self.tabSelection.demonstrationsTab.layout.addWidget(self.demonstrationMenu)
         self.tabSelection.demonstrationsTab.layout.addWidget(QHorizontalLine())
@@ -312,7 +319,7 @@ class EUPWidget(QWidget):
         self.tabSelection.demonstrationsTab.layout.addWidget(QHorizontalLine())
         self.tabSelection.demonstrationsTab.layout.addWidget(self.lowerDemoMenu)
 
-        #Assign actions for each button
+        #Assign actions for each button of create programs tab
         self.addPrimitiveButtonActions()
         self.addProgramUtilityActions()
         self.addControlButtonActions()
@@ -394,6 +401,7 @@ class EUPWidget(QWidget):
         #Labels for the state are updated
         self.lowerProgramMenu.updateControlStateLabels(self.interface)
 
+        #Disable or Enable validation buttons based on current primitive
         self.updateValidationButtons()
 
 
@@ -566,11 +574,15 @@ class EUPWidget(QWidget):
             self.loadNewProgram()
         
     def updateValidationButtons(self):
+        '''
+        Enable adding user sync unless the program has not entered the starting state, allow merging of linear motions if
+        current and previous primitives are linear motions. Allow converting motions if current primitive is linear or push motion.
+        '''
         idx = self.interpreter.next_primitive_index
         if idx == len(self.interpreter.loaded_program.primitives):
             self.validationButtons[0].setEnabled(False)
             self.validationButtons[1].setEnabled(False)
-            self.validationButtons[1].setEnabled(False)
+            self.validationButtons[2].setEnabled(False)
             return
 
         if idx == -1:
@@ -599,40 +611,44 @@ class EUPWidget(QWidget):
             self.validationButtons[2].setEnabled(False)                    
 
     def add_validation_usersync(self):
+        '''
+        Add a user sync primitive to the program at the current primitive index of the program interpreter
+        '''
         idx = self.interpreter.next_primitive_index
         goal = UserSyncGoal()
         goal.force_threshold = 5.0
         user_sync_primitive = pp.UserSync()
         user_sync_primitive.set_parameter_container(goal)
+
         arm_index = self.interpreter.loaded_program.primitives[idx].starting_arm_state_index
         gripper_index = self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index
         self.interpreter.loaded_program.primitives.insert(idx, user_sync_primitive)
-        #arm_state = self.interpreter.loaded_program.arm_state_list[idx]
-        #gripper_state = self.interpreter.loaded_program.gripper_state_list[idx]
         self.interpreter.loaded_program.primitives[idx].starting_arm_state_index = arm_index
-        #self.interpreter.loaded_program.arm_state_list.insert(idx+1, arm_state)
         self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index = gripper_index
-        #self.interpreter.loaded_program.gripper_state_list.insert(idx+1, gripper_state)
+
         self.updateValidationButtons()
         self.panda_program_widget.clear()
         for primitive in self.interpreter.loaded_program.primitives:
             self.panda_program_widget.addPrimitiveWidget(primitive, self.interpreter)
+
         self.panda_program_widget.primitive_widget_list[idx].primitive.status = pp.PandaPrimitiveStatus.READY
         self.panda_program_widget.primitive_widget_list[idx].updateWidget()
         self.panda_program_widget.primitive_widget_list[idx + 1].primitive.status = pp.PandaPrimitiveStatus.NEUTRAL    
-        self.panda_program_widget.primitive_widget_list[idx + 1].updateWidget()
-        #self.panda_program_widget.updateWidget()   
+        self.panda_program_widget.primitive_widget_list[idx + 1].updateWidget()   
         self.saveAfterValidation()
         self.updatePandaWidgets()
 
     def combine_motion_with_previous(self):
+        '''
+        Merge a linear motion primitive with the current one so that the goal point of the latter motion is the goal point
+        of the merged motion
+        '''
         idx = self.interpreter.next_primitive_index
-        #print(self.interpreter.loaded_program.primitives[idx].starting_arm_state_index, self.interpreter.loaded_program.primitives[idx - 1].starting_arm_state_index)
-        #print(self.interpreter.loaded_program.arm_state_list)
         self.interpreter.loaded_program.primitives[idx - 1].parameter_container = self.interpreter.loaded_program.primitives[idx].parameter_container
         self.interpreter.loaded_program.primitives.pop(idx)
         self.interpreter.next_primitive_index = idx - 1
         idx = self.interpreter.next_primitive_index
+       
         self.updateValidationButtons()
         self.panda_program_widget.clear()
         for primitive in self.interpreter.loaded_program.primitives:
@@ -643,8 +659,12 @@ class EUPWidget(QWidget):
         self.updatePandaWidgets()   
 
     def convert_motion(self):
+        '''
+        Convert current linear motion to push motion or vice versa
+        '''
         idx = self.interpreter.next_primitive_index
         currentMotion = self.interpreter.loaded_program.primitives[idx]
+
         if currentMotion.__class__.__name__ == "MoveToEE":
             pose = currentMotion.parameter_container.pose
             goal = MoveToContactGoal()
@@ -655,15 +675,13 @@ class EUPWidget(QWidget):
             goal.torque_threshold = self.interface.default_parameters['move_to_contact_default_torque_threshold']
             move_to_contact_primitive = pp.MoveToContact()
             move_to_contact_primitive.set_parameter_container(goal)
+            
             original_arm_index = self.interpreter.loaded_program.primitives[idx].starting_arm_state_index
             original_gripper_index = self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index
             self.interpreter.loaded_program.primitives[idx] = move_to_contact_primitive
-            #arm_state = self.interpreter.loaded_program.arm_state_list[idx]
-            #gripper_state = self.interpreter.loaded_program.gripper_state_list[idx]
             self.interpreter.loaded_program.primitives[idx].starting_arm_state_index = original_arm_index
-            #self.interpreter.loaded_program.arm_state_list.insert(idx+1, arm_state)
             self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index = original_gripper_index
-            #self.interpreter.loaded_program.gripper_state_list.insert(idx+1, gripper_state)
+
         elif currentMotion.__class__.__name__ == "MoveToContact":
             pose = currentMotion.parameter_container.pose
             goal = MoveToEEGoal()
@@ -671,14 +689,17 @@ class EUPWidget(QWidget):
             goal.rotation_speed = self.interface.default_parameters['move_to_ee_default_rotation_speed'] 
             move_to_ee_primitive = pp.MoveToEE()
             move_to_ee_primitive.set_parameter_container(goal)
+
             original_arm_index = self.interpreter.loaded_program.primitives[idx].starting_arm_state_index
             original_gripper_index = self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index
             self.interpreter.loaded_program.primitives[idx] = move_to_ee_primitive
             self.interpreter.loaded_program.primitives[idx].starting_arm_state_index = original_arm_index
             self.interpreter.loaded_program.primitives[idx].starting_gripper_state_index = original_gripper_index
+        
         else:
             print("Incorrect primitive type")
-            return      
+            return     
+
         self.updateValidationButtons()
         self.panda_program_widget.clear()
         for primitive in self.interpreter.loaded_program.primitives:
@@ -688,8 +709,10 @@ class EUPWidget(QWidget):
         self.saveAfterValidation()
         self.updatePandaWidgets()        
         
-
     def saveAfterValidation(self):
+        '''
+        Ask the user if they want to save the program after the modifications done with validation buttons
+        '''
         buttonReply = QMessageBox.question(self, 'PyQt5 message', "Would you like to save the modified program?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if buttonReply == QMessageBox.Yes:
             filename, okPressed = QInputDialog.getText(self, "Save Program","Enter filename for the program:", QLineEdit.Normal, "")
@@ -952,6 +975,10 @@ class ProgramCreationButtons(QWidget):
         self.layout.addWidget(self.controlButtonWidget)            
 
 class DemonstrationMenu(QWidget):
+    '''
+    The demonstration menu includes the plots for recording data, buttons for starting the recording, ending the recording,
+    emptying plots and entering program creation mode.
+    '''
 
     def __init__(self, parent):
         super(DemonstrationMenu, self).__init__(parent)
@@ -976,14 +1003,19 @@ class DemonstrationMenu(QWidget):
         self.addButtonActions()
 
     def addButtonArea(self):
+        '''
+        Add buttons of the demonstration menu
+        '''
         self.demoButtons = []
         labels = ["Start recording", "Stop recording", "Clear plot", "Program\nCreation", "Relax Fingers", "Return to\nrecording", "Create Program"]
+        
         for label in labels:
             button = QExpandingPushButton(label, self)
             button.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed))
             button.setFont(EUPWidget.font)
             self.buttonLayout.addWidget(button)
             self.demoButtons.append(button)            
+        
         self.buttonArea.addWidget(self.buttonWidget)
         self.dataInputField = QLineEdit()
         self.dataInputField.setPlaceholderText("Enter filename for data to be used for program creation")
@@ -993,6 +1025,9 @@ class DemonstrationMenu(QWidget):
 
 
     def saveData(self):
+        '''
+        Use the input field at the bottom of the GUI to save recorded data as pickle-files
+        '''
         inputfield = self.lowerDemoMenu.inputField
         filename = inputfield.text() + '.pkl'
         path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources', 'data')
@@ -1001,6 +1036,9 @@ class DemonstrationMenu(QWidget):
         return filename
 
     def addButtonActions(self):
+        '''
+        Set the buttons of demonstration menu either visible or not as well as assigning their respective functions
+        '''
         self.demoButtons[4].setVisible(False)
         self.demoButtons[5].setVisible(False)
         self.demoButtons[6].setVisible(False)
@@ -1014,6 +1052,9 @@ class DemonstrationMenu(QWidget):
         self.demoButtons[6].pressed.connect(self.createProgram)
 
     def addGraphWidget(self):
+        '''
+        This widget handles the plotting of recorded data
+        '''
         self.graphwidget = QWidget(self)
         self.graphlayout = QVBoxLayout(self.graphwidget)
 
@@ -1034,6 +1075,9 @@ class DemonstrationMenu(QWidget):
         self.addGraphFunctionality()
 
     def addGraphFunctionality(self):
+        '''
+        Assigns the recorded values to variables that should be plotted
+        '''
         self.times_ee = self.datarecorder.time_axis_ee
         self.times_gripper = self.datarecorder.time_axis_gripper
         
@@ -1046,9 +1090,15 @@ class DemonstrationMenu(QWidget):
         self.graphlayout.addWidget(self.grippergraphwidget)
 
     def relaxFingers(self):
+        '''
+        Used only if Finger Grasp is executed during demonstrations
+        '''
         self.datarecorder.interface.relax_finger()
 
     def enterProgramCreation(self):
+        '''
+        Set some buttons hidden when entering program creation
+        '''
         self.demoButtons[0].setVisible(False)
         self.demoButtons[1].setVisible(False)
         self.demoButtons[2].setVisible(False)
@@ -1059,6 +1109,9 @@ class DemonstrationMenu(QWidget):
         self.demoButtons[6].setVisible(True)
 
     def returnToRecording(self):
+        '''
+        When returning to recording mode, bring said buttons back to visible
+        '''
         self.demoButtons[0].setVisible(True)
         self.demoButtons[1].setVisible(True)
         self.demoButtons[2].setVisible(True)
@@ -1069,11 +1122,16 @@ class DemonstrationMenu(QWidget):
         self.demoButtons[6].setVisible(False)
 
     def createProgram(self):
+        '''
+        Execute the segmentation algorithm to create a program from recorded data
+        '''
         self.seg.interface.program.primitives = []
         self.seg.interface.interpreter.program = None
         self.seg.max_deviation = self.parent.regularizationSlider.slider.value()
         self.parent.demo_program_widget.clear()
         filename = self.dataInputField.text()
+
+        #Use recently recorded data if a file of previous data is not given
         if filename == '':
             self.seg.data = {}
             self.seg.data["ee_velocities"] = self.datarecorder.ee_velocities
@@ -1082,16 +1140,23 @@ class DemonstrationMenu(QWidget):
             self.seg.data["gripper_states"] = self.datarecorder.gripper_states
             self.seg.data["time_axis_ee"] = self.datarecorder.time_axis_ee
             self.seg.data["time_axis_gripper"] = self.datarecorder.time_axis_gripper
+        
         else:
             path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources', 'data')
             self.seg.data = self.seg.loadData(path, filename)
+        
+        #Execute segmentation, save program, and load program to interpreter
         self.seg.createSegments()
         resourcepath = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
         self.seg.saveProgram(path=resourcepath, filename="segmentation_test.pkl")
         self.seg.interface.interpreter.load_program(self.seg.interface.program)
+        
+        #Update program widget at the top of the GUI
         for primitive in self.seg.interface.program.primitives:
             self.parent.demo_program_widget.addPrimitiveWidget(primitive, self.seg.interface.interpreter)
         self.parent.demo_program_widget.updateWidget()
+        
+        #Ask whether the user wants to save the program and load it to run programs tab
         self.AskForSaving()
         buttonReply = QMessageBox.question(self, 'PyQt5 message', "Load this program for execution?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if buttonReply == QMessageBox.Yes:
@@ -1107,6 +1172,9 @@ class DemonstrationMenu(QWidget):
                 self.seg.interface.program.dump_to_file(filepath=path, filename=filename)
 
     def loadForExecution(self):
+        '''
+        Use the interpreter of run programs tab to load the created program. Update the UI of run programs tab accordingly
+        '''
         self.parent.interpreter.load_program(self.seg.interface.program)
         self.parent.interpreter.loaded_program.reset_primitives_history()
         self.parent.state_machine = EUPStateMachine.STARTUP

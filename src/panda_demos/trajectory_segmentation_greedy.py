@@ -6,52 +6,53 @@ class TrajSeg_greedy():
     
     def __init__(self, max_deviation):
         self.trajectory_points = []
-        self.segmentation_points = []
-        self.d = 0.02
-        self.max_deviation = max_deviation
+        self.d = 0.02 #distance threshold for downsampling
+        self.max_deviation = max_deviation #Maximum allowed deviation
         
     def initialize(self):
         self.downSample()
         self.points_to_segment = self.downSamplePoints
-        self.segmentation_points.append(0)
-        self.segmentation_points.append(len(self.points_to_segment) - 1)
 
     def optimize(self):
+        #Return empty array if the segment is too short
         if len(self.points_to_segment) < 3:
             return []
         self.points = np.arange(len(self.points_to_segment))
         self.remainingPoints = np.ones(len(self.points_to_segment))
-        #self.remainingPoints[0] = False
-        #self.remainingPoints[-1] = False
         costs = []
+        #As the points-to-be-removed are chosen based on minimum transition cost, we assign large interger values for the costs of points
+        #which should not be removed or which already have been removed to prevent accidently picking them
         costs.append(10000)
         done = False
         prevDeleted = None
-        prevValue = 0
+        #Calculate transition cost for each point i
         for i in range(1, len(self.points) - 1):
             cost = self.calculateTransitionCost(i)
             costs.append(cost)
         costs.append(10000)    
             
         while not done:
-            breakpoints = [item for i,item in enumerate(self.points) if self.remainingPoints[i] == True]
-            distances = self.calculatePerformance(breakpoints)
+            breakpoints = [item for i,item in enumerate(self.points) if self.remainingPoints[i] == True] #List of current segmentation points
+            distances = self.calculatePerformance(breakpoints) #Calculate deviation for each trajectory point from the proposed trajectory
             totalCost = sum(distances)
             maxDev = max(distances)
             numOfPoints = sum(self.remainingPoints) - 2
-            value = totalCost
+            
+            #Compared the current maximum deviation with maximum allowed deviation, and end the algorithm if maximum allowed deviation is exceeded.
             if maxDev > self.max_deviation:
                 done = True
                 self.remainingPoints[prevDeleted] = True
                 print("--- Maximum absolute deviation: %s ---" % round(prevMaxDev, 3)) 
                 break
-            else:
-                prevValue = value   
-            minCostIndex = np.argmin([item for item in costs])
+            
+            minCostIndex = np.argmin([item for item in costs]) #find index for item with minimum transition cost
             costs[minCostIndex] = 10**4
             self.remainingPoints[minCostIndex] = False
+            #Save the index of previously deleted segmentation point and the maximum absolute deviation with that segmentation point
             prevDeleted = minCostIndex
             prevMaxDev = maxDev
+            
+            #Stop execution if all segmentation points have been removed
             if all(x==costs[0] for x in costs):
                 done = True
                 breakpoints = [0, len(self.points_to_segment) - 1]
@@ -62,6 +63,8 @@ class TrajSeg_greedy():
                 else:
                     print("--- Maximum absolute deviation: %s ---" % round(lastmaxdev, 3))
                 break
+
+            #Find previus and following segmentation point from the one that was just removed
             diff = self.points - minCostIndex
             a = np.max([item for i, item in enumerate(diff) if item < 0 and self.remainingPoints[i] == True])
             prevIndex = np.where(diff == a)[0].item()
@@ -69,6 +72,8 @@ class TrajSeg_greedy():
             a = np.min([item for i, item in enumerate(diff) if item > 0 and self.remainingPoints[i] == True])
             folIndex = np.where(diff == a)[0].item()
             nearestFollowing = self.points[folIndex]
+            
+            #Calculate transition cost again for previous and following segmentation point
             if nearestPrevious > 0:
                 costPrevious = self.calculateTransitionCost(nearestPrevious)
                 costs[nearestPrevious] = costPrevious
@@ -76,6 +81,7 @@ class TrajSeg_greedy():
                 costFollowing = self.calculateTransitionCost(nearestFollowing)
                 costs[nearestFollowing] = costFollowing
 
+        #Present the indexes of finalPoints with respect to full, non-downsampled trajectory
         self.remainingPoints = self.remainingPoints[1:]
         result = [item for i, item in enumerate(self.points[1:]) if self.remainingPoints[i] == True]
         finalPoints = []
@@ -84,6 +90,10 @@ class TrajSeg_greedy():
         return finalPoints       
 
     def calculateTransitionCost(self, i):
+        '''
+        Calculate transition cost for segmentation point i meaning the summed deviation of trajectory points from the previous segmentation point of i
+        to the following segmentation point of i.
+        '''
         distances = []
         diff = self.points - i
         end = np.min([item for i, item in enumerate(diff) if item > 0 and self.remainingPoints[i] == True])
@@ -98,6 +108,9 @@ class TrajSeg_greedy():
         return sum(distances)/len(distances)    
 
     def downSample(self):
+        '''
+        Perform a distance-wise downsampling to the set of trajectory points using parameter self.d as the distance threshold
+        '''
         self.trajectory_points = [np.array([point.x, point.y, point.z]) for point in self.trajectory_points]
         self.downSamplePoints = []
         self.downSampleIndexes = []
@@ -105,18 +118,25 @@ class TrajSeg_greedy():
         self.downSampleIndexes.append(0)
         distances = []
         count = 1
+        
         for point in self.trajectory_points[1:]:
             dist = np.linalg.norm(self.downSamplePoints[-1] - point)
+            #Set limit at 0.85*self.d to allow some error
             if dist > 0.85*self.d:
                 self.downSamplePoints.append(point)
                 self.downSampleIndexes.append(count)
                 distances.append(dist)
             count += 1
+        
         print("--- Number of Downsampled trajectory points: %s ---" % len(self.downSamplePoints))        
     
     def calculatePerformance(self, breakpoints):
+        '''
+        Calculate deviation for each trajectory point from the proposed trajectory that is formed using the segmenation points of array breakpoints
+        '''
         start = 0
         distances = []
+
         for point in breakpoints[1:]:
             startpoint = self.points_to_segment[start]
             endpoint = self.points_to_segment[point]

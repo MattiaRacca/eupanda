@@ -13,6 +13,9 @@ class GripperSegmentation():
         self.gripper_velocities = []
     
     def moving_average(self, values, n=3):
+        '''
+        Perform moving average filtering with filter size n on array values
+        '''
         return np.convolve(values, np.ones(n), 'valid') / n
     
     def loadData(self, path, filename):
@@ -21,20 +24,17 @@ class GripperSegmentation():
             return loaded_program
     
     def findGripperActions(self, data):
-        threshold = 0.01
+        threshold = 0.01 #velocity threshold for detecting gripper actions
+        
+        #Create bool array for both Move Fingers and Finger Grasp to find values which exceed threshold or remain below -1*threshold
         fingerGrasps = data < -1*threshold
         moveFingers = data > threshold
+        
+        #Find the start and end of each segment with convolution
         fingerGrasp_edges = np.convolve([1, -1], fingerGrasps, mode='same')
         moveFingers_edges = np.convolve([1, -1], moveFingers, mode='same')
         fingerGrasp_indices = [item for item in zip(np.where(fingerGrasp_edges==1)[0], np.where(fingerGrasp_edges==-1)[0])]
         moveFingers_indices = [item for item in zip(np.where(moveFingers_edges==1)[0], np.where(moveFingers_edges==-1)[0])]
-        
-        for item in fingerGrasp_indices:
-            timestamp_start = self.time_axis_gripper[item[0]]
-            timestamp_end = self.time_axis_gripper[item[1]]
-            diff_start = abs(np.array(self.time_axis_ee) - timestamp_start)
-            diff_end = abs(np.array(self.time_axis_ee) - timestamp_end)
-            idx = diff_start.argmin()
         
         return fingerGrasp_indices, moveFingers_indices
 
@@ -42,9 +42,9 @@ class GripperSegmentation():
         done = False
         start = 0
         fingerGrasp_indices, moveFingers_indices = self.findGripperActions(data)
-        #trajSeg = TrajSeg()
         segments = []
         while not done:
+            #Choose the next gripper action based on the indices
             if len(fingerGrasp_indices) == 0 and len(moveFingers_indices) == 0:
                 done = True
             elif len(fingerGrasp_indices) == 0:
@@ -56,7 +56,8 @@ class GripperSegmentation():
             else:
                 currentAction = moveFingers_indices.pop(0)
 
-            if not done:    
+            if not done:
+                #Find the respective trajectory point index for the current gripper action    
                 gripper_timestamp = self.time_axis_gripper[currentAction[0]]
                 diff = abs(np.array(self.time_axis_ee) - gripper_timestamp)
                 idx = diff.argmin()
@@ -64,22 +65,9 @@ class GripperSegmentation():
             else:
                 idx = len(self.trajectory_points) - 1      
                 points_to_segment = self.trajectory_points[start:]
-            '''
-            trajSeg.trajectory_points = np.array(points_to_segment)
-            trajSeg.initialize()
-            result = trajSeg.optimize()
-            points = []
-            points.append(start)
-            for point in result[1:-1]:
-                value = start + trajSeg.downSampleIndexes[point]
-                points.append(value)
-            points.append(idx)    
-            '''
-            #run trajectory_segmentation with points_to_segment
-            #print(start, idx)
-            #print(result, points)
             segments.append((start, idx))
             if not done:
+                #Assign the start of next segment to the end of previous one
                 end_timestamp = self.time_axis_gripper[currentAction[1]]
                 diff = abs(np.array(self.time_axis_ee) - end_timestamp)
                 start = diff.argmin()
@@ -95,11 +83,8 @@ if __name__ == '__main__':
     seg.time_axis_gripper = data["time_axis_gripper"]
     seg.time_axis_ee = data["time_axis_ee"]
     ma = seg.moving_average(seg.gripper_velocities)
-    #seg.findGripperActions(ma)
     segments = seg.createSegments(ma)
     print(segments)
-    #ma = seg.gripper_velocities
     count = 0
     for value in ma:
-        #print(value, seg.gripper_states[count + 1])
         count += 1
