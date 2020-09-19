@@ -76,7 +76,7 @@ class PandaPBDInterface(object):
                 self.relax()
         else:
             self.last_pose = np.random.uniform(0, 1, 3)
-            self.last_gripper_width = np.random.uniform(0, 0.08, 1)
+            self.last_gripper_width = np.random.uniform(0, 0.08, 1).item()
             # During robotless debug, we replace actual values with randomly generated ones
             # This way, we can still test the functionality of the GUI while not
             # connected to the robot.
