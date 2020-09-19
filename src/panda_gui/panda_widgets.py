@@ -31,6 +31,7 @@ from functools import partial
 from enum import Enum
 from datetime import datetime
 import time
+from copy import deepcopy
 
 # Size of Primitive Widget
 PRIMITIVE_WIDTH = 100
@@ -589,7 +590,11 @@ class EUPWidget(QWidget):
             self.validationButtons[0].setEnabled(True)
 
         curPrimitive = self.interpreter.loaded_program.primitives[idx].__class__.__name__
-        prevPrimitive = self.interpreter.loaded_program.primitives[idx - 1].__class__.__name__
+        if len(self.interpreter.loaded_program.primitives) > 1:
+            prevPrimitive = self.interpreter.loaded_program.primitives[idx - 1].__class__.__name__
+        else:
+            prevPrimitive = None
+
         if idx > 0:
             if curPrimitive == 'MoveToEE' and prevPrimitive == 'MoveToEE':
                 self.validationButtons[1].setEnabled(True)
@@ -725,13 +730,14 @@ class EUPWidget(QWidget):
         is cleared and updated with primitives of the new program. EUP state machine is reseted to the state STARTUP so we can
         properly start the program with "Go to start state" -button
         '''
-        self.interpreter.load_program(self.pbd_interface.program)
+        program = deepcopy(self.pbd_interface.program)
+        self.interpreter.load_program(program)
         self.interpreter.loaded_program.reset_primitives_history()
         self.state_machine = EUPStateMachine.STARTUP
         self.last_interface_state = None
         self.updatePandaWidgets()
         self.panda_program_widget.clear()
-        for primitive in self.pbd_interface.program.primitives:
+        for primitive in self.interpreter.loaded_program.primitives:
             self.panda_program_widget.addPrimitiveWidget(primitive, self.interpreter)
         self.panda_program_widget.update()
 
@@ -742,6 +748,7 @@ class EUPWidget(QWidget):
         n = len(self.pbd_interface.program.primitives) - 1
         buttonReply = QMessageBox.question(self, 'PyQt5 message', "Return the robot to previous preconditions?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if buttonReply == QMessageBox.Yes:
+            print(n, self.pbd_interface.interpreter.loaded_program.primitives)
             self.returnPreviousPreconditions(n)
         self.pbd_interface.program.delete_nth_primitive(n)
         self.program_creation_widget.deleteLastPrimitive()
@@ -1341,6 +1348,7 @@ class PandaProgramWidget(QGroupBox):
         self.primitive_widget_list = []
         if interface != None:
             interface.program = pp.PandaProgram("A Panda Program")
+            interface.interpreter.loaded_program = interface.program
         self.update()
 
     def deleteLastPrimitive(self):
