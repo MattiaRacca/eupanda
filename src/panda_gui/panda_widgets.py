@@ -235,9 +235,9 @@ class EUPWidget(QWidget):
             value[0].setVisible(key is not 'go_to_current_primitive_preconditions')
             value[0].setFont(EUPWidget.font)
 
-        #Validation buttons represent the buttons that allow the user to do slight modifications to the program
-        #in the tuning-tab, including adding user synchronizations, merging linear motions and converting
-        #linear motion to push motion and vice versa
+        # Validation buttons represent the buttons that allow the user to do slight modifications to the program
+        # in the tuning-tab, including adding user synchronizations, merging linear motions and converting
+        # linear motion to push motion and vice versa
         self.validationButtons = []
         self.validationButtonWidget = QWidget()
         self.validationButtonLayout = QHBoxLayout(self.validationButtonWidget)
@@ -268,11 +268,12 @@ class EUPWidget(QWidget):
         self.validationButtonLayout.addWidget(self.motionlabel)
         self.validationButtonLayout.addWidget(button)
 
-        #Assign each button to its respective function
+        # Assign each button to its respective function
         self.validationButtons[0].pressed.connect(self.add_validation_usersync)
         self.validationButtons[1].pressed.connect(self.combine_motion_with_previous)
         self.validationButtons[2].pressed.connect(self.convert_motion)
-        #Add created widgets to run program tab
+        
+        # Add created widgets to run program tab
         self.tabSelection.runProgramTab.layout.addWidget(self.panda_program_widget)
         self.tabSelection.runProgramTab.layout.addWidget(self.panda_tuning_widget)
         self.tabSelection.runProgramTab.layout.addWidget(QHorizontalLine())
@@ -288,7 +289,7 @@ class EUPWidget(QWidget):
         self.program_creation_buttons = ProgramCreationButtons(self)
         self.lowerProgramMenu = LowerProgramMenu(self)
 
-        #These widgets are for the demonstrations tab
+        # These widgets are for the demonstrations tab
         self.demo_program_widget = PandaProgramWidget(self)
         self.demo_program_widget.clear()
         self.demonstrationMenu = DemonstrationMenu(self)
@@ -311,7 +312,7 @@ class EUPWidget(QWidget):
         self.tabSelection.createProgramTab.layout.addWidget(QHorizontalLine())
         self.tabSelection.createProgramTab.layout.addWidget(self.lowerProgramMenu)
 
-        #Add demonstration widgets to their respective tab
+        # Add demonstration widgets to their respective tab
         self.tabSelection.demonstrationsTab.layout.addWidget(self.demo_program_widget)
         self.tabSelection.demonstrationsTab.layout.addWidget(self.demonstrationMenu)
         self.tabSelection.demonstrationsTab.layout.addWidget(QHorizontalLine())
@@ -319,7 +320,7 @@ class EUPWidget(QWidget):
         self.tabSelection.demonstrationsTab.layout.addWidget(QHorizontalLine())
         self.tabSelection.demonstrationsTab.layout.addWidget(self.lowerDemoMenu)
 
-        #Assign actions for each button of create programs tab
+        # Assign actions for each button of create programs tab
         self.addPrimitiveButtonActions()
         self.addProgramUtilityActions()
         self.addControlButtonActions()
@@ -921,7 +922,7 @@ class ProgramCreationButtons(QWidget):
         self.primitiveButtonLayout = QHBoxLayout(self.primitiveButtonRowWidget)
         self.primitiveButtonLayout.setAlignment(Qt.AlignLeft)
 
-        #Iterate through list of all used primitives and create button for each
+        # Iterate through list of all used primitives and create button for each
         primitives = [pp.MoveToEE(), pp.MoveToContact(), pp.UserSync(), pp.MoveFingers(), pp.ApplyForceFingers()]
         for primitive in primitives:
             button = QPushButton('', self)
@@ -931,7 +932,7 @@ class ProgramCreationButtons(QWidget):
             self.primitiveButtonLayout.addWidget(button)
             self.primitiveButtons.append(button)
 
-        #Add button for deleting previous primitive
+        # Add button for deleting previous primitive
         self.deleteButton = QPushButton("Delete\nlast primitive")
         self.deleteButton.setSizePolicy(QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed))
         self.deleteButton.setMinimumWidth(150)
@@ -944,7 +945,6 @@ class ProgramCreationButtons(QWidget):
         self.lowerLayout.setAlignment(Qt.AlignCenter)
         self.primitiveVerticalLayout.addWidget(self.primitiveButtonRowWidget)
         self.primitiveVerticalLayout.addWidget(self.lowerLayoutWidget)
-        #self.primitiveVerticalLayout.addWidget(self.deleteButton)
         self.layout.addWidget(self.primitiveButtonAreaWidget)
 
     def sizeHint(self):
@@ -1124,7 +1124,7 @@ class DemonstrationMenu(QWidget):
         self.parent.demo_program_widget.clear()
         filename = self.dataInputField.text()
 
-        #Use recently recorded data if a file of previous data is not given
+        # Use recently recorded data if a file of previous data is not given
         if filename == '':
             self.seg.data = {}
             self.seg.data["ee_velocities"] = self.datarecorder.ee_velocities
@@ -1138,18 +1138,18 @@ class DemonstrationMenu(QWidget):
             path = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources', 'data')
             self.seg.data = self.seg.loadData(path, filename)
 
-        #Execute segmentation, save program, and load program to interpreter
+        # Execute segmentation, save program, and load program to interpreter
         self.seg.createSegments()
         resourcepath = os.path.join(rospkg.RosPack().get_path('panda_pbd'), 'resources')
         self.seg.saveProgram(path=resourcepath, filename="segmentation_test.pkl")
         self.seg.interface.interpreter.load_program(self.seg.interface.program)
 
-        #Update program widget at the top of the GUI
+        # Update program widget at the top of the GUI
         for primitive in self.seg.interface.program.primitives:
             self.parent.demo_program_widget.addPrimitiveWidget(primitive, self.seg.interface.interpreter)
         self.parent.demo_program_widget.updateWidget()
 
-        #Ask whether the user wants to save the program and load it to run programs tab
+        # Ask whether the user wants to save the program and load it to run programs tab
         self.AskForSaving()
         buttonReply = QMessageBox.question(self, 'PyQt5 message', "Load this program for execution?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if buttonReply == QMessageBox.Yes:
@@ -1199,7 +1199,7 @@ class LowerProgramMenu(QWidget):
     def initUI(self):
         self.layout = QHBoxLayout(self)
         self.layout.setAlignment(Qt.AlignLeft)
-        #Reuse same state widget that was used in run program -tab
+        # Reuse same state widget that was used in run program -tab
         self.stateWidget = PandaStateWidget(self)
         self.layout.addWidget(self.stateWidget)
         self.addControlStateLabels()
