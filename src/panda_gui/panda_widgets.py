@@ -748,7 +748,6 @@ class EUPWidget(QWidget):
         n = len(self.pbd_interface.program.primitives) - 1
         buttonReply = QMessageBox.question(self, 'PyQt5 message', "Return the robot to previous preconditions?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if buttonReply == QMessageBox.Yes:
-            print(n, self.pbd_interface.interpreter.loaded_program.primitives)
             self.returnPreviousPreconditions(n)
         self.pbd_interface.program.delete_nth_primitive(n)
         self.program_creation_widget.deleteLastPrimitive()
