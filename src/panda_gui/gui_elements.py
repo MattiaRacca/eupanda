@@ -13,8 +13,8 @@ class RangeSliderTestWidget(QWidget):
         super(RangeSliderTestWidget, self).__init__()
         self.setWindowTitle(title)
         self.layout = QVBoxLayout(self)
-        self.range_slider = qtRangeSlider.QHRangeSlider(slider_range=[0, 100, 1], values=[20, 80], strict_range=[10, 80],
-                                                        parent=self)
+        self.range_slider = qtRangeSlider.QHRangeSlider(slider_range=[0, 100, 1], values=[20, 80],
+                                                        strict_range=[10, 80], parent=self)
         self.layout.addWidget(self.range_slider)
         self.range_slider.rangeChanged.connect(self.report)
 
