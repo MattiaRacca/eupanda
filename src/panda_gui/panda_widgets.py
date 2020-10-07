@@ -690,6 +690,7 @@ class EUPWidget(QWidget):
         elif currentMotion.__class__.__name__ == "MoveToContact":
             pose = currentMotion.parameter_container.pose
             goal = MoveToEEGoal()
+            goal.pose = pose
             goal.position_speed = self.pbd_interface.default_parameters['move_to_ee_default_position_speed']
             goal.rotation_speed = self.pbd_interface.default_parameters['move_to_ee_default_rotation_speed']
             move_to_ee_primitive = pp.MoveToEE()
