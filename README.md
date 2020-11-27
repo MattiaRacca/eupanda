@@ -7,10 +7,15 @@ The framework allows to create from kinestethic teaching robot programs made of 
 * move to pose,
 * move to contact at pose,
 * move fingers,
-* apply force with fingers, and 
-* user synchronization primitive).
+* apply force with fingers, and
+* user synchronization primitive.
 
 Programs can be executed step-by-step or fully; Similarly, primitives can be reverted.
+
+<img src="resources/demo_gui.png" width="300">
+<img src="resources/video_screen.png" width="300">
+
+Watch [eupanda] in action!.
 
 ## Status
 
@@ -51,6 +56,7 @@ pages={63}
 [2]: https://aaltodoc.aalto.fi/handle/123456789/47148
 [tuning_al_gui]: https://github.com/MattiaRacca/tuning_al_gui
 [Desk environment]: https://www.franka.de/capability
+[eupanda]: https://vimeo.com/mattiaracca/hri20
 
 #### License
 Everything authored by me is released under the GNU GPL 3.0 license. Some files are authored by others, and are included
