@@ -13,8 +13,8 @@ The framework allows to create from kinestethic teaching robot programs made of 
 **Watch [EUPanda] in action!**
 
 <p float="left">
-<img src="resources/demo_gui.png" height="270">
-<img src="resources/video_screen.png" height="270">
+<img src="resources/demo_gui.png" width="500">
+<img src="resources/video_screen.png" width="500">
 </p>
 
 ## Status
