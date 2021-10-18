@@ -55,7 +55,7 @@ pages={63}
 [1]: https://dl.acm.org/doi/abs/10.1145/3319502.3374784
 [2]: https://aaltodoc.aalto.fi/handle/123456789/47148
 [tuning_al_gui]: https://github.com/MattiaRacca/tuning_al_gui
-[Desk environment]: https://www.franka.de/capability
+[Desk environment]: https://www.franka.de/robot-system
 [EUPanda]: https://vimeo.com/mattiaracca/hri20
 
 #### License
